@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INVENTARIO | Sistema Empresarial de Gestión Física y Vencimientos</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="css/custom.css">
+</head>
+<body>
+    <div class="d-flex" id="wrapper">
+        <!-- SIDEBAR LATERAL IZQUIERDA -->
+        <aside id="sidebar-wrapper">
+            <div class="sidebar-heading d-flex align-items-center text-white">
+                <div class="bg-primary text-white rounded-3 p-2 me-2 d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                    <i class="bi bi-box-seam-fill fs-5"></i>
+                </div>
+                <div>
+                    <div class="fw-bold tracking-wide">INVENTARIO</div>
+                    <div class="text-white-50" style="font-size: 0.72rem; letter-spacing: 0.5px;">SISTEMA MULTI-BODEGA</div>
+                </div>
+            </div>
+
+            <div class="sidebar-nav">
+                <a href="#inicio" class="nav-link-custom active" data-view="inicio">
+                    <i class="bi bi-speedometer2"></i>
+                    <span>Inicio / Dashboard</span>
+                </a>
+                <a href="#inventario" class="nav-link-custom" data-view="inventario">
+                    <i class="bi bi-boxes"></i>
+                    <span>Inventario CDS</span>
+                    <span class="badge bg-warning text-dark ms-auto" id="sidebar-badge-stock-bajo" style="display:none;">0</span>
+                </a>
+                <a href="#movimientos" class="nav-link-custom" data-view="movimientos">
+                    <i class="bi bi-arrow-left-right"></i>
+                    <span>Movimientos</span>
+                </a>
+                <a href="#items" class="nav-link-custom" data-view="items">
+                    <i class="bi bi-tags"></i>
+                    <span>Catálogo Ítems</span>
+                </a>
+                <a href="#vencimientos" class="nav-link-custom" data-view="vencimientos">
+                    <i class="bi bi-calendar-event"></i>
+                    <span>Vencimientos</span>
+                    <span class="badge bg-danger ms-auto" id="sidebar-badge-vencidos" style="display:none;">0</span>
+                </a>
+                <a href="#bodegas" class="nav-link-custom" data-view="bodegas">
+                    <i class="bi bi-building"></i>
+                    <span>Bodegas y Proyectos</span>
+                </a>
+                <a href="#reportes" class="nav-link-custom" data-view="reportes">
+                    <i class="bi bi-file-earmark-bar-graph"></i>
+                    <span>Kardex & Reportes</span>
+                </a>
+                <a href="#database" class="nav-link-custom" data-view="database">
+                    <i class="bi bi-database-fill-gear"></i>
+                    <span>Base de Datos & Backup</span>
+                </a>
+            </div>
+
+            <div class="sidebar-footer text-white-50">
+                <div class="d-flex align-items-center mb-1">
+                    <span class="badge bg-success p-1 rounded-circle me-2" style="width: 8px; height: 8px;"></span>
+                    <span class="text-xs fw-semibold text-light">Modo 100% Offline (SQLite)</span>
+                </div>
+                <div style="font-size: 0.7rem;" class="text-white-50">Control Oficial Bodega CDS</div>
+            </div>
+        </aside>
+
+        <!-- CONTENIDO PRINCIPAL -->
+        <div id="page-content-wrapper">
+            <!-- TOP NAVBAR -->
+            <header class="top-navbar d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center">
+                    <button class="btn btn-light border me-3" id="sidebarToggle" title="Ocultar/Mostrar Barra Lateral">
+                        <i class="bi bi-list fs-5"></i>
+                    </button>
+                    <div class="d-none d-md-block">
+                        <span class="fw-bold text-dark fs-6" id="page-title">Dashboard Ejecutivo</span>
+                        <span class="text-muted ms-2" style="font-size: 0.85rem;" id="system-date"></span>
+                    </div>
+                </div>
+
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-outline-secondary btn-sm d-flex align-items-center px-3" data-bs-toggle="modal" data-bs-target="#modalBuscarItem">
+                        <i class="bi bi-search me-2"></i>
+                        <span>Buscar Ítem</span>
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm d-flex align-items-center px-3" onclick="navigate('database')">
+                        <i class="bi bi-database-fill-gear me-2"></i>
+                        <span>Base de Datos</span>
+                    </button>
+                    <button class="btn btn-primary btn-sm d-flex align-items-center px-3 shadow-sm" onclick="openModalMovimiento()">
+                        <i class="bi bi-plus-circle-fill me-2"></i>
+                        <span>Nuevo Movimiento</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- CONTENEDOR DE VISTAS (SPA) -->
+            <main class="container-fluid p-4" id="main-container">
+                
+                <!-- 1. VISTA INICIO / DASHBOARD -->
+                <section id="view-inicio" class="app-view">
+                    <div class="row g-3 mb-4">
+                        <div class="col-12 col-sm-6 col-xl-2">
+                            <div class="card-kpi p-3 h-100">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="kpi-label">Ítems Catálogo</span>
+                                    <div class="kpi-icon bg-primary bg-opacity-10 text-primary">
+                                        <i class="bi bi-tags-fill"></i>
+                                    </div>
+                                </div>
+                                <div class="kpi-value" id="kpi-total-items">0</div>
+                                <small class="text-muted" style="font-size: 0.75rem;">100% Catálogo Activo</small>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-sm-6 col-xl-2">
+                            <div class="card-kpi p-3 h-100">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="kpi-label">Stock Físico CDS</span>
+                                    <div class="kpi-icon bg-success bg-opacity-10 text-success">
+                                        <i class="bi bi-box-seam-fill"></i>
+                                    </div>
+                                </div>
+                                <div class="kpi-value" id="kpi-stock-cds">0</div>
+                                <small class="text-success fw-semibold" style="font-size: 0.75rem;">Saldo Físico Oficial</small>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-sm-6 col-xl-2">
+                            <div class="card-kpi p-3 h-100">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="kpi-label">Ítems Vencidos</span>
+                                    <div class="kpi-icon bg-danger bg-opacity-10 text-danger">
+                                        <i class="bi bi-exclamation-triangle-fill"></i>
+                                    </div>
+                                </div>
+                                <div class="kpi-value text-danger" id="kpi-items-vencidos">0</div>
+                                <small class="text-danger fw-semibold" style="font-size: 0.75rem;">En Bodega CDS</small>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-sm-6 col-xl-2">
+                            <div class="card-kpi p-3 h-100">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="kpi-label">Próx. a Vencer</span>
+                                    <div class="kpi-icon bg-warning bg-opacity-10 text-warning">
+                                        <i class="bi bi-clock-history"></i>
+                                    </div>
+                                </div>
+                                <div class="kpi-value text-warning" id="kpi-proximos-vencer">0</div>
+                                <small class="text-muted" style="font-size: 0.75rem;">Ventana <= 30 días</small>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-sm-6 col-xl-2">
+                            <div class="card-kpi p-3 h-100">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="kpi-label">Stock Bajo CDS</span>
+                                    <div class="kpi-icon bg-warning bg-opacity-10 text-warning">
+                                        <i class="bi bi-graph-down-arrow"></i>
+                                    </div>
+                                </div>
+                                <div class="kpi-value text-warning" id="kpi-stock-bajo">0</div>
+                                <small class="text-muted" style="font-size: 0.75rem;">Alerta de reorden</small>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-sm-6 col-xl-2">
+                            <div class="card-kpi p-3 h-100">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="kpi-label">Movimientos</span>
+                                    <div class="kpi-icon bg-info bg-opacity-10 text-info">
+                                        <i class="bi bi-arrow-repeat"></i>
+                                    </div>
+                                </div>
+                                <div class="kpi-value" id="kpi-total-movimientos">0</div>
+                                <small class="text-muted" style="font-size: 0.75rem;">Historial acumulado</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BOTONERA DE ACCESO RÁPIDO A FORMULARIOS (7 MÓDULOS) -->
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <h6 class="fw-bold mb-0 text-dark">
+                                <i class="bi bi-grid-fill text-primary me-2"></i>Centro de Operaciones y Formularios
+                            </h6>
+                            <span class="badge bg-light text-secondary border">7 Accesos Rápidos</span>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-6 col-md-3 col-xl">
+                                <div class="btn-action-tile h-100" onclick="openModalMovimiento()">
+                                    <i class="bi bi-arrow-left-right text-primary"></i>
+                                    <span class="fw-semibold">1. Registrar Movimiento</span>
+                                    <small class="text-muted">frmMovimiento</small>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3 col-xl">
+                                <div class="btn-action-tile h-100" onclick="openModalBajasVencidos()">
+                                    <i class="bi bi-trash3-fill text-danger"></i>
+                                    <span class="fw-semibold">2. Bajas Vencidos</span>
+                                    <small class="text-muted">frmBajasVencidos</small>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3 col-xl">
+                                <div class="btn-action-tile h-100" data-bs-toggle="modal" data-bs-target="#modalBuscarItem">
+                                    <i class="bi bi-search text-info"></i>
+                                    <span class="fw-semibold">3. Buscar Ítem</span>
+                                    <small class="text-muted">frmBuscarItem</small>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3 col-xl">
+                                <div class="btn-action-tile h-100" onclick="openModalNuevoItem()">
+                                    <i class="bi bi-plus-square-fill text-success"></i>
+                                    <span class="fw-semibold">4. Catálogo Ítems</span>
+                                    <small class="text-muted">frmNuevoItem</small>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3 col-xl">
+                                <div class="btn-action-tile h-100" onclick="openModalNuevoProyecto()">
+                                    <i class="bi bi-cone-striped text-warning"></i>
+                                    <span class="fw-semibold">5. Proyectos</span>
+                                    <small class="text-muted">frmNuevoProyecto</small>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3 col-xl">
+                                <div class="btn-action-tile h-100" onclick="openModalNuevaBodega()">
+                                    <i class="bi bi-building-add text-secondary"></i>
+                                    <span class="fw-semibold">6. Bodegas</span>
+                                    <small class="text-muted">frmNuevaBodega</small>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3 col-xl">
+                                <div class="btn-action-tile h-100" onclick="navigate('reportes')">
+                                    <i class="bi bi-file-earmark-spreadsheet-fill text-dark"></i>
+                                    <span class="fw-semibold">7. Kardex</span>
+                                    <small class="text-muted">frmReportes</small>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3 col-xl">
+                                <div class="btn-action-tile h-100" onclick="navigate('database')">
+                                    <i class="bi bi-database-fill-gear text-primary"></i>
+                                    <span class="fw-semibold">8. Base de Datos</span>
+                                    <small class="text-muted">Backup / Import</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TABLA Y ACTIVIDAD EN VIVO -->
+                    <div class="row g-4">
+                        <div class="col-12 col-lg-7">
+                            <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
+                                <h6 class="fw-bold mb-3 text-dark">
+                                    <i class="bi bi-pie-chart-fill text-primary me-2"></i>Existencias por Categoría (Bodega CDS)
+                                </h6>
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0" style="font-size: 0.88rem;">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Categoría</th>
+                                                <th class="text-center">Total Ítems</th>
+                                                <th class="text-end">Unidades en Stock</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="table-dashboard-categorias"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-lg-5">
+                            <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
+                                <h6 class="fw-bold mb-3 text-dark">
+                                    <i class="bi bi-clock-history text-primary me-2"></i>Últimos Movimientos
+                                </h6>
+                                <div class="list-group list-group-flush" id="list-dashboard-movimientos"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. VISTA INVENTARIO OFICIAL CDS -->
+                <section id="view-inventario" class="app-view" style="display: none;">
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
+                            <div>
+                                <h5 class="fw-bold mb-1 text-dark">Control Oficial de Existencias - Bodega CDS</h5>
+                                <p class="text-muted mb-0 small">Balance oficial en tiempo real de entradas, entregas y saldo físico</p>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline-success btn-sm d-flex align-items-center fw-semibold shadow-sm" onclick="exportInventarioExcel()">
+                                    <i class="bi bi-file-earmark-excel-fill me-1 text-success"></i> Exportar Excel (.xlsx)
+                                </button>
+                                <button class="btn btn-primary btn-sm d-flex align-items-center" onclick="openModalMovimiento()">
+                                    <i class="bi bi-plus-lg me-1"></i> Movimiento
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="row g-2 mb-3 bg-light p-3 rounded-3 border">
+                            <div class="col-12 col-md-4">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                                    <input type="text" class="form-control" id="filter-inv-search" placeholder="Buscar por código, nombre o ubicación...">
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <select class="form-select form-select-sm" id="filter-inv-categoria">
+                                    <option value="ALL">Todas las Categorías</option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <select class="form-select form-select-sm" id="filter-inv-estado">
+                                    <option value="ALL">Todos los Estados de Stock</option>
+                                    <option value="STOCK NORMAL">STOCK NORMAL</option>
+                                    <option value="STOCK BAJO">STOCK BAJO</option>
+                                    <option value="SIN EXISTENCIAS">SIN EXISTENCIAS</option>
+                                    <option value="ERROR: SOBREGIRO">ERROR: SOBREGIRO</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-2 d-grid">
+                                <button class="btn btn-secondary btn-sm" onclick="loadInventario()">
+                                    <i class="bi bi-arrow-clockwise me-1"></i> Filtrar
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive" style="max-height: 65vh;">
+                            <table class="custom-table table table-hover align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Ítem / Descripción</th>
+                                        <th>Categoría</th>
+                                        <th>Unidad</th>
+                                        <th>Ubicación</th>
+                                        <th class="text-end">Entradas</th>
+                                        <th class="text-end">Entregas</th>
+                                        <th class="text-end">Bajas Disp.</th>
+                                        <th class="text-end text-primary fw-bold">Existencia CDS</th>
+                                        <th class="text-end">Stock Mín.</th>
+                                        <th class="text-center">Estado Stock</th>
+                                        <th class="text-center">Kardex</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-inventario-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. VISTA HISTORIAL DE MOVIMIENTOS -->
+                <section id="view-movimientos" class="app-view" style="display: none;">
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
+                            <div>
+                                <h5 class="fw-bold mb-1 text-dark">Libro Diario de Movimientos y Transacciones</h5>
+                                <p class="text-muted mb-0 small">Historial completo con trazabilidad de orígenes, destinos y responsables</p>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline-success btn-sm d-flex align-items-center fw-semibold shadow-sm" onclick="exportMovimientosExcel()">
+                                    <i class="bi bi-file-earmark-excel-fill me-1 text-success"></i> Exportar Excel (.xlsx)
+                                </button>
+                                <button class="btn btn-primary btn-sm d-flex align-items-center" onclick="openModalMovimiento()">
+                                    <i class="bi bi-plus-lg me-1"></i> Registrar Transacción
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="row g-2 mb-3 bg-light p-3 rounded-3 border">
+                            <div class="col-12 col-md-3">
+                                <input type="text" class="form-control form-control-sm" id="filter-mov-search" placeholder="Buscar N°, Ítem, Responsable...">
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <select class="form-select form-select-sm" id="filter-mov-tipo">
+                                    <option value="ALL">Todos los Tipos</option>
+                                    <option value="ENTRADA">ENTRADA</option>
+                                    <option value="ENTREGA">ENTREGA</option>
+                                    <option value="DISPOSICION FINAL">DISPOSICIÓN FINAL</option>
+                                    <option value="DEVOLUCION">DEVOLUCIÓN</option>
+                                    <option value="AJUSTE POSITIVO">AJUSTE POSITIVO (+)</option>
+                                    <option value="AJUSTE NEGATIVO">AJUSTE NEGATIVO (-)</option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <select class="form-select form-select-sm" id="filter-mov-bodega">
+                                    <option value="ALL">Todas las Bodegas</option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <input type="date" class="form-control form-control-sm" id="filter-mov-fechainicio">
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <input type="date" class="form-control form-control-sm" id="filter-mov-fechafin">
+                            </div>
+                            <div class="col-12 col-md-1 d-grid">
+                                <button class="btn btn-secondary btn-sm" onclick="loadMovimientos()">
+                                    <i class="bi bi-filter"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive" style="max-height: 65vh;">
+                            <table class="custom-table table table-hover align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>N° Mov.</th>
+                                        <th>Fecha/Hora</th>
+                                        <th>Tipo</th>
+                                        <th>Código</th>
+                                        <th>Ítem / Material</th>
+                                        <th class="text-end">Cantidad</th>
+                                        <th>Origen</th>
+                                        <th>Destino</th>
+                                        <th>Causal / Proyecto</th>
+                                        <th>Responsable</th>
+                                        <th>Observaciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-movimientos-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. VISTA CATÁLOGO DE ITEMS -->
+                <section id="view-items" class="app-view" style="display: none;">
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
+                            <div>
+                                <h5 class="fw-bold mb-1 text-dark">Catálogo Maestro de Ítems (Código 100% Numérico)</h5>
+                                <p class="text-muted mb-0 small">Administración de productos, especificaciones técnicas y ubicación</p>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline-success btn-sm d-flex align-items-center fw-semibold" onclick="exportCatalogoExcel()">
+                                    <i class="bi bi-file-earmark-excel-fill me-1 text-success"></i> Exportar Catálogo (.xlsx)
+                                </button>
+                                <button class="btn btn-primary btn-sm d-flex align-items-center" onclick="openModalNuevoItem()">
+                                    <i class="bi bi-plus-lg me-1"></i> [+] Crear Nuevo Ítem
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="row g-2 mb-3 bg-light p-3 rounded-3 border">
+                            <div class="col-12 col-md-5">
+                                <input type="text" class="form-control form-control-sm" id="filter-items-search" placeholder="Buscar por código numérico, nombre o estantería...">
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <select class="form-select form-select-sm" id="filter-items-categoria">
+                                    <option value="ALL">Todas las Categorías</option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <select class="form-select form-select-sm" id="filter-items-estado">
+                                    <option value="ALL">Todos los Estados</option>
+                                    <option value="Activo">Activos</option>
+                                    <option value="Inactivo">Inactivos</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-2 d-grid">
+                                <button class="btn btn-secondary btn-sm" onclick="loadItems()">
+                                    <i class="bi bi-search me-1"></i> Buscar
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive" style="max-height: 65vh;">
+                            <table class="custom-table table table-hover align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Nombre del Ítem</th>
+                                        <th>Categoría</th>
+                                        <th>Unidad</th>
+                                        <th>Ubicación CDS</th>
+                                        <th>Vencimiento</th>
+                                        <th class="text-end">Stock Mínimo</th>
+                                        <th class="text-center">Estado</th>
+                                        <th class="text-center">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-items-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. VISTA CONTROL DE VENCIMIENTOS -->
+                <section id="view-vencimientos" class="app-view" style="display: none;">
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
+                            <div>
+                                <h5 class="fw-bold mb-1 text-dark">Control y Monitoreo de Lotes con Vencimiento</h5>
+                                <p class="text-muted mb-0 small">Semaforización de caducidad en tiempo real y asistente de bajas</p>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline-success btn-sm d-flex align-items-center fw-semibold" onclick="exportVencimientosExcel()">
+                                    <i class="bi bi-file-earmark-excel-fill me-1 text-success"></i> Exportar Lotes (.xlsx)
+                                </button>
+                                <button class="btn btn-danger btn-sm d-flex align-items-center" onclick="openModalBajasVencidos()">
+                                    <i class="bi bi-trash3-fill me-1"></i> Asistente de Bajas Automáticas
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive" style="max-height: 65vh;">
+                            <table class="custom-table table table-hover align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Nombre del Ítem</th>
+                                        <th>Bodega</th>
+                                        <th>Fecha Ingreso</th>
+                                        <th>Fecha Vencimiento</th>
+                                        <th class="text-center">Días Restantes</th>
+                                        <th class="text-end">Cant. Disponible</th>
+                                        <th class="text-center">Estado Caducidad</th>
+                                        <th>Observaciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-vencimientos-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 6. VISTA BODEGAS Y PROYECTOS -->
+                <section id="view-bodegas" class="app-view" style="display: none;">
+                    <div class="row g-4">
+                        <div class="col-12 col-lg-6">
+                            <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <div>
+                                        <h5 class="fw-bold mb-1 text-dark">Bodegas / Almacenes</h5>
+                                        <p class="text-muted mb-0 small">Estructura oficial de bodegas físicas</p>
+                                    </div>
+                                    <button class="btn btn-primary btn-sm" onclick="openModalNuevaBodega()">
+                                        <i class="bi bi-plus-lg me-1"></i> Nueva Bodega
+                                    </button>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0" style="font-size: 0.88rem;">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Código</th>
+                                                <th>Bodega</th>
+                                                <th>Responsable</th>
+                                                <th class="text-center">Estado</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="table-bodegas-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-lg-6">
+                            <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <div>
+                                        <h5 class="fw-bold mb-1 text-dark">Frentes de Obra / Proyectos</h5>
+                                        <p class="text-muted mb-0 small">Destinos finales de materiales</p>
+                                    </div>
+                                    <button class="btn btn-primary btn-sm" onclick="openModalNuevoProyecto()">
+                                        <i class="bi bi-plus-lg me-1"></i> Nuevo Proyecto
+                                    </button>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0" style="font-size: 0.88rem;">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Proyecto / Frente</th>
+                                                <th>Responsable</th>
+                                                <th class="text-center">Estado</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="table-proyectos-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 7. VISTA KARDEX Y REPORTES -->
+                <section id="view-reportes" class="app-view" style="display: none;">
+                    <!-- CENTRO DE REPORTES GERENCIALES -->
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+                            <div>
+                                <h5 class="fw-bold mb-1 text-dark">Centro de Reportes Gerenciales y Auditoría</h5>
+                                <p class="text-muted mb-0 small">Exportación directa a hojas de cálculo Excel (.xlsx) estructuradas por columnas</p>
+                            </div>
+                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-2">
+                                <i class="bi bi-file-earmark-excel-fill me-1"></i> Formato Nativo XLSX Compatible
+                            </span>
+                        </div>
+
+                        <div class="row g-3 mb-4">
+                            <!-- Reporte 1: Balance General -->
+                            <div class="col-12 col-md-6 col-xl-3">
+                                <div class="card border border-success border-opacity-25 h-100 rounded-4 shadow-sm p-3 bg-light">
+                                    <div class="d-flex align-items-center gap-2 mb-2 text-success">
+                                        <i class="bi bi-boxes fs-4"></i>
+                                        <h6 class="fw-bold mb-0">Balance de Stock</h6>
+                                    </div>
+                                    <p class="text-muted small mb-3">Existencias actuales, entradas, entregas y saldo físico de todos los ítems en CDS.</p>
+                                    <button class="btn btn-success btn-sm w-100 mt-auto fw-semibold" onclick="exportInventarioExcel()">
+                                        <i class="bi bi-download me-1"></i> Descargar Excel
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Reporte 2: Stock Crítico / Bajo -->
+                            <div class="col-12 col-md-6 col-xl-3">
+                                <div class="card border border-warning border-opacity-50 h-100 rounded-4 shadow-sm p-3 bg-light">
+                                    <div class="d-flex align-items-center gap-2 mb-2 text-warning text-dark">
+                                        <i class="bi bi-exclamation-triangle-fill fs-4 text-warning"></i>
+                                        <h6 class="fw-bold mb-0 text-dark">Stock Crítico / Bajo</h6>
+                                    </div>
+                                    <p class="text-muted small mb-3">Filtro exclusivo de ítems bajo el stock mínimo o sin existencias para reabastecimiento.</p>
+                                    <button class="btn btn-warning btn-sm w-100 mt-auto fw-semibold text-dark" onclick="exportReporteStockBajoExcel()">
+                                        <i class="bi bi-download me-1"></i> Descargar Excel
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Reporte 3: Vencimientos y Lotes -->
+                            <div class="col-12 col-md-6 col-xl-3">
+                                <div class="card border border-danger border-opacity-25 h-100 rounded-4 shadow-sm p-3 bg-light">
+                                    <div class="d-flex align-items-center gap-2 mb-2 text-danger">
+                                        <i class="bi bi-alarm-fill fs-4"></i>
+                                        <h6 class="fw-bold mb-0">Lotes y Vencimientos</h6>
+                                    </div>
+                                    <p class="text-muted small mb-3">Estado de caducidad, días restantes y lotes con semáforo de alerta en CDS.</p>
+                                    <button class="btn btn-danger btn-sm w-100 mt-auto fw-semibold" onclick="exportReporteVencidosExcel()">
+                                        <i class="bi bi-download me-1"></i> Descargar Excel
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Reporte 4: Movimientos / Auditoría -->
+                            <div class="col-12 col-md-6 col-xl-3">
+                                <div class="card border border-primary border-opacity-25 h-100 rounded-4 shadow-sm p-3 bg-light">
+                                    <div class="d-flex align-items-center gap-2 mb-2 text-primary">
+                                        <i class="bi bi-journal-text fs-4"></i>
+                                        <h6 class="fw-bold mb-0">Libro Movimientos</h6>
+                                    </div>
+                                    <p class="text-muted small mb-3">Trazabilidad histórica completa de transacciones, orígenes, destinos y causales.</p>
+                                    <button class="btn btn-primary btn-sm w-100 mt-auto fw-semibold" onclick="exportMovimientosExcel()">
+                                        <i class="bi bi-download me-1"></i> Descargar Excel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- AUDITORÍA DE KARDEX INDIVIDUAL -->
+                        <div class="border-top pt-4">
+                            <h6 class="fw-bold mb-2 text-dark">Auditoría Individual de Kardex por Ítem</h6>
+                            <p class="text-muted small mb-3">Selecciona un producto específico para visualizar y exportar su historial acumulado de entradas, salidas y saldos físicos.</p>
+
+                            <div class="row g-3 mb-4 bg-light p-3 rounded-3 border">
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label fw-semibold small">Seleccione el Ítem a auditar en Kardex:</label>
+                                    <select class="form-select form-select-sm" id="reporte-item-select" onchange="loadKardexItem(this.value)">
+                                        <option value="">-- Seleccionar Ítem del Catálogo --</option>
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-6 d-flex align-items-end gap-2">
+                                    <button class="btn btn-success btn-sm d-flex align-items-center fw-semibold" id="btn-export-kardex" onclick="exportKardexActualExcel()">
+                                        <i class="bi bi-file-earmark-excel-fill me-1"></i> Exportar Kardex (.xlsx)
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm d-flex align-items-center" onclick="window.print()">
+                                        <i class="bi bi-printer me-1"></i> Imprimir
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="kardex-container" style="display: none;">
+                                <div class="alert alert-primary d-flex align-items-center justify-content-between p-3 mb-3">
+                                    <div>
+                                        <h6 class="fw-bold mb-1" id="kardex-item-titulo">ÍTEM</h6>
+                                        <div class="small text-muted" id="kardex-item-subtitulo">Categoría / Ubicación</div>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="small fw-semibold">SALDO ACTUAL EN CDS</div>
+                                        <div class="fs-4 fw-bold text-primary" id="kardex-saldo-final">0</div>
+                                    </div>
+                                </div>
+
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-hover align-middle mb-0" style="font-size: 0.88rem;">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <th>Código</th>
+                                                <th>Ítem / Descripción</th>
+                                                <th>N° Mov.</th>
+                                                <th>Fecha / Hora</th>
+                                                <th>Tipo Movimiento</th>
+                                                <th>Origen</th>
+                                                <th>Destino</th>
+                                                <th>Responsable / Recibe</th>
+                                                <th class="text-end text-success">Entrada (+)</th>
+                                                <th class="text-end text-danger">Salida (-)</th>
+                                                <th class="text-end text-primary fw-bold">Saldo Físico</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="table-kardex-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 8. VISTA BASE DE DATOS Y BACKUPS -->
+                <section id="view-database" class="app-view" style="display: none;">
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+                            <div>
+                                <h5 class="fw-bold mb-1 text-dark">
+                                    <i class="bi bi-database-fill-gear text-primary me-2"></i>Gestión, Respaldo y Restauración de Base de Datos
+                                </h5>
+                                <p class="text-muted mb-0 small">Exporta copias de seguridad completas o importa/actualiza masivamente desde Excel o archivos de respaldo</p>
+                            </div>
+                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-3 py-2">
+                                <i class="bi bi-shield-lock-fill me-1"></i> SQLite Persistente Offline
+                            </span>
+                        </div>
+
+                        <div class="row g-4 mb-3">
+                            <!-- PANEL 1: EXPORTACIÓN Y BACKUPS -->
+                            <div class="col-12 col-lg-6">
+                                <div class="card border border-success border-opacity-25 h-100 rounded-4 shadow-sm p-4 bg-light">
+                                    <div class="d-flex align-items-center gap-2 mb-3 text-success">
+                                        <i class="bi bi-cloud-arrow-down-fill fs-3"></i>
+                                        <h6 class="fw-bold mb-0 text-dark">1. Exportar y Crear Copia de Seguridad</h6>
+                                    </div>
+                                    <p class="text-muted small mb-4">
+                                        Descarga un archivo con todos los datos registrados en el sistema para conservarlo como respaldo seguro o trasladarlo a otro computador.
+                                    </p>
+
+                                    <div class="d-grid gap-3">
+                                        <a href="/api/database/download" download class="btn btn-success d-flex align-items-center justify-content-between py-2 px-3 fw-semibold shadow-sm text-decoration-none">
+                                            <span><i class="bi bi-filetype-sql me-2 fs-5"></i> Descargar Base de Datos SQLite (.db)</span>
+                                            <span class="badge bg-white text-success">Recomendado</span>
+                                        </a>
+
+                                        <a href="/api/database/download-excel" download class="btn btn-outline-success d-flex align-items-center justify-content-between py-2 px-3 fw-semibold text-decoration-none">
+                                            <span><i class="bi bi-file-earmark-excel-fill me-2 fs-5 text-success"></i> Descargar Respaldo Completo Excel (.xlsx)</span>
+                                            <small class="text-muted">Multi-Hoja</small>
+                                        </a>
+
+                                        <a href="/api/database/download-json" download class="btn btn-outline-secondary d-flex align-items-center justify-content-between py-2 px-3 fw-semibold text-decoration-none">
+                                            <span><i class="bi bi-filetype-json me-2 fs-5"></i> Descargar Copia JSON (.json)</span>
+                                            <small class="text-muted">Estructurado</small>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- PANEL 2: IMPORTACIÓN Y RESTAURACIÓN -->
+                            <div class="col-12 col-lg-6">
+                                <div class="card border border-primary border-opacity-25 h-100 rounded-4 shadow-sm p-4 bg-light">
+                                    <div class="d-flex align-items-center gap-2 mb-3 text-primary">
+                                        <i class="bi bi-cloud-arrow-up-fill fs-3"></i>
+                                        <h6 class="fw-bold mb-0 text-dark">2. Importar o Restaurar Base de Datos</h6>
+                                    </div>
+                                    <p class="text-muted small mb-3">
+                                        Carga un archivo Excel (.xlsx / .xlsm) para actualizar el catálogo y existencias, o restaura una copia de seguridad previa.
+                                    </p>
+
+                                    <!-- OPCIÓN A: IMPORTADOR EXCEL -->
+                                    <div class="bg-white p-3 rounded-3 border mb-3">
+                                        <div class="d-flex align-items-center justify-content-between mb-2">
+                                            <label class="form-label fw-bold small text-dark mb-0">
+                                                <i class="bi bi-file-earmark-spreadsheet text-success me-1"></i> A. Importar desde Archivo Excel (.xlsx / .xlsm)
+                                            </label>
+                                            <a href="/api/database/download-template" download class="btn btn-link btn-sm text-decoration-none p-0 small text-primary fw-semibold">
+                                                <i class="bi bi-download me-1"></i> Descargar Plantilla
+                                            </a>
+                                        </div>
+                                        <input type="file" class="form-control form-control-sm mb-2" id="import-excel-file" accept=".xlsx, .xls, .xlsm">
+                                        
+                                        <div class="form-check form-check-sm mb-3">
+                                            <input class="form-check-input" type="checkbox" id="check-limpiar-base">
+                                            <label class="form-check-label small text-danger fw-semibold" for="check-limpiar-base">
+                                                Reemplazar base de datos completa con este Excel (Cargue Inicial)
+                                            </label>
+                                        </div>
+
+                                        <button class="btn btn-primary btn-sm w-100 fw-semibold" id="btn-import-excel" onclick="handleImportExcel()">
+                                            <i class="bi bi-upload me-1"></i> Procesar e Importar Excel
+                                        </button>
+                                    </div>
+
+                                    <!-- OPCIÓN B: RESTAURAR JSON -->
+                                    <div class="bg-white p-3 rounded-3 border mb-3">
+                                        <label class="form-label fw-bold small text-dark mb-2">
+                                            <i class="bi bi-filetype-json text-primary me-1"></i> B. Restaurar Respaldo JSON (.json)
+                                        </label>
+                                        <input type="file" class="form-control form-control-sm mb-2" id="restore-json-file" accept=".json">
+                                        
+                                        <button class="btn btn-outline-primary btn-sm w-100 fw-semibold" id="btn-restore-json" onclick="handleRestoreJSON()">
+                                            <i class="bi bi-arrow-counterclockwise me-1"></i> Restaurar Copia JSON
+                                        </button>
+                                    </div>
+
+                                    <!-- OPCIÓN C: SUBIR Y RESTAURAR BASE DE DATOS SQLITE (.DB) -->
+                                    <div class="bg-white p-3 rounded-3 border">
+                                        <label class="form-label fw-bold small text-dark mb-2">
+                                            <i class="bi bi-database-fill-up text-success me-1"></i> C. Subir / Restaurar Archivo SQLite (.db)
+                                        </label>
+                                        <input type="file" class="form-control form-control-sm mb-2" id="restore-sqlite-file" accept=".db, .sqlite, .sqlite3">
+                                        
+                                        <button class="btn btn-outline-success btn-sm w-100 fw-semibold" id="btn-restore-sqlite" onclick="handleRestoreSQLite()">
+                                            <i class="bi bi-cloud-arrow-up-fill me-1"></i> Subir y Cargar Base SQLite (.db)
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- MODAL 1: frmMovimiento -->
+    <div class="modal fade" id="modalMovimiento" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+                <div class="modal-header modal-header-custom p-3">
+                    <h6 class="modal-title fw-bold text-white">
+                        <i class="bi bi-arrow-left-right text-warning me-2"></i>frmMovimiento - Registro Transaccional
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="form-movimiento" onsubmit="submitMovimiento(event)">
+                    <div class="modal-body p-4">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-bold small">Tipo de Movimiento <span class="text-danger">*</span></label>
+                                <select class="form-select" id="mov-tipo" required onchange="handleTipoMovimientoChange(this.value)">
+                                    <option value="ENTRADA">ENTRADA (Ingreso a CDS)</option>
+                                    <option value="ENTREGA">ENTREGA (Salida operativa de CDS)</option>
+                                    <option value="DISPOSICION FINAL">DISPOSICIÓN FINAL (Baja por daño/scrap)</option>
+                                    <option value="DEVOLUCION">DEVOLUCIÓN (Retorno a CDS)</option>
+                                    <option value="AJUSTE POSITIVO">AJUSTE POSITIVO (+)</option>
+                                    <option value="AJUSTE NEGATIVO">AJUSTE NEGATIVO (-)</option>
+                                </select>
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-bold small">Seleccionar Ítem del Catálogo <span class="text-danger">*</span></label>
+                                <select class="form-select" id="mov-item-select" required onchange="handleItemSelectInMovimiento(this.value)">
+                                    <option value="">-- Buscar ítem por código o nombre --</option>
+                                </select>
+                            </div>
+
+                            <div class="col-12" id="mov-item-info" style="display: none;">
+                                <div class="alert alert-light border d-flex align-items-center justify-content-between p-2 mb-0">
+                                    <div class="small">
+                                        <span class="fw-bold" id="mov-preview-nombre">Nombre</span> |
+                                        <span>Ubicación CDS: <strong id="mov-preview-ubicacion">A1</strong></span> |
+                                        <span>Unidad: <strong id="mov-preview-unidad">Unidad</strong></span>
+                                    </div>
+                                    <div class="small">
+                                        Stock Disponible CDS: <span class="badge bg-primary fs-6" id="mov-preview-stock">0</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label class="form-label fw-bold small">Cantidad <span class="text-danger">*</span></label>
+                                <input type="number" step="any" min="0.01" class="form-control" id="mov-cantidad" required placeholder="0.00">
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label class="form-label fw-bold small">Bodega Origen</label>
+                                <select class="form-select" id="mov-bodega-origen"></select>
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label class="form-label fw-bold small">Bodega Destino</label>
+                                <select class="form-select" id="mov-bodega-destino"></select>
+                            </div>
+
+                            <div class="col-12 col-md-6" id="mov-vencimiento-container" style="display: none;">
+                                <div class="p-2 border border-warning rounded-3 bg-warning bg-opacity-10">
+                                    <label class="form-label fw-bold small text-dark mb-1">
+                                        <i class="bi bi-calendar-event me-1"></i>Fecha de Vencimiento del Lote <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="date" class="form-control form-control-sm" id="mov-fecha-vencimiento">
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-bold small">Causal / Condición</label>
+                                <select class="form-select" id="mov-causal"></select>
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-bold small">Proyecto / Destino Final</label>
+                                <select class="form-select" id="mov-proyecto"></select>
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-bold small">Responsable Transacción</label>
+                                <input type="text" class="form-control" id="mov-responsable" value="Administrador CDS" required>
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-bold small">Persona que Recibe / Devuelve</label>
+                                <input type="text" class="form-control" id="mov-persona-recibe" placeholder="Nombre de quien recibe/entrega">
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-bold small">Documento / Referencia</label>
+                                <input type="text" class="form-control" id="mov-doc-ref" placeholder="Ej: REMISION-1045, FACT-992">
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label fw-bold small">Observaciones</label>
+                                <textarea class="form-control" id="mov-observaciones" rows="2" placeholder="Detalles u observaciones del movimiento"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light p-3">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold">Registrar Transacción</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: frmBajasVencidos -->
+    <div class="modal fade" id="modalBajasVencidos" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+                <div class="modal-header bg-danger text-white p-3">
+                    <h6 class="modal-title fw-bold text-white">
+                        <i class="bi bi-trash3-fill text-white me-2"></i>frmBajasVencidos - Asistente de Bajas por Caducidad
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="alert alert-warning small mb-3">
+                        <i class="bi bi-info-circle-fill me-1"></i> Seleccione los lotes vencidos en <strong>Bodega CDS</strong> para trasladar masivamente a <strong>DISPOSICIÓN FINAL</strong>.
+                    </div>
+                    <div class="table-responsive" style="max-height: 45vh;">
+                        <table class="table table-hover align-middle mb-0" style="font-size: 0.88rem;">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="text-center"><input type="checkbox" id="check-all-bajas" onchange="toggleSelectAllBajas(this)"></th>
+                                    <th>Código</th>
+                                    <th>Ítem</th>
+                                    <th>Fecha Ingreso</th>
+                                    <th>Fecha Vencimiento</th>
+                                    <th class="text-end">Cant. Disponible</th>
+                                    <th class="text-center">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-bajas-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="row g-3 mt-2">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-bold small">Responsable de la Baja</label>
+                            <input type="text" class="form-control form-control-sm" id="bajas-responsable" value="Administrador CDS">
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-bold small">Observaciones Generales</label>
+                            <input type="text" class="form-control form-control-sm" id="bajas-obs" value="Baja masiva por caducidad en Bodega CDS">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light p-3">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-danger btn-sm px-4 fw-bold" onclick="ejecutarBajasMasivas()">
+                        <i class="bi bi-check2-circle me-1"></i> Ejecutar Traslado a Disposición Final
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: frmBuscarItem -->
+    <div class="modal fade" id="modalBuscarItem" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+                <div class="modal-header modal-header-custom p-3">
+                    <h6 class="modal-title fw-bold text-white">
+                        <i class="bi bi-search text-info me-2"></i>frmBuscarItem - Consulta Rápida de Stock y Ubicación
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="input-group mb-3">
+                        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control" id="buscador-rapido-input" placeholder="Escriba código numérico, nombre o ubicación..." oninput="filtrarBuscadorRapido(this.value)">
+                    </div>
+                    <div class="table-responsive" style="max-height: 50vh;">
+                        <table class="table table-hover align-middle mb-0" style="font-size: 0.88rem;">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Nombre del Ítem</th>
+                                    <th>Categoría</th>
+                                    <th>Ubicación CDS</th>
+                                    <th class="text-end">Stock CDS</th>
+                                    <th class="text-center">Estado</th>
+                                    <th class="text-center">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-buscador-rapido-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: frmNuevoItem -->
+    <div class="modal fade" id="modalNuevoItem" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+                <div class="modal-header modal-header-custom p-3">
+                    <h6 class="modal-title fw-bold text-white" id="modalNuevoItemTitle">
+                        <i class="bi bi-plus-square-fill text-success me-2"></i>frmNuevoItem - Alta y Edición de Catálogo
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="form-item" onsubmit="submitItem(event)">
+                    <div class="modal-body p-4">
+                        <div class="alert alert-info small mb-3">
+                            <i class="bi bi-shield-check me-1"></i> <strong>Reglas estrictas:</strong> Código 100% numérico. Todo producto nuevo se crea con <strong>existencia inicial en cero (0)</strong>; el stock se ingresa mediante un movimiento formal de ENTRADA.
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-12 col-md-4">
+                                <label class="form-label fw-bold small">Código Ítem (100% Numérico) <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <input type="text" pattern="[0-9]+" class="form-control" id="item-codigo" required placeholder="Ej: 7538">
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="sugerirSiguienteCodigo()" title="Sugerir consecutivo">Auto</button>
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-8">
+                                <label class="form-label fw-bold small">Nombre del Ítem / Material <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control text-uppercase" id="item-nombre" required placeholder="DESCRIPCIÓN COMPLETA DEL ITEM">
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label class="form-label fw-bold small">Categoría <span class="text-danger">*</span></label>
+                                <select class="form-select" id="item-categoria" required></select>
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label class="form-label fw-bold small">Subcategoría</label>
+                                <input type="text" class="form-control" id="item-subcategoria" value="General">
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label class="form-label fw-bold small">Unidad de Medida <span class="text-danger">*</span></label>
+                                <select class="form-select" id="item-unidad" required></select>
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label class="form-label fw-bold small">Marca</label>
+                                <input type="text" class="form-control" id="item-marca" value="Generico">
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label class="form-label fw-bold small">Referencia</label>
+                                <input type="text" class="form-control" id="item-referencia" value="-">
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label class="form-label fw-bold small">Ubicación Bodega CDS</label>
+                                <select class="form-select" id="item-ubicacion"></select>
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label class="form-label fw-bold small">Stock Mínimo</label>
+                                <input type="number" min="0" class="form-control" id="item-stock-minimo" value="0">
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label class="form-label fw-bold small">¿Aplica Control de Vencimiento?</label>
+                                <select class="form-select" id="item-aplica-vencimiento">
+                                    <option value="0">NO APLICA</option>
+                                    <option value="1">SI APLICA (Captura en Entrada)</option>
+                                </select>
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label class="form-label fw-bold small">Estado del Ítem</label>
+                                <select class="form-select" id="item-estado">
+                                    <option value="Activo">Activo</option>
+                                    <option value="Inactivo">Inactivo</option>
+                                </select>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label fw-bold small">Observaciones</label>
+                                <input type="text" class="form-control" id="item-observaciones" placeholder="Detalles adicionales">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light p-3">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success btn-sm px-4 fw-bold">Guardar Ítem</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 5: frmNuevoProyecto -->
+    <div class="modal fade" id="modalNuevoProyecto" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+                <div class="modal-header modal-header-custom p-3">
+                    <h6 class="modal-title fw-bold text-white">
+                        <i class="bi bi-cone-striped text-warning me-2"></i>frmNuevoProyecto - Administrador de Proyectos
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="form-proyecto" onsubmit="submitProyecto(event)">
+                    <div class="modal-body p-4">
+                        <input type="hidden" id="proy-id">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Nombre del Frente / Proyecto <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="proy-nombre" required placeholder="Ej: Camisas Barbaras, Movilidad...">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Responsable del Frente</label>
+                            <input type="text" class="form-control" id="proy-responsable" placeholder="Nombre del coordinador / líder">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Estado</label>
+                            <select class="form-select" id="proy-estado">
+                                <option value="Activo">Activo</option>
+                                <option value="Inactivo">Inactivo</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Observaciones</label>
+                            <input type="text" class="form-control" id="proy-obs" placeholder="Detalles del proyecto">
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light p-3">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold">Guardar Proyecto</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 6: frmNuevaBodega -->
+    <div class="modal fade" id="modalNuevaBodega" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+                <div class="modal-header modal-header-custom p-3">
+                    <h6 class="modal-title fw-bold text-white">
+                        <i class="bi bi-building-add text-secondary me-2"></i>frmNuevaBodega - Administrador de Bodegas
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="form-bodega" onsubmit="submitBodega(event)">
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Código de Bodega <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control text-uppercase" id="bod-codigo" required placeholder="Ej: BOD-007">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Nombre de Bodega <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control text-uppercase" id="bod-nombre" required placeholder="Ej: ALMACEN NORTE">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Ubicación Física</label>
+                            <input type="text" class="form-control" id="bod-ubicacion" placeholder="Sede / Ciudad / Área">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Responsable</label>
+                            <input type="text" class="form-control" id="bod-responsable" placeholder="Encargado de almacén">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Estado</label>
+                            <select class="form-select" id="bod-estado">
+                                <option value="Activa">Activa</option>
+                                <option value="Inactiva">Inactiva</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Observaciones</label>
+                            <input type="text" class="form-control" id="bod-obs" placeholder="Propósito de la bodega">
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light p-3">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold">Guardar Bodega</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- SheetJS (XLSX) para exportación nativa a Excel con tablas formateadas -->
+    <script src="js/xlsx.full.min.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

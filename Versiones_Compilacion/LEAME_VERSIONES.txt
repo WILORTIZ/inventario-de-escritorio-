@@ -1,0 +1,35 @@
+========================================================================
+ HISTORIAL DE VERSIONES Y EJECUTABLES COMPILADOS - INVENTARIO CDS
+========================================================================
+
+📁 Carpeta: D:\antigravity\INVENTARIO\Versiones_Compilacion
+
+------------------------------------------------------------------------
+📌 VERSIÓN 1.0.4 (Módulo de Base de Datos y Backups)
+------------------------------------------------------------------------
+- Archivos:
+  • INVENTARIO_CDS_v1.0.4_Portable.exe (Ejecutable directo portable)
+  • Instalador_INVENTARIO_CDS_v1.0.4.exe (Instalador estándar para Windows)
+- Nuevas Funcionalidades:
+  1. Módulo "Base de Datos & Backup" en menú lateral y dashboard.
+  2. Descarga directa de archivo binario SQLite (.db) para copia de seguridad.
+  3. Exportación de libro Excel multi-hoja (.xlsx) con todas las tablas.
+  4. Descarga y restauración de copias de seguridad en formato JSON (.json).
+  5. Importador masivo inteligente desde Excel (.xlsx / .xlsm) con opción
+     de reemplazo total (cargue inicial) o fusión de catálogo.
+
+------------------------------------------------------------------------
+📌 VERSIÓN 1.0.3
+------------------------------------------------------------------------
+- Base de datos depurada al 100% con los 653 ítems reales de INVENTARIO.xlsx.
+
+------------------------------------------------------------------------
+📌 VERSIÓN 1.0.2
+------------------------------------------------------------------------
+- Inclusión del Código de Ítem y Nombre en cabeceras y reportes.
+
+------------------------------------------------------------------------
+📌 VERSIÓN 1.0.1
+------------------------------------------------------------------------
+- Exportación nativa a Excel (.xlsx) con SheetJS y tablas estructuradas.
+========================================================================

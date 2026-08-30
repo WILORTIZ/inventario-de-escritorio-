@@ -1,0 +1,69 @@
+{
+  "name": "inventario-cds",
+  "version": "1.0.4",
+  "description": "Sistema Empresarial de Gestión Física y Control de Vencimientos CDS",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win",
+    "pack:portable": "electron-builder --win portable",
+    "pack:dir": "electron-builder --win --dir"
+  },
+  "build": {
+    "appId": "com.cds.inventario",
+    "productName": "INVENTARIO CDS",
+    "copyright": "Copyright © 2026 CDS Logística y Operaciones",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "portable",
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "INVENTARIO CDS",
+      "uninstallDisplayName": "INVENTARIO CDS"
+    },
+    "files": [
+      "main.js",
+      "src/**/*",
+      "inventario.db",
+      "package.json",
+      "!**/*.map",
+      "!**/*.py"
+    ],
+    "extraResources": [
+      "inventario.db"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "**/node_modules/sqlite3/**/*"
+    ]
+  },
+  "keywords": [
+    "inventario",
+    "gestion",
+    "kardex",
+    "vencimientos",
+    "cds"
+  ],
+  "author": "CDS Logística",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "sqlite3": "^6.0.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.7.1",
+    "electron": "^44.0.0",
+    "electron-builder": "^26.0.2"
+  }
+}

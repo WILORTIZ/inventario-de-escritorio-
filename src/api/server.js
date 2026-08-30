@@ -1,0 +1,1390 @@
+const express = require('express');
+const cors = require('cors');
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
+const fs = require('fs');
+const XLSX = require('xlsx');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', '..', 'inventario.db');
+
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.static(path.join(__dirname, '..', 'public')));
+
+// Inicializador de base de datos SQLite autocontenida (0 configuraciones requeridas)
+const db = new sqlite3.Database(DB_PATH, (err) => {
+    if (err) {
+        console.error('Error al conectar con SQLite:', err.message);
+    } else {
+        console.log('Conectado a la base de datos SQLite:', DB_PATH);
+        ensureDatabaseSchema();
+    }
+});
+
+// Función de auto-instalación de esquema y datos base
+function ensureDatabaseSchema() {
+    db.serialize(() => {
+        db.run(`
+            CREATE TABLE IF NOT EXISTS items (
+                codigo INTEGER PRIMARY KEY,
+                nombre TEXT NOT NULL,
+                categoria TEXT NOT NULL,
+                subcategoria TEXT DEFAULT 'General',
+                unidad_medida TEXT NOT NULL,
+                marca TEXT DEFAULT 'Generico',
+                referencia TEXT DEFAULT '-',
+                ubicacion_cds TEXT DEFAULT 'A1',
+                aplica_vencimiento INTEGER DEFAULT 0,
+                fecha_vencimiento_default TEXT,
+                stock_minimo INTEGER DEFAULT 0,
+                estado TEXT DEFAULT 'Activo',
+                observaciones TEXT,
+                fecha_registro TEXT
+            )
+        `);
+
+        db.run(`
+            CREATE TABLE IF NOT EXISTS bodegas (
+                codigo TEXT PRIMARY KEY,
+                nombre TEXT NOT NULL UNIQUE,
+                ubicacion TEXT,
+                responsable TEXT,
+                estado TEXT DEFAULT 'Activa',
+                observaciones TEXT
+            )
+        `);
+
+        db.run(`
+            CREATE TABLE IF NOT EXISTS proyectos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL UNIQUE,
+                responsable TEXT,
+                estado TEXT DEFAULT 'Activo',
+                observaciones TEXT
+            )
+        `);
+
+        db.run(`
+            CREATE TABLE IF NOT EXISTS movimientos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                n_movimiento TEXT NOT NULL UNIQUE,
+                fecha TEXT NOT NULL,
+                hora TEXT NOT NULL,
+                tipo_movimiento TEXT NOT NULL,
+                codigo_item INTEGER NOT NULL,
+                nombre_item TEXT NOT NULL,
+                cantidad REAL NOT NULL,
+                unidad TEXT NOT NULL,
+                bodega_origen TEXT,
+                bodega_destino TEXT,
+                causal_condicion TEXT,
+                ubicacion_cds TEXT,
+                proyecto_destino TEXT,
+                responsable TEXT,
+                persona_recibe_devuelve TEXT,
+                documento_referencia TEXT,
+                observaciones TEXT,
+                fecha_vencimiento_lote TEXT,
+                creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (codigo_item) REFERENCES items(codigo)
+            )
+        `);
+
+        db.run(`
+            CREATE TABLE IF NOT EXISTS control_vencimientos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                codigo_item INTEGER NOT NULL,
+                nombre_item TEXT NOT NULL,
+                bodega TEXT DEFAULT 'CDS',
+                fecha_ingreso TEXT NOT NULL,
+                fecha_vencimiento TEXT NOT NULL,
+                cant_inicial REAL NOT NULL,
+                cant_disponible REAL NOT NULL,
+                estado TEXT,
+                observaciones TEXT,
+                n_movimiento_origen TEXT,
+                FOREIGN KEY (codigo_item) REFERENCES items(codigo)
+            )
+        `);
+
+        db.run(`
+            CREATE TABLE IF NOT EXISTS listas_config (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tipo TEXT NOT NULL,
+                valor TEXT NOT NULL,
+                orden INTEGER DEFAULT 0
+            )
+        `);
+
+        // Comprobar si las bodegas base existen; si no, insertarlas
+        db.get(`SELECT COUNT(*) as count FROM bodegas`, (err, row) => {
+            if (row && row.count === 0) {
+                const bodegas = [
+                    ['BOD-001', 'CDS', 'Sede Principal / Almacén Central', 'Administrador CDS', 'Activa', 'Centro de Distribución y Almacenamiento Principal (Control Oficial)'],
+                    ['BOD-002', 'AOM', 'Sede Operativa AOM', 'Líder Operativo AOM', 'Activa', 'Bodega de Operaciones y Mantenimiento'],
+                    ['BOD-003', 'PROYECTOS', 'Frentes de Obra e Infraestructura', 'Coordinador de Proyectos', 'Activa', 'Destino de materiales y herramientas para proyectos'],
+                    ['BOD-004', 'DISPOSICION FINAL', 'Área de Bajas y Scrap', 'Control Calidad / SST', 'Activa', 'Destino exclusivo de bajas por ítems dañados, gastados o vencidos'],
+                    ['BOD-005', 'MOVILIDAD', 'Vehículos y Flota Operativa', 'Logística / Transporte', 'Activa', 'Bodega operativa para gestión de movilidad y transporte'],
+                    ['BOD-006', 'TRASLADOS', 'Tránsito y Reubicación', 'Logística / Despachos', 'Activa', 'Bodega temporal para traslados y movimientos intersedes']
+                ];
+                const stmt = db.prepare(`INSERT OR REPLACE INTO bodegas (codigo, nombre, ubicacion, responsable, estado, observaciones) VALUES (?, ?, ?, ?, ?, ?)`);
+                bodegas.forEach(b => stmt.run(b));
+                stmt.finalize();
+            }
+        });
+
+        // Comprobar si las listas maestras existen
+        db.get(`SELECT COUNT(*) as count FROM listas_config`, (err, row) => {
+            if (row && row.count === 0) {
+                const listas = [
+                    ['categoria', 'Herramientas', 1],
+                    ['categoria', 'Tornilleria', 2],
+                    ['categoria', 'Materiales', 3],
+                    ['categoria', 'Consumibles', 4],
+                    ['categoria', 'Repuestos', 5],
+                    ['categoria', 'Elementos electricos', 6],
+                    ['categoria', 'Elementos de seguridad', 7],
+                    ['categoria', 'Cableado', 8],
+                    ['categoria', 'Otros', 9],
+                    ['unidad_medida', 'Unidad', 1],
+                    ['unidad_medida', 'Caja', 2],
+                    ['unidad_medida', 'Paquete', 3],
+                    ['unidad_medida', 'Metro', 4],
+                    ['unidad_medida', 'Kilogramo', 5],
+                    ['unidad_medida', 'Litro', 6],
+                    ['unidad_medida', 'Rollo', 7],
+                    ['unidad_medida', 'Otro', 8],
+                    ['ubicacion_cds', 'A1', 1],
+                    ['ubicacion_cds', 'A2', 2],
+                    ['ubicacion_cds', 'A3', 3],
+                    ['ubicacion_cds', 'B1', 4],
+                    ['ubicacion_cds', 'B2', 5],
+                    ['ubicacion_cds', 'B3', 6],
+                    ['ubicacion_cds', 'C1', 7],
+                    ['ubicacion_cds', 'C2', 8],
+                    ['ubicacion_cds', 'C3', 9],
+                    ['ubicacion_cds', 'D1', 10],
+                    ['ubicacion_cds', 'D2', 11],
+                    ['ubicacion_cds', 'D3', 12],
+                    ['ubicacion_cds', 'T1', 13],
+                    ['ubicacion_cds', 'T2', 14],
+                    ['ubicacion_cds', 'T3', 15],
+                    ['ubicacion_cds', 'T4', 16],
+                    ['ubicacion_cds', 'T5', 17],
+                    ['causal_disposicion', 'Dañado', 1],
+                    ['causal_disposicion', 'Gastado Interno', 2],
+                    ['causal_disposicion', 'Vencido', 3],
+                    ['causal_disposicion', 'Deterioro Operativo / Merma', 4],
+                    ['causal_disposicion', 'Inutilizable / Scrap', 5]
+                ];
+                const stmt = db.prepare(`INSERT INTO listas_config (tipo, valor, orden) VALUES (?, ?, ?)`);
+                listas.forEach(l => stmt.run(l));
+                stmt.finalize();
+            }
+        });
+    });
+}
+
+// Helper para consultas Promise
+const dbAll = (sql, params = []) => new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+    });
+});
+
+const dbGet = (sql, params = []) => new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+    });
+});
+
+const dbRun = (sql, params = []) => new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+        if (err) reject(err);
+        else resolve(this);
+    });
+});
+
+// ==========================================
+// 1. ENDPOINTS DE KPIS Y RESUMEN EJECUTIVO
+// ==========================================
+app.get('/api/kpis', async (req, res) => {
+    try {
+        const totalItems = (await dbGet(`SELECT COUNT(*) as count FROM items WHERE estado = 'Activo'`)).count;
+        
+        // Stock en CDS
+        const stockCDSData = await dbGet(`
+            SELECT 
+                SUM(
+                    (CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END) -
+                    (CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END)
+                ) as total_stock
+            FROM movimientos
+        `);
+        const totalStockCDS = stockCDSData.total_stock || 0;
+
+        const totalMovimientos = (await dbGet(`SELECT COUNT(*) as count FROM movimientos`)).count;
+
+        // Vencimientos
+        const today = new Date().toISOString().split('T')[0];
+        const vencidosQuery = await dbGet(`
+            SELECT COUNT(*) as count FROM control_vencimientos 
+            WHERE bodega = 'CDS' AND cant_disponible > 0 AND fecha_vencimiento <= ?
+        `, [today]);
+        const itemsVencidos = vencidosQuery.count || 0;
+
+        const proximoMes = new Date();
+        proximoMes.setDate(proximoMes.getDate() + 30);
+        const proximoMesStr = proximoMes.toISOString().split('T')[0];
+
+        const proximosVencerQuery = await dbGet(`
+            SELECT COUNT(*) as count FROM control_vencimientos 
+            WHERE bodega = 'CDS' AND cant_disponible > 0 AND fecha_vencimiento > ? AND fecha_vencimiento <= ?
+        `, [today, proximoMesStr]);
+        const itemsProximosVencer = proximosVencerQuery.count || 0;
+
+        // Stock bajo en CDS
+        const stockBajoQuery = await dbAll(`
+            SELECT 
+                i.codigo,
+                i.stock_minimo,
+                COALESCE(SUM(
+                    (CASE WHEN m.tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (m.bodega_destino = 'CDS' OR m.bodega_destino IS NULL) THEN m.cantidad ELSE 0 END) -
+                    (CASE WHEN m.tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (m.bodega_origen = 'CDS' OR m.bodega_origen IS NULL) THEN m.cantidad ELSE 0 END)
+                ), 0) as stock_actual
+            FROM items i
+            LEFT JOIN movimientos m ON i.codigo = m.codigo_item
+            WHERE i.estado = 'Activo'
+            GROUP BY i.codigo
+            HAVING stock_actual <= i.stock_minimo
+        `);
+        const itemsStockBajo = stockBajoQuery.length;
+
+        // Stock por categoría
+        const categoriasStock = await dbAll(`
+            SELECT 
+                i.categoria,
+                COUNT(DISTINCT i.codigo) as total_items,
+                COALESCE(SUM(
+                    (CASE WHEN m.tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (m.bodega_destino = 'CDS' OR m.bodega_destino IS NULL) THEN m.cantidad ELSE 0 END) -
+                    (CASE WHEN m.tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (m.bodega_origen = 'CDS' OR m.bodega_origen IS NULL) THEN m.cantidad ELSE 0 END)
+                ), 0) as stock_total
+            FROM items i
+            LEFT JOIN movimientos m ON i.codigo = m.codigo_item
+            WHERE i.estado = 'Activo'
+            GROUP BY i.categoria
+            ORDER BY stock_total DESC
+        `);
+
+        // Movimientos recientes
+        const ultimosMovimientos = await dbAll(`
+            SELECT * FROM movimientos 
+            ORDER BY id DESC LIMIT 5
+        `);
+
+        res.json({
+            success: true,
+            kpis: {
+                totalItems,
+                totalStockCDS,
+                itemsVencidos,
+                itemsProximosVencer,
+                totalMovimientos,
+                itemsStockBajo
+            },
+            categoriasStock,
+            ultimosMovimientos
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ==========================================
+// 2. INVENTARIO FÍSICO OFICIAL CDS
+// ==========================================
+app.get('/api/inventario', async (req, res) => {
+    try {
+        const { categoria, estadoStock, search } = req.query;
+
+        let query = `
+            SELECT 
+                i.codigo,
+                i.nombre,
+                i.categoria,
+                i.subcategoria,
+                i.unidad_medida,
+                i.ubicacion_cds,
+                i.aplica_vencimiento,
+                i.stock_minimo,
+                i.estado as item_estado,
+                COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'ENTRADA' AND (m.bodega_destino = 'CDS' OR m.bodega_destino IS NULL) THEN m.cantidad ELSE 0 END), 0) AS entradas,
+                COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'DEVOLUCION' AND m.bodega_destino = 'CDS' THEN m.cantidad ELSE 0 END), 0) AS devoluciones,
+                COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'ENTREGA' AND m.bodega_destino = 'CDS' THEN m.cantidad ELSE 0 END), 0) AS entregas_recibidas,
+                COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'AJUSTE POSITIVO' AND (m.bodega_destino = 'CDS' OR m.bodega_destino IS NULL) THEN m.cantidad ELSE 0 END), 0) AS ajustes_pos,
+                COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'ENTREGA' AND (m.bodega_origen = 'CDS' OR m.bodega_origen IS NULL) THEN m.cantidad ELSE 0 END), 0) AS entregas_enviadas,
+                COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'DISPOSICION FINAL' AND (m.bodega_origen = 'CDS' OR m.bodega_origen IS NULL) THEN m.cantidad ELSE 0 END), 0) AS disp_final,
+                COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'AJUSTE NEGATIVO' AND (m.bodega_origen = 'CDS' OR m.bodega_origen IS NULL) THEN m.cantidad ELSE 0 END), 0) AS ajustes_neg
+            FROM items i
+            LEFT JOIN movimientos m ON i.codigo = m.codigo_item
+            WHERE 1=1
+        `;
+
+        const params = [];
+        if (categoria && categoria !== 'ALL') {
+            query += ` AND i.categoria = ?`;
+            params.push(categoria);
+        }
+        if (search) {
+            query += ` AND (CAST(i.codigo AS TEXT) LIKE ? OR i.nombre LIKE ? OR i.ubicacion_cds LIKE ?)`;
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+        }
+
+        query += ` GROUP BY i.codigo ORDER BY i.codigo ASC`;
+
+        const rows = await dbAll(query, params);
+
+        const result = rows.map(r => {
+            const existencia = (r.entradas + r.devoluciones + r.entregas_recibidas + r.ajustes_pos) - 
+                               (r.entregas_enviadas + r.disp_final + r.ajustes_neg);
+            
+            let estado_stock = 'STOCK NORMAL';
+            let badge_class = 'bg-success';
+
+            if (existencia < 0) {
+                estado_stock = 'ERROR: SOBREGIRO';
+                badge_class = 'bg-danger';
+            } else if (existencia === 0) {
+                estado_stock = 'SIN EXISTENCIAS';
+                badge_class = 'bg-secondary';
+            } else if (existencia <= r.stock_minimo) {
+                estado_stock = 'STOCK BAJO';
+                badge_class = 'bg-warning text-dark';
+            }
+
+            return {
+                ...r,
+                existencia,
+                estado_stock,
+                badge_class
+            };
+        });
+
+        const filtered = estadoStock && estadoStock !== 'ALL' 
+            ? result.filter(item => item.estado_stock === estadoStock)
+            : result;
+
+        res.json({ success: true, count: filtered.length, data: filtered });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ==========================================
+// 3. CATÁLOGO DE ITEMS (CRUD + VALIDACIÓN 100% NUMÉRICO)
+// ==========================================
+app.get('/api/items', async (req, res) => {
+    try {
+        const { search, categoria, estado } = req.query;
+        let query = `SELECT * FROM items WHERE 1=1`;
+        const params = [];
+
+        if (search) {
+            query += ` AND (CAST(codigo AS TEXT) LIKE ? OR nombre LIKE ? OR marca LIKE ? OR ubicacion_cds LIKE ?)`;
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+        }
+        if (categoria && categoria !== 'ALL') {
+            query += ` AND categoria = ?`;
+            params.push(categoria);
+        }
+        if (estado && estado !== 'ALL') {
+            query += ` AND estado = ?`;
+            params.push(estado);
+        }
+
+        query += ` ORDER BY codigo ASC`;
+        const items = await dbAll(query, params);
+        res.json({ success: true, count: items.length, data: items });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Sugerencia consecutivo
+app.get('/api/items/next-code', async (req, res) => {
+    try {
+        const row = await dbGet(`SELECT MAX(codigo) as max_code FROM items`);
+        const nextCode = (row.max_code || 1000) + 1;
+        res.json({ success: true, nextCode });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Crear ítem (100% Numérico, Stock Inicial = 0)
+app.post('/api/items', async (req, res) => {
+    try {
+        let {
+            codigo,
+            nombre,
+            categoria,
+            subcategoria,
+            unidad_medida,
+            marca,
+            referencia,
+            ubicacion_cds,
+            aplica_vencimiento,
+            stock_minimo,
+            estado,
+            observaciones
+        } = req.body;
+
+        if (!/^\d+$/.test(String(codigo).trim())) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'El código del ítem debe ser 100% numérico, sin letras, guiones ni espacios.' 
+            });
+        }
+        const numericCode = parseInt(codigo, 10);
+
+        if (!nombre || !nombre.trim()) {
+            return res.status(400).json({ success: false, error: 'El nombre del ítem es obligatorio.' });
+        }
+
+        const existing = await dbGet(`SELECT codigo FROM items WHERE codigo = ?`, [numericCode]);
+        if (existing) {
+            return res.status(400).json({ success: false, error: `El código ${numericCode} ya se encuentra registrado en el catálogo.` });
+        }
+
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        await dbRun(`
+            INSERT INTO items (
+                codigo, nombre, categoria, subcategoria, unidad_medida, marca, referencia,
+                ubicacion_cds, aplica_vencimiento, stock_minimo, estado, observaciones, fecha_registro
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            numericCode,
+            nombre.trim().toUpperCase(),
+            categoria || 'Materiales',
+            subcategoria || 'General',
+            unidad_medida || 'Unidad',
+            marca || 'Generico',
+            referencia || '-',
+            ubicacion_cds || 'A1',
+            aplica_vencimiento ? 1 : 0,
+            parseInt(stock_minimo || 0, 10),
+            estado || 'Activo',
+            observaciones || 'Alta en catálogo',
+            todayStr
+        ]);
+
+        res.json({ success: true, message: 'Ítem creado exitosamente con existencia inicial en 0.', codigo: numericCode });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Actualizar ítem
+app.put('/api/items/:codigo', async (req, res) => {
+    try {
+        const { codigo } = req.params;
+        const {
+            nombre,
+            categoria,
+            subcategoria,
+            unidad_medida,
+            marca,
+            referencia,
+            ubicacion_cds,
+            aplica_vencimiento,
+            stock_minimo,
+            estado,
+            observaciones
+        } = req.body;
+
+        await dbRun(`
+            UPDATE items SET
+                nombre = ?,
+                categoria = ?,
+                subcategoria = ?,
+                unidad_medida = ?,
+                marca = ?,
+                referencia = ?,
+                ubicacion_cds = ?,
+                aplica_vencimiento = ?,
+                stock_minimo = ?,
+                estado = ?,
+                observaciones = ?
+            WHERE codigo = ?
+        `, [
+            nombre.trim().toUpperCase(),
+            categoria,
+            subcategoria,
+            unidad_medida,
+            marca,
+            referencia,
+            ubicacion_cds,
+            aplica_vencimiento ? 1 : 0,
+            parseInt(stock_minimo || 0, 10),
+            estado,
+            observaciones,
+            codigo
+        ]);
+
+        res.json({ success: true, message: 'Ítem actualizado exitosamente.' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ==========================================
+// 4. MOVIMIENTOS DE INVENTARIO (TRANSACCIONAL)
+// ==========================================
+app.get('/api/movimientos', async (req, res) => {
+    try {
+        const { tipo, bodega, search, fechaInicio, fechaFin } = req.query;
+        let query = `SELECT * FROM movimientos WHERE 1=1`;
+        const params = [];
+
+        if (tipo && tipo !== 'ALL') {
+            query += ` AND tipo_movimiento = ?`;
+            params.push(tipo);
+        }
+        if (bodega && bodega !== 'ALL') {
+            query += ` AND (bodega_origen = ? OR bodega_destino = ?)`;
+            params.push(bodega, bodega);
+        }
+        if (fechaInicio) {
+            query += ` AND fecha >= ?`;
+            params.push(fechaInicio);
+        }
+        if (fechaFin) {
+            query += ` AND fecha <= ?`;
+            params.push(fechaFin);
+        }
+        if (search) {
+            query += ` AND (n_movimiento LIKE ? OR CAST(codigo_item AS TEXT) LIKE ? OR nombre_item LIKE ? OR responsable LIKE ? OR proyecto_destino LIKE ?)`;
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+        }
+
+        query += ` ORDER BY id DESC LIMIT 500`;
+        const movs = await dbAll(query, params);
+        res.json({ success: true, count: movs.length, data: movs });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Registrar movimiento
+app.post('/api/movimientos', async (req, res) => {
+    try {
+        const {
+            tipo_movimiento,
+            codigo_item,
+            cantidad,
+            bodega_origen,
+            bodega_destino,
+            causal_condicion,
+            ubicacion_cds,
+            proyecto_destino,
+            responsable,
+            persona_recibe_devuelve,
+            documento_referencia,
+            observaciones,
+            fecha_vencimiento_lote,
+            fecha,
+            hora
+        } = req.body;
+
+        const cantNum = parseFloat(cantidad);
+        if (!cantNum || cantNum <= 0) {
+            return res.status(400).json({ success: false, error: 'La cantidad debe ser un número mayor a cero.' });
+        }
+
+        const item = await dbGet(`SELECT * FROM items WHERE codigo = ?`, [codigo_item]);
+        if (!item) {
+            return res.status(400).json({ success: false, error: `El ítem con código ${codigo_item} no existe en el catálogo.` });
+        }
+
+        // Validación de stock en CDS para salidas
+        const esSalidaCDS = (tipo_movimiento === 'ENTREGA' && (bodega_origen === 'CDS' || !bodega_origen)) ||
+                            (tipo_movimiento === 'DISPOSICION FINAL' && (bodega_origen === 'CDS' || !bodega_origen)) ||
+                            (tipo_movimiento === 'AJUSTE NEGATIVO' && (bodega_origen === 'CDS' || !bodega_origen));
+
+        if (esSalidaCDS) {
+            const stockActualData = await dbGet(`
+                SELECT 
+                    COALESCE(SUM(
+                        (CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END) -
+                        (CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END)
+                    ), 0) as stock
+                FROM movimientos WHERE codigo_item = ?
+            `, [codigo_item]);
+
+            const stockActual = stockActualData ? stockActualData.stock : 0;
+            if (stockActual < cantNum) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: `Stock insuficiente en Bodega Central (CDS). Stock disponible: ${stockActual} ${item.unidad_medida}. Intentó retirar: ${cantNum} ${item.unidad_medida}.` 
+                });
+            }
+        }
+
+        const lastMov = await dbGet(`SELECT id FROM movimientos ORDER BY id DESC LIMIT 1`);
+        const nextId = (lastMov ? lastMov.id : 0) + 1;
+        const n_movimiento = `MOV-${String(nextId).padStart(5, '0')}`;
+
+        const now = new Date();
+        const movFecha = fecha || now.toISOString().split('T')[0];
+        const movHora = hora || now.toTimeString().split(' ')[0].substring(0, 5);
+
+        await dbRun(`
+            INSERT INTO movimientos (
+                n_movimiento, fecha, hora, tipo_movimiento, codigo_item, nombre_item, cantidad, unidad,
+                bodega_origen, bodega_destino, causal_condicion, ubicacion_cds, proyecto_destino,
+                responsable, persona_recibe_devuelve, documento_referencia, observaciones, fecha_vencimiento_lote
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            n_movimiento,
+            movFecha,
+            movHora,
+            tipo_movimiento,
+            item.codigo,
+            item.nombre,
+            cantNum,
+            item.unidad_medida,
+            bodega_origen || null,
+            bodega_destino || (tipo_movimiento === 'ENTRADA' ? 'CDS' : null),
+            causal_condicion || (tipo_movimiento === 'ENTRADA' ? 'NUEVO / INICIAL' : null),
+            ubicacion_cds || item.ubicacion_cds,
+            proyecto_destino || 'Operacion Central',
+            responsable || 'Administrador CDS',
+            persona_recibe_devuelve || null,
+            documento_referencia || 'REG-AUTOMATICO',
+            observaciones || null,
+            fecha_vencimiento_lote || null
+        ]);
+
+        if (tipo_movimiento === 'ENTRADA' && item.aplica_vencimiento && fecha_vencimiento_lote) {
+            const hoyStr = now.toISOString().split('T')[0];
+            const diffDias = Math.ceil((new Date(fecha_vencimiento_lote) - new Date(hoyStr)) / (1000 * 60 * 60 * 24));
+            let estadoVenc = 'VIGENTE';
+            if (diffDias <= 0) estadoVenc = '¡VENCIDO!';
+            else if (diffDias <= 30) estadoVenc = 'PROXIMO A VENCER';
+
+            await dbRun(`
+                INSERT INTO control_vencimientos (
+                    codigo_item, nombre_item, bodega, fecha_ingreso, fecha_vencimiento,
+                    cant_inicial, cant_disponible, estado, observaciones, n_movimiento_origen
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+                item.codigo,
+                item.nombre,
+                bodega_destino || 'CDS',
+                movFecha,
+                fecha_vencimiento_lote,
+                cantNum,
+                cantNum,
+                estadoVenc,
+                `Lote ingresado vía ${n_movimiento}`,
+                n_movimiento
+            ]);
+        }
+
+        res.json({ 
+            success: true, 
+            message: `Movimiento ${n_movimiento} registrado con éxito.`,
+            n_movimiento
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ==========================================
+// 5. CONTROL DE VENCIMIENTOS Y ASISTENTE DE BAJAS
+// ==========================================
+app.get('/api/vencimientos', async (req, res) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const rows = await dbAll(`
+            SELECT cv.*, i.ubicacion_cds, i.unidad_medida 
+            FROM control_vencimientos cv
+            JOIN items i ON cv.codigo_item = i.codigo
+            WHERE cv.cant_disponible > 0
+            ORDER BY cv.fecha_vencimiento ASC
+        `);
+
+        const formatted = rows.map(r => {
+            const diffDias = Math.ceil((new Date(r.fecha_vencimiento) - new Date(today)) / (1000 * 60 * 60 * 24));
+            let estado = 'VIGENTE';
+            let badge_class = 'bg-success';
+
+            if (diffDias <= 0) {
+                estado = '¡VENCIDO!';
+                badge_class = 'bg-danger';
+            } else if (diffDias <= 30) {
+                estado = 'PROXIMO A VENCER';
+                badge_class = 'bg-warning text-dark';
+            }
+
+            return {
+                ...r,
+                dias_restantes: diffDias,
+                estado_actualizado: estado,
+                badge_class
+            };
+        });
+
+        res.json({ success: true, count: formatted.length, data: formatted });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Bajas automáticas masivas (frmBajasVencidos)
+app.post('/api/vencimientos/bajas-automaticas', async (req, res) => {
+    try {
+        const { lotesIds, responsable, observaciones } = req.body;
+
+        if (!lotesIds || !Array.isArray(lotesIds) || lotesIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'Debe seleccionar al menos un lote vencido para dar de baja.' });
+        }
+
+        const now = new Date();
+        const todayStr = now.toISOString().split('T')[0];
+        const timeStr = now.toTimeString().split(' ')[0].substring(0, 5);
+
+        let bajasRealizadas = 0;
+
+        for (const id of lotesIds) {
+            const lote = await dbGet(`SELECT * FROM control_vencimientos WHERE id = ?`, [id]);
+            if (lote && lote.cant_disponible > 0) {
+                const lastMov = await dbGet(`SELECT id FROM movimientos ORDER BY id DESC LIMIT 1`);
+                const nextId = (lastMov ? lastMov.id : 0) + 1;
+                const n_movimiento = `MOV-${String(nextId).padStart(5, '0')}`;
+
+                const item = await dbGet(`SELECT * FROM items WHERE codigo = ?`, [lote.codigo_item]);
+
+                await dbRun(`
+                    INSERT INTO movimientos (
+                        n_movimiento, fecha, hora, tipo_movimiento, codigo_item, nombre_item, cantidad, unidad,
+                        bodega_origen, bodega_destino, causal_condicion, ubicacion_cds, proyecto_destino,
+                        responsable, persona_recibe_devuelve, documento_referencia, observaciones
+                    ) VALUES (?, ?, ?, 'DISPOSICION FINAL', ?, ?, ?, ?, 'CDS', 'DISPOSICION FINAL', 'Vencido', ?, 'Bajas Scrap', ?, 'Control Calidad', 'BAJA-AUTO-VENC', ?)
+                `, [
+                    n_movimiento,
+                    todayStr,
+                    timeStr,
+                    lote.codigo_item,
+                    lote.nombre_item,
+                    lote.cant_disponible,
+                    item ? item.unidad_medida : 'Unidad',
+                    item ? item.ubicacion_cds : 'A1',
+                    responsable || 'Administrador CDS',
+                    observaciones || `Baja masiva por caducidad (Lote ${lote.n_movimiento_origen || lote.id})`
+                ]);
+
+                await dbRun(`
+                    UPDATE control_vencimientos SET cant_disponible = 0, estado = 'DADO DE BAJA' WHERE id = ?
+                `, [id]);
+
+                bajasRealizadas++;
+            }
+        }
+
+        res.json({ 
+            success: true, 
+            message: `Se trasladaron exitosamente ${bajasRealizadas} lotes a la bodega DISPOSICIÓN FINAL.` 
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ==========================================
+// 6. BODEGAS, PROYECTOS Y CONFIGURACIONES
+// ==========================================
+app.get('/api/bodegas', async (req, res) => {
+    try {
+        const bodegas = await dbAll(`SELECT * FROM bodegas ORDER BY codigo ASC`);
+        res.json({ success: true, data: bodegas });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/bodegas', async (req, res) => {
+    try {
+        const { codigo, nombre, ubicacion, responsable, estado, observaciones } = req.body;
+        if (!codigo || !nombre) {
+            return res.status(400).json({ success: false, error: 'Código y nombre de bodega son obligatorios.' });
+        }
+        await dbRun(`
+            INSERT OR REPLACE INTO bodegas (codigo, nombre, ubicacion, responsable, estado, observaciones)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `, [codigo.trim().toUpperCase(), nombre.trim().toUpperCase(), ubicacion, responsable, estado || 'Activa', observaciones]);
+        res.json({ success: true, message: 'Bodega guardada correctamente.' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/proyectos', async (req, res) => {
+    try {
+        const proyectos = await dbAll(`SELECT * FROM proyectos ORDER BY nombre ASC`);
+        res.json({ success: true, data: proyectos });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/proyectos', async (req, res) => {
+    try {
+        const { id, nombre, responsable, estado, observaciones } = req.body;
+        if (!nombre || !nombre.trim()) {
+            return res.status(400).json({ success: false, error: 'Nombre del proyecto es obligatorio.' });
+        }
+        if (id) {
+            await dbRun(`
+                UPDATE proyectos SET nombre = ?, responsable = ?, estado = ?, observaciones = ? WHERE id = ?
+            `, [nombre.trim(), responsable, estado || 'Activo', observaciones, id]);
+        } else {
+            await dbRun(`
+                INSERT INTO proyectos (nombre, responsable, estado, observaciones)
+                VALUES (?, ?, ?, ?)
+            `, [nombre.trim(), responsable, estado || 'Activo', observaciones]);
+        }
+        res.json({ success: true, message: 'Proyecto guardado correctamente.' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/config', async (req, res) => {
+    try {
+        const categorias = (await dbAll(`SELECT DISTINCT valor FROM listas_config WHERE tipo = 'categoria' ORDER BY orden ASC`)).map(r => r.valor);
+        const unidades = (await dbAll(`SELECT DISTINCT valor FROM listas_config WHERE tipo = 'unidad_medida' ORDER BY orden ASC`)).map(r => r.valor);
+        const ubicaciones = (await dbAll(`SELECT DISTINCT valor FROM listas_config WHERE tipo = 'ubicacion_cds' ORDER BY orden ASC`)).map(r => r.valor);
+        const causales = (await dbAll(`SELECT DISTINCT valor FROM listas_config WHERE tipo = 'causal_disposicion' ORDER BY orden ASC`)).map(r => r.valor);
+        const bodegas = (await dbAll(`SELECT nombre FROM bodegas WHERE estado = 'Activa' ORDER BY codigo ASC`)).map(r => r.nombre);
+        const proyectos = (await dbAll(`SELECT nombre FROM proyectos WHERE estado = 'Activo' ORDER BY nombre ASC`)).map(r => r.nombre);
+
+        res.json({
+            success: true,
+            data: {
+                categorias,
+                unidades,
+                ubicaciones,
+                causales,
+                bodegas,
+                proyectos
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ==========================================
+// 7. REPORTES Y KARDEX POR ÍTEM
+// ==========================================
+app.get('/api/reportes/kardex/:codigo', async (req, res) => {
+    try {
+        const { codigo } = req.params;
+        const item = await dbGet(`SELECT * FROM items WHERE codigo = ?`, [codigo]);
+        if (!item) {
+            return res.status(404).json({ success: false, error: 'Ítem no encontrado.' });
+        }
+
+        const movimientos = await dbAll(`
+            SELECT * FROM movimientos 
+            WHERE codigo_item = ? 
+            ORDER BY fecha ASC, hora ASC, id ASC
+        `, [codigo]);
+
+        let saldo = 0;
+        const kardex = movimientos.map(m => {
+            const esEntrada = ['ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO'].includes(m.tipo_movimiento) && (m.bodega_destino === 'CDS' || !m.bodega_destino);
+            const esSalida = ['ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO'].includes(m.tipo_movimiento) && (m.bodega_origen === 'CDS' || !m.bodega_origen);
+
+            const entradaCant = esEntrada ? m.cantidad : 0;
+            const salidaCant = esSalida ? m.cantidad : 0;
+            saldo += (entradaCant - salidaCant);
+
+            return {
+                ...m,
+                entrada: entradaCant,
+                salida: salidaCant,
+                saldo_acumulado: saldo
+            };
+        });
+
+        res.json({ success: true, item, kardex, saldo_final: saldo });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ==========================================
+// 10. GESTIÓN, BACKUP Y RESTAURACIÓN DE BASE DE DATOS
+// ==========================================
+
+// Descargar archivo binario SQLite .db
+app.get('/api/database/download', (req, res) => {
+    try {
+        if (!fs.existsSync(DB_PATH)) {
+            return res.status(404).json({ success: false, error: 'Base de datos no encontrada en el sistema.' });
+        }
+        const today = new Date().toISOString().split('T')[0];
+        res.setHeader('Content-Type', 'application/x-sqlite3');
+        res.setHeader('Content-Disposition', `attachment; filename="inventario_backup_${today}.db"`);
+        res.download(DB_PATH, `inventario_backup_${today}.db`);
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Descargar archivo JSON directamente como adjunto
+app.get('/api/database/download-json', async (req, res) => {
+    try {
+        const items = await dbAll(`SELECT * FROM items ORDER BY codigo ASC`);
+        const movimientos = await dbAll(`SELECT * FROM movimientos ORDER BY id ASC`);
+        const control_vencimientos = await dbAll(`SELECT * FROM control_vencimientos ORDER BY id ASC`);
+        const bodegas = await dbAll(`SELECT * FROM bodegas ORDER BY codigo ASC`);
+        const proyectos = await dbAll(`SELECT * FROM proyectos ORDER BY id ASC`);
+        const listas_config = await dbAll(`SELECT * FROM listas_config ORDER BY id ASC`);
+
+        const exportData = {
+            success: true,
+            version: '1.0.4',
+            exportedAt: new Date().toISOString(),
+            data: {
+                items,
+                movimientos,
+                control_vencimientos,
+                bodegas,
+                proyectos,
+                listas_config
+            }
+        };
+
+        const today = new Date().toISOString().split('T')[0];
+        const jsonContent = JSON.stringify(exportData.data, null, 2);
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="inventario_backup_completo_${today}.json"`);
+        res.send(jsonContent);
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Descargar Libro Excel Multi-Hoja generado en el Servidor
+app.get('/api/database/download-excel', async (req, res) => {
+    try {
+        const items = await dbAll(`SELECT * FROM items ORDER BY codigo ASC`);
+        const movimientos = await dbAll(`SELECT * FROM movimientos ORDER BY id ASC`);
+        const control_vencimientos = await dbAll(`SELECT * FROM control_vencimientos ORDER BY id ASC`);
+        const bodegas = await dbAll(`SELECT * FROM bodegas ORDER BY codigo ASC`);
+
+        // Calcular inventario actual
+        const inventario = items.map(it => {
+            const movs = movimientos.filter(m => m.codigo_item === it.codigo);
+            const entradas = movs.filter(m => m.bodega_destino === 'CDS' && m.tipo_movimiento === 'ENTRADA').reduce((a, b) => a + b.cantidad, 0);
+            const salidas = movs.filter(m => m.bodega_origen === 'CDS' && (m.tipo_movimiento === 'ENTREGA' || m.tipo_movimiento === 'DISPOSICION FINAL')).reduce((a, b) => a + b.cantidad, 0);
+            const saldo = entradas - salidas;
+            return {
+                'Codigo': it.codigo,
+                'Item': it.nombre,
+                'Categoria': it.categoria,
+                'Unidad': it.unidad_medida,
+                'Ubicacion': it.ubicacion_cds,
+                'Entradas': entradas,
+                'Salidas': salidas,
+                'Existencia_Actual': saldo,
+                'Stock_Minimo': it.stock_minimo,
+                'Estado_Stock': saldo <= 0 ? 'SIN EXISTENCIAS' : (saldo <= it.stock_minimo ? 'STOCK BAJO' : 'STOCK NORMAL')
+            };
+        });
+
+        const workbook = XLSX.utils.book_new();
+
+        if (items.length > 0) {
+            const wsItems = XLSX.utils.json_to_sheet(items);
+            XLSX.utils.book_append_sheet(workbook, wsItems, 'ITEMS');
+        }
+        if (inventario.length > 0) {
+            const wsInv = XLSX.utils.json_to_sheet(inventario);
+            XLSX.utils.book_append_sheet(workbook, wsInv, 'INVENTARIO');
+        }
+        if (movimientos.length > 0) {
+            const wsMov = XLSX.utils.json_to_sheet(movimientos);
+            XLSX.utils.book_append_sheet(workbook, wsMov, 'MOVIMIENTOS');
+        }
+        if (control_vencimientos.length > 0) {
+            const wsVenc = XLSX.utils.json_to_sheet(control_vencimientos);
+            XLSX.utils.book_append_sheet(workbook, wsVenc, 'CONTROL_VENCIMIENTOS');
+        }
+        if (bodegas.length > 0) {
+            const wsBod = XLSX.utils.json_to_sheet(bodegas);
+            XLSX.utils.book_append_sheet(workbook, wsBod, 'BODEGAS');
+        }
+
+        const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+        const today = new Date().toISOString().split('T')[0];
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="INVENTARIO_RESPALDO_COMPLETO_${today}.xlsx"`);
+        res.send(buffer);
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Descargar Plantilla Excel generada en el Servidor
+app.get('/api/database/download-template', (req, res) => {
+    try {
+        const templateData = [
+            {
+                'Codigo': 7537,
+                'Item': 'ABRAZADERA AJUSTABLE (UNISTRUT) 1"',
+                'Cantidad': 25,
+                'ESTANTERIA': 'A',
+                'NIVEL': 3,
+                'Categoria': 'Materiales',
+                'Unidad': 'Unidad',
+                'Vencimiento': 'NO APLICA'
+            },
+            {
+                'Codigo': 7500,
+                'Item': 'ESPUMA EXPANSIVA SIKA 750ML',
+                'Cantidad': 19,
+                'ESTANTERIA': 'A',
+                'NIVEL': 2,
+                'Categoria': 'Consumibles',
+                'Unidad': 'Unidad',
+                'Vencimiento': 'APLICA'
+            },
+            {
+                'Codigo': 8555,
+                'Item': 'DISCO DE CORTE METAL 4 1/2"',
+                'Cantidad': 50,
+                'ESTANTERIA': 'B',
+                'NIVEL': 4,
+                'Categoria': 'Consumibles',
+                'Unidad': 'Unidad',
+                'Vencimiento': 'NO APLICA'
+            },
+            {
+                'Codigo': 7602,
+                'Item': 'ADAPTADOR HEMBRA CONDUIT PVC 1/2"',
+                'Cantidad': 0,
+                'ESTANTERIA': '',
+                'NIVEL': '',
+                'Categoria': 'Materiales',
+                'Unidad': 'Unidad',
+                'Vencimiento': 'NO APLICA'
+            }
+        ];
+
+        const workbook = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(templateData);
+        XLSX.utils.book_append_sheet(workbook, ws, 'ITEMS');
+
+        const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="PLANTILLA_CARGUE_INVENTARIO.xlsx"`);
+        res.send(buffer);
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Exportar copia de seguridad completa en JSON
+app.get('/api/database/export-json', async (req, res) => {
+    try {
+        const items = await dbAll(`SELECT * FROM items ORDER BY codigo ASC`);
+        const movimientos = await dbAll(`SELECT * FROM movimientos ORDER BY id ASC`);
+        const control_vencimientos = await dbAll(`SELECT * FROM control_vencimientos ORDER BY id ASC`);
+        const bodegas = await dbAll(`SELECT * FROM bodegas ORDER BY codigo ASC`);
+        const proyectos = await dbAll(`SELECT * FROM proyectos ORDER BY id ASC`);
+        const listas_config = await dbAll(`SELECT * FROM listas_config ORDER BY id ASC`);
+
+        res.json({
+            success: true,
+            version: '1.0.4',
+            exportedAt: new Date().toISOString(),
+            data: {
+                items,
+                movimientos,
+                control_vencimientos,
+                bodegas,
+                proyectos,
+                listas_config
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Restaurar base de datos completa desde JSON
+app.post('/api/database/restore-json', async (req, res) => {
+    try {
+        const { data } = req.body;
+        if (!data || !data.items || !Array.isArray(data.items)) {
+            return res.status(400).json({ success: false, error: 'El archivo JSON de respaldo no contiene una estructura válida.' });
+        }
+
+        db.serialize(async () => {
+            try {
+                await dbRun('BEGIN TRANSACTION');
+
+                await dbRun('DELETE FROM movimientos');
+                await dbRun('DELETE FROM control_vencimientos');
+                await dbRun('DELETE FROM items');
+                await dbRun('DELETE FROM bodegas');
+                await dbRun('DELETE FROM proyectos');
+                await dbRun('DELETE FROM listas_config');
+
+                // Insertar items
+                const itemStmt = db.prepare(`
+                    INSERT INTO items (
+                        codigo, nombre, categoria, subcategoria, unidad_medida, marca, referencia,
+                        ubicacion_cds, aplica_vencimiento, fecha_vencimiento_default, stock_minimo,
+                        estado, observaciones, fecha_registro
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `);
+                for (const it of data.items) {
+                    itemStmt.run([
+                        it.codigo, it.nombre, it.categoria || 'Materiales', it.subcategoria || 'General',
+                        it.unidad_medida || 'Unidad', it.marca || 'Generico', it.referencia || '-',
+                        it.ubicacion_cds || 'A1', it.aplica_vencimiento ? 1 : 0, it.fecha_vencimiento_default || null,
+                        parseInt(it.stock_minimo || 0, 10), it.estado || 'Activo', it.observaciones || '',
+                        it.fecha_registro || new Date().toISOString().split('T')[0]
+                    ]);
+                }
+                itemStmt.finalize();
+
+                // Insertar movimientos
+                if (data.movimientos && data.movimientos.length > 0) {
+                    const movStmt = db.prepare(`
+                        INSERT INTO movimientos (
+                            id, n_movimiento, fecha, hora, tipo_movimiento, codigo_item, nombre_item,
+                            cantidad, unidad, bodega_origen, bodega_destino, causal_condicion, ubicacion_cds,
+                            proyecto_destino, responsable, persona_recibe_devuelve, documento_referencia,
+                            observaciones, fecha_vencimiento_lote
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    `);
+                    for (const m of data.movimientos) {
+                        movStmt.run([
+                            m.id, m.n_movimiento, m.fecha, m.hora, m.tipo_movimiento, m.codigo_item,
+                            m.nombre_item, m.cantidad, m.unidad, m.bodega_origen, m.bodega_destino,
+                            m.causal_condicion, m.ubicacion_cds, m.proyecto_destino, m.responsable,
+                            m.persona_recibe_devuelve, m.documento_referencia, m.observaciones,
+                            m.fecha_vencimiento_lote
+                        ]);
+                    }
+                    movStmt.finalize();
+                }
+
+                // Insertar vencimientos
+                if (data.control_vencimientos && data.control_vencimientos.length > 0) {
+                    const vencStmt = db.prepare(`
+                        INSERT INTO control_vencimientos (
+                            id, codigo_item, nombre_item, bodega, fecha_ingreso, fecha_vencimiento,
+                            cant_inicial, cant_disponible, estado, observaciones, n_movimiento_origen
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    `);
+                    for (const v of data.control_vencimientos) {
+                        vencStmt.run([
+                            v.id, v.codigo_item, v.nombre_item, v.bodega, v.fecha_ingreso,
+                            v.fecha_vencimiento, v.cant_inicial, v.cant_disponible, v.estado,
+                            v.observaciones, v.n_movimiento_origen
+                        ]);
+                    }
+                    vencStmt.finalize();
+                }
+
+                // Insertar bodegas
+                if (data.bodegas && data.bodegas.length > 0) {
+                    const bodStmt = db.prepare(`INSERT INTO bodegas (codigo, nombre, ubicacion, responsable, estado, observaciones) VALUES (?, ?, ?, ?, ?, ?)`);
+                    for (const b of data.bodegas) {
+                        bodStmt.run([b.codigo, b.nombre, b.ubicacion, b.responsable, b.estado, b.observaciones]);
+                    }
+                    bodStmt.finalize();
+                }
+
+                // Insertar listas_config
+                if (data.listas_config && data.listas_config.length > 0) {
+                    const listStmt = db.prepare(`INSERT INTO listas_config (id, tipo, valor, orden) VALUES (?, ?, ?, ?)`);
+                    for (const l of data.listas_config) {
+                        listStmt.run([l.id, l.tipo, l.valor, l.orden]);
+                    }
+                    listStmt.finalize();
+                }
+
+                await dbRun('COMMIT');
+                res.json({ success: true, message: 'Base de datos restaurada exitosamente desde archivo JSON.' });
+            } catch (errInner) {
+                await dbRun('ROLLBACK');
+                res.status(500).json({ success: false, error: 'Error durante la transacción de restauración: ' + errInner.message });
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Restaurar archivo binario de Base de Datos SQLite (.db)
+app.post('/api/database/restore-binary', async (req, res) => {
+    try {
+        const { base64Data } = req.body;
+        if (!base64Data) {
+            return res.status(400).json({ success: false, error: 'No se recibieron datos del archivo de base de datos.' });
+        }
+
+        const buffer = Buffer.from(base64Data, 'base64');
+        if (buffer.length < 100) {
+            return res.status(400).json({ success: false, error: 'El archivo seleccionado no es un archivo de base de datos SQLite válido.' });
+        }
+
+        // Crear copia de seguridad previa antes de reemplazar
+        if (fs.existsSync(DB_PATH)) {
+            fs.copyFileSync(DB_PATH, DB_PATH + '.bak');
+        }
+
+        // Escribir el nuevo archivo de base de datos
+        fs.writeFileSync(DB_PATH, buffer);
+
+        // Si existe en AppData, sincronizarla también
+        const appDataDb = path.join(process.env.APPDATA || '', 'inventario-cds', 'inventario.db');
+        if (fs.existsSync(path.dirname(appDataDb))) {
+            try {
+                fs.copyFileSync(DB_PATH, appDataDb);
+            } catch (e) {
+                console.warn('No se pudo copiar a AppData:', e.message);
+            }
+        }
+
+        res.json({ 
+            success: true, 
+            message: 'Base de datos SQLite (.db) restaurada y cargada exitosamente. Se aplicaron todos los registros y movimientos.' 
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Error al restaurar archivo SQLite: ' + err.message });
+    }
+});
+
+// Importador / Cargue Masivo Inteligente desde Excel
+app.post('/api/database/import-excel-items', async (req, res) => {
+    try {
+        const { items, limpiarBasePrevia } = req.body;
+
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, error: 'No se encontraron filas válidas para importar.' });
+        }
+
+        const todayStr = new Date().toISOString().split('T')[0];
+        const nowTimeStr = new Date().toTimeString().split(' ')[0].substring(0, 5);
+
+        db.serialize(async () => {
+            try {
+                await dbRun('BEGIN TRANSACTION');
+
+                if (limpiarBasePrevia) {
+                    await dbRun('DELETE FROM movimientos');
+                    await dbRun('DELETE FROM control_vencimientos');
+                    await dbRun('DELETE FROM items');
+                }
+
+                let importados = 0;
+                let movId = 1;
+                const lastMov = await dbGet(`SELECT id FROM movimientos ORDER BY id DESC LIMIT 1`);
+                if (lastMov && !limpiarBasePrevia) {
+                    movId = lastMov.id + 1;
+                }
+
+                for (const it of items) {
+                    const codigo = parseInt(it.codigo, 10);
+                    if (!codigo || isNaN(codigo)) continue;
+
+                    const nombre = (it.nombre || '').trim().toUpperCase();
+                    if (!nombre) continue;
+
+                    const categoria = it.categoria || 'Materiales';
+                    const unidad = it.unidad_medida || 'Unidad';
+                    const ubicacion = (it.ubicacion_cds || 'A1').trim().toUpperCase();
+                    const stockInicial = parseFloat(it.cantidad || it.stock || 0) || 0;
+                    const aplicaVenc = it.aplica_vencimiento ? 1 : 0;
+
+                    // Insert or replace item
+                    await dbRun(`
+                        INSERT OR REPLACE INTO items (
+                            codigo, nombre, categoria, subcategoria, unidad_medida, marca, referencia,
+                            ubicacion_cds, aplica_vencimiento, stock_minimo, estado, observaciones, fecha_registro
+                        ) VALUES (?, ?, ?, 'General', ?, 'Generico', '-', ?, ?, 5, 'Activo', 'Importado desde Excel', ?)
+                    `, [codigo, nombre, categoria, unidad, ubicacion, aplicaVenc, todayStr]);
+
+                    // Si se indicó limpiar base o registrar movimiento inicial para stock > 0
+                    if (stockInicial > 0) {
+                        const n_mov = `MOV-${String(movId).padStart(5, '0')}`;
+                        await dbRun(`
+                            INSERT INTO movimientos (
+                                n_movimiento, fecha, hora, tipo_movimiento, codigo_item, nombre_item,
+                                cantidad, unidad, bodega_origen, bodega_destino, causal_condicion,
+                                ubicacion_cds, proyecto_destino, responsable, persona_recibe_devuelve,
+                                documento_referencia, observaciones
+                            ) VALUES (?, ?, ?, 'ENTRADA', ?, ?, ?, ?, 'PROVEEDOR', 'CDS', 'INVENTARIO INICIAL', ?, 'Operacion Central', 'Administrador CDS', 'Importador Excel', 'IMPORT-EXCEL', 'Cargue masivo de existencias')
+                        `, [n_mov, todayStr, nowTimeStr, codigo, nombre, stockInicial, unidad, ubicacion]);
+
+                        if (aplicaVenc) {
+                            const vencDate = it.fecha_vencimiento || '2027-08-30';
+                            await dbRun(`
+                                INSERT INTO control_vencimientos (
+                                    codigo_item, nombre_item, bodega, fecha_ingreso, fecha_vencimiento,
+                                    cant_inicial, cant_disponible, estado, observaciones, n_movimiento_origen
+                                ) VALUES (?, ?, 'CDS', ?, ?, ?, ?, 'VIGENTE', 'Lote de Cargue Masivo', ?)
+                            `, [codigo, nombre, todayStr, vencDate, stockInicial, stockInicial, n_mov]);
+                        }
+
+                        movId++;
+                    }
+
+                    importados++;
+                }
+
+                await dbRun('COMMIT');
+                res.json({ 
+                    success: true, 
+                    message: `Cargue masivo completado exitosamente. Se procesaron ${importados} ítems en la base de datos.`,
+                    importados
+                });
+            } catch (errInner) {
+                await dbRun('ROLLBACK');
+                res.status(500).json({ success: false, error: 'Error durante el cargue masivo: ' + errInner.message });
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Servir la interfaz SPA
+app.use((req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+});
+
+app.listen(PORT, () => {
+    console.log(`=======================================================`);
+    console.log(`🚀 SERVIDOR INVENTARIO INICIADO EXITOSAMENTE`);
+    console.log(`🌐 URL: http://localhost:${PORT}`);
+    console.log(`=======================================================`);
+});

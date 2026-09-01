@@ -1,0 +1,33 @@
+======================================================================
+SISTEMA DE INVENTARIO FÍSICO Y CONTROL DE VENCIMIENTOS CDS - PAQUETE COMPLETO
+Versión Oficial: 1.0.6 (Build 2026)
+======================================================================
+
+Esta carpeta contiene todos los archivos necesarios para instalar y ejecutar el
+software en computadores nuevos o limpios.
+
+CONTENIDO DEL PAQUETE:
+----------------------------------------------------------------------
+1. Instalador_Oficial_INVENTARIO_CDS.exe
+   - Instalador guiado con asistente paso a paso.
+   - Crea accesos directos en el Escritorio y en el Menú Inicio de Windows.
+   - Instala todos los componentes, motor de base de datos SQLite y servidor integrado.
+   - Recomendado para despliegue formal en puestos de trabajo de almacén/oficina.
+
+2. INVENTARIO_CDS_Portable.exe (o INVENTARIO_CDS_v1.0.6.exe)
+   - Ejecutable autocontenido que NO requiere instalación.
+   - Puede ejecutarse directamente desde una memoria USB o disco duro local.
+   - Ideal para pruebas inmediatas, portabilidad y entornos sin permisos de administrador.
+
+3. Iniciar_Inventario.bat
+   - Script de inicio rápido por si se requiere iniciar el entorno de servidor local.
+
+4. inventario_base.db
+   - Respaldo de la estructura de base de datos con catálogos base, bodegas oficiales y listas.
+
+REQUISITOS DEL SISTEMA:
+----------------------------------------------------------------------
+- Sistema Operativo: Windows 10 / Windows 11 (64 bits).
+- Espacio libre en disco: Mínimo 300 MB.
+- No requiere conexión a internet (Opera 100% Offline con SQLite persistente).
+======================================================================

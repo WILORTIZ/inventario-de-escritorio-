@@ -1,0 +1,33 @@
+======================================================================
+CENTRO DE ACTUALIZACIONES Y PARCHES - SISTEMA INVENTARIO CDS
+======================================================================
+
+Esta carpeta almacena el histórico de versiones y los ejecutables de actualización
+para actualizar instalaciones existentes sin perder la base de datos de movimientos.
+
+HISTORIAL DE VERSIONES Y CAMBIOS:
+----------------------------------------------------------------------
+[Versión 1.0.6] (Última versión estable)
+- Módulo de Bodegas con código autoincrementable automático (BOD-001, BOD-002...).
+- Bloqueo de modificación manual del código de bodega (Solo lectura).
+- Asignación automática de la primera bodega creada como BODEGA CENTRAL.
+- Protección total de la Bodega Central (solo permite modificación descriptiva, no eliminación).
+- Botones de Modificación y Eliminación con validación de movimientos para bodegas secundarias.
+- Refuerzo de la regla de inventario oficial gobernado por Bodega Central y control de stock previo en devoluciones.
+
+[Versión 1.0.5]
+- Botón "Deshacer / Eliminar Último Movimiento" en Libro Diario.
+- Eliminación individual de transacciones con reversión estricta de stock y lotes.
+- Sistema de notificaciones modernas (Toasts) en sustitución de alertas del navegador.
+- Selector dinámico de stock disponible según la Bodega Origen seleccionada.
+
+[Versión 1.0.4]
+- Módulo completo de Gestión de Base de Datos y Backups (Exportar/Restaurar SQLite .db y JSON).
+- Importador masivo inteligente desde hojas Excel (.xlsx/.xlsm).
+- Descarga de reportes nativos en Excel multi-hoja con SheetJS.
+- Empaquetado oficial con Electron y Electron Builder.
+
+[Versión 1.0.3 - 1.0.0]
+- Sistema base de inventario físico, catálogo de ítems y Kardex individual.
+- Control y semaforización de vencimientos con asistente de bajas por caducidad.
+======================================================================

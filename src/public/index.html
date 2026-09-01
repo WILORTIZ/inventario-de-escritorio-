@@ -9,6 +9,9 @@
     <link rel="stylesheet" href="css/custom.css">
 </head>
 <body>
+    <!-- Toast Notification Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 11000;" id="toastContainer"></div>
+
     <div class="d-flex" id="wrapper">
         <!-- SIDEBAR LATERAL IZQUIERDA -->
         <aside id="sidebar-wrapper">
@@ -362,11 +365,14 @@
                                 <h5 class="fw-bold mb-1 text-dark">Libro Diario de Movimientos y Transacciones</h5>
                                 <p class="text-muted mb-0 small">Historial completo con trazabilidad de orígenes, destinos y responsables</p>
                             </div>
-                            <div class="d-flex gap-2">
+                            <div class="d-flex flex-wrap gap-2">
+                                <button class="btn btn-outline-danger btn-sm d-flex align-items-center fw-semibold shadow-sm" onclick="abrirModalEliminarUltimoMovimiento()">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i> Deshacer / Eliminar Último Movimiento
+                                </button>
                                 <button class="btn btn-outline-success btn-sm d-flex align-items-center fw-semibold shadow-sm" onclick="exportMovimientosExcel()">
                                     <i class="bi bi-file-earmark-excel-fill me-1 text-success"></i> Exportar Excel (.xlsx)
                                 </button>
-                                <button class="btn btn-primary btn-sm d-flex align-items-center" onclick="openModalMovimiento()">
+                                <button class="btn btn-primary btn-sm d-flex align-items-center shadow-sm" onclick="openModalMovimiento()">
                                     <i class="bi bi-plus-lg me-1"></i> Registrar Transacción
                                 </button>
                             </div>
@@ -420,6 +426,7 @@
                                         <th>Causal / Proyecto</th>
                                         <th>Responsable</th>
                                         <th>Observaciones</th>
+                                        <th class="text-center">Acción</th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-movimientos-body"></tbody>
@@ -551,6 +558,7 @@
                                                 <th>Bodega</th>
                                                 <th>Responsable</th>
                                                 <th class="text-center">Estado</th>
+                                                <th class="text-center">Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody id="table-bodegas-body"></tbody>
@@ -873,7 +881,7 @@
                                         <span>Unidad: <strong id="mov-preview-unidad">Unidad</strong></span>
                                     </div>
                                     <div class="small">
-                                        Stock Disponible CDS: <span class="badge bg-primary fs-6" id="mov-preview-stock">0</span>
+                                        <span id="mov-preview-stock-label">Stock Disponible:</span> <span class="badge bg-primary fs-6" id="mov-preview-stock">0</span>
                                     </div>
                                 </div>
                             </div>
@@ -885,7 +893,7 @@
 
                             <div class="col-12 col-md-4">
                                 <label class="form-label fw-bold small">Bodega Origen</label>
-                                <select class="form-select" id="mov-bodega-origen"></select>
+                                <select class="form-select" id="mov-bodega-origen" onchange="actualizarStockPreviewEnMovimiento()"></select>
                             </div>
 
                             <div class="col-12 col-md-4">
@@ -1171,20 +1179,37 @@
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
                 <div class="modal-header modal-header-custom p-3">
-                    <h6 class="modal-title fw-bold text-white">
+                    <h6 class="modal-title fw-bold text-white" id="modalBodegaTitle">
                         <i class="bi bi-building-add text-secondary me-2"></i>frmNuevaBodega - Administrador de Bodegas
                     </h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <form id="form-bodega" onsubmit="submitBodega(event)">
                     <div class="modal-body p-4">
+                        <input type="hidden" id="bod-is-edit" value="0">
+                        
+                        <!-- Banner informativo si es Bodega Central -->
+                        <div class="alert alert-primary py-2 px-3 mb-3 d-flex align-items-center gap-2 small rounded-3" id="bod-central-alert" style="display: none;">
+                            <i class="bi bi-star-fill text-warning fs-5 flex-shrink-0"></i>
+                            <div id="bod-central-alert-text">
+                                <strong>Bodega Central:</strong> Esta bodega es el almacén central operativo. Puede modificar sus datos, pero no puede ser eliminada.
+                            </div>
+                        </div>
+
                         <div class="mb-3">
-                            <label class="form-label fw-bold small">Código de Bodega <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control text-uppercase" id="bod-codigo" required placeholder="Ej: BOD-007">
+                            <label class="form-label fw-bold small d-flex justify-content-between align-items-center">
+                                <span>Código de Bodega <span class="text-danger">*</span></span>
+                                <span class="badge bg-secondary-subtle text-secondary border small"><i class="bi bi-lock-fill me-1"></i>Autoincrementable</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light text-muted"><i class="bi bi-upc-scan"></i></span>
+                                <input type="text" class="form-control text-uppercase bg-light fw-bold text-primary font-monospace" id="bod-codigo" readonly required placeholder="Autogenerado...">
+                            </div>
+                            <div class="form-text text-muted small"><i class="bi bi-info-circle me-1"></i>El código es asignado automáticamente en secuencia estricta por el sistema y no permite modificación manual.</div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label fw-bold small">Nombre de Bodega <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control text-uppercase" id="bod-nombre" required placeholder="Ej: ALMACEN NORTE">
+                            <input type="text" class="form-control text-uppercase" id="bod-nombre" required placeholder="Ej: ALMACEN NORTE, CDS...">
                         </div>
                         <div class="mb-3">
                             <label class="form-label fw-bold small">Ubicación Física</label>
@@ -1203,14 +1228,99 @@
                         </div>
                         <div class="mb-3">
                             <label class="form-label fw-bold small">Observaciones</label>
-                            <input type="text" class="form-control" id="bod-obs" placeholder="Propósito de la bodega">
+                            <input type="text" class="form-control" id="bod-obs" placeholder="Propósito o notas de la bodega">
                         </div>
                     </div>
                     <div class="modal-footer bg-light p-3">
                         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold">Guardar Bodega</button>
+                        <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold" id="btn-guardar-bodega">
+                            <i class="bi bi-check2-circle me-1"></i> Guardar Bodega
+                        </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Confirmar Eliminación de Bodega -->
+    <div class="modal fade" id="modalEliminarBodega" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+                <div class="modal-header bg-danger text-white p-3">
+                    <h6 class="modal-title fw-bold text-white">
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Confirmar Eliminación de Bodega
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="alert alert-warning border-warning d-flex align-items-start gap-2 mb-3">
+                        <i class="bi bi-info-circle-fill text-warning fs-5 flex-shrink-0 mt-1"></i>
+                        <div class="small">
+                            <strong>Atención:</strong> Solo se pueden eliminar bodegas secundarias que no posean movimientos ni lotes asociados. La Bodega Central está protegida y no puede eliminarse.
+                        </div>
+                    </div>
+                    
+                    <div class="card border rounded-3 p-3 bg-light mb-3">
+                        <div class="row g-2 small">
+                            <div class="col-6"><span class="text-muted">Código:</span> <strong class="text-primary font-monospace" id="del-bod-codigo">--</strong></div>
+                            <div class="col-6"><span class="text-muted">Estado:</span> <span class="badge bg-secondary" id="del-bod-estado">--</span></div>
+                            <div class="col-12"><span class="text-muted">Nombre:</span> <strong class="text-dark fs-6" id="del-bod-nombre">--</strong></div>
+                            <div class="col-12"><span class="text-muted">Ubicación:</span> <span class="text-dark" id="del-bod-ubicacion">--</span></div>
+                            <div class="col-12"><span class="text-muted">Responsable:</span> <span class="text-dark" id="del-bod-responsable">--</span></div>
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="del-bod-cod-input">
+                    <p class="text-muted small mb-0">¿Está seguro de que desea eliminar permanentemente esta bodega de la base de datos?</p>
+                </div>
+                <div class="modal-footer bg-light p-3">
+                    <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger btn-sm px-4 fw-bold shadow-sm" id="btn-confirmar-eliminar-bodega" onclick="ejecutarEliminarBodega()">
+                        <i class="bi bi-trash3-fill me-1"></i> Confirmar y Eliminar Bodega
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Confirmar Eliminación de Movimiento -->
+    <div class="modal fade" id="modalEliminarMovimiento" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+                <div class="modal-header bg-danger text-white p-3">
+                    <h6 class="modal-title fw-bold text-white">
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Confirmar Eliminación de Movimiento
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="alert alert-warning border-warning d-flex align-items-start gap-2 mb-3">
+                        <i class="bi bi-info-circle-fill text-warning fs-5 flex-shrink-0 mt-1"></i>
+                        <div class="small">
+                            <strong>Atención:</strong> Esta acción reversará el impacto de existencias en Bodega CDS y eliminará permanentemente el registro del libro diario y kardex.
+                        </div>
+                    </div>
+                    
+                    <div class="card border rounded-3 p-3 bg-light mb-3">
+                        <div class="row g-2 small">
+                            <div class="col-6"><span class="text-muted">N° Movimiento:</span> <strong class="text-primary" id="del-mov-n">--</strong></div>
+                            <div class="col-6"><span class="text-muted">Tipo:</span> <span class="badge bg-secondary" id="del-mov-tipo">--</span></div>
+                            <div class="col-12"><span class="text-muted">Ítem:</span> <strong class="text-dark" id="del-mov-item">--</strong></div>
+                            <div class="col-6"><span class="text-muted">Cantidad:</span> <strong class="text-danger fs-6" id="del-mov-cantidad">--</strong></div>
+                            <div class="col-6"><span class="text-muted">Fecha/Hora:</span> <span class="text-dark" id="del-mov-fecha">--</span></div>
+                            <div class="col-12"><span class="text-muted">Responsable:</span> <span class="text-dark" id="del-mov-responsable">--</span></div>
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="del-mov-id">
+                    <p class="text-muted small mb-0">¿Está seguro de que desea eliminar este movimiento de la base de datos?</p>
+                </div>
+                <div class="modal-footer bg-light p-3">
+                    <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger btn-sm px-4 fw-bold shadow-sm" id="btn-confirmar-eliminar-mov" onclick="ejecutarEliminarMovimiento()">
+                        <i class="bi bi-trash3-fill me-1"></i> Eliminar y Revertir Stock
+                    </button>
+                </div>
             </div>
         </div>
     </div>

@@ -5,6 +5,73 @@
 
 const API_BASE = '/api';
 
+// ==============================================================
+// GESTIÓN DE NOTIFICACIONES TOAST Y MODALES SIN BLOQUEOS
+// ==============================================================
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+
+    const toastId = 'toast-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+    let bgClass = 'bg-success text-white';
+    let iconClass = 'bi-check-circle-fill';
+
+    if (type === 'danger' || type === 'error') {
+        bgClass = 'bg-danger text-white';
+        iconClass = 'bi-exclamation-triangle-fill';
+    } else if (type === 'warning') {
+        bgClass = 'bg-warning text-dark';
+        iconClass = 'bi-exclamation-circle-fill';
+    } else if (type === 'info') {
+        bgClass = 'bg-info text-dark';
+        iconClass = 'bi-info-circle-fill';
+    }
+
+    const toastEl = document.createElement('div');
+    toastEl.className = `toast align-items-center ${bgClass} border-0 shadow-lg mb-2`;
+    toastEl.id = toastId;
+    toastEl.setAttribute('role', 'alert');
+    toastEl.setAttribute('aria-live', 'assertive');
+    toastEl.setAttribute('aria-atomic', 'true');
+    toastEl.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body d-flex align-items-center gap-2 py-2 px-3">
+                <i class="bi ${iconClass} fs-5"></i>
+                <div class="fw-semibold small">${message}</div>
+            </div>
+            <button type="button" class="btn-close ${type === 'warning' || type === 'info' ? '' : 'btn-close-white'} me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    `;
+
+    container.appendChild(toastEl);
+    const bsToast = new bootstrap.Toast(toastEl, { delay: 4500 });
+    bsToast.show();
+
+    toastEl.addEventListener('hidden.bs.toast', () => {
+        toastEl.remove();
+    });
+}
+
+function closeModal(modalId) {
+    const modalEl = document.getElementById(modalId);
+    if (!modalEl) return;
+
+    try {
+        const instance = bootstrap.Modal.getOrCreateInstance(modalEl);
+        instance.hide();
+    } catch (e) {
+        console.warn('Error ocultando modal:', e);
+    }
+
+    // Limpieza de seguridad para eliminar backdrops atascados y reactivar scroll
+    setTimeout(() => {
+        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+    }, 300);
+}
+
 // Estado global de la aplicación
 let appState = {
     currentView: 'inicio',
@@ -340,20 +407,25 @@ function renderMovimientosTable(movs) {
     if (!tbody) return;
 
     if (movs.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="11" class="text-center py-4 text-muted">No se encontraron movimientos registrados.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" class="text-center py-4 text-muted">No se encontraron movimientos registrados.</td></tr>`;
         return;
     }
 
-    tbody.innerHTML = movs.map(m => {
+    tbody.innerHTML = movs.map((m, index) => {
         let badgeClass = 'bg-secondary';
         if (m.tipo_movimiento === 'ENTRADA') badgeClass = 'bg-success';
         if (m.tipo_movimiento === 'ENTREGA') badgeClass = 'bg-warning text-dark';
         if (m.tipo_movimiento === 'DISPOSICION FINAL') badgeClass = 'bg-danger';
         if (m.tipo_movimiento === 'DEVOLUCION') badgeClass = 'bg-info text-dark';
 
+        const isLatest = index === 0;
+
         return `
-            <tr>
-                <td><strong class="text-primary">${m.n_movimiento}</strong></td>
+            <tr class="${isLatest ? 'table-light' : ''}">
+                <td>
+                    <strong class="text-primary">${m.n_movimiento}</strong>
+                    ${isLatest ? '<span class="badge bg-primary ms-1" style="font-size: 0.65rem;">Último</span>' : ''}
+                </td>
                 <td>
                     <div>${m.fecha}</div>
                     <small class="text-muted">${m.hora}</small>
@@ -370,6 +442,11 @@ function renderMovimientosTable(movs) {
                 </td>
                 <td>${m.responsable || '-'}</td>
                 <td class="small text-muted">${m.observaciones || '-'}</td>
+                <td class="text-center">
+                    <button class="btn btn-outline-danger btn-sm py-0 px-2 shadow-sm" onclick="abrirModalEliminarMovimiento(${m.id})" title="Eliminar y revertir este movimiento">
+                        <i class="bi bi-trash3"></i>
+                    </button>
+                </td>
             </tr>
         `;
     }).join('');
@@ -379,7 +456,21 @@ function openModalMovimiento(preselectedCode = null) {
     const form = document.getElementById('form-movimiento');
     if (form) form.reset();
 
-    // Llenar selector de ítems
+    // Resetear vistas previas e informaciones
+    const infoDiv = document.getElementById('mov-item-info');
+    if (infoDiv) infoDiv.style.display = 'none';
+
+    const vencContainer = document.getElementById('mov-vencimiento-container');
+    if (vencContainer) vencContainer.style.display = 'none';
+
+    // Asegurar botón habilitado
+    const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = 'Registrar Transacción';
+    }
+
+    // Llenar selector de ítems activos
     const select = document.getElementById('mov-item-select');
     if (select) {
         let html = '<option value="">-- Seleccionar Ítem del Catálogo --</option>';
@@ -396,7 +487,8 @@ function openModalMovimiento(preselectedCode = null) {
 
     handleTipoMovimientoChange(document.getElementById('mov-tipo').value);
 
-    const modal = new bootstrap.Modal(document.getElementById('modalMovimiento'));
+    const modalEl = document.getElementById('modalMovimiento');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modal.show();
 }
 
@@ -406,7 +498,7 @@ function handleTipoMovimientoChange(tipo) {
     const causalSelect = document.getElementById('mov-causal');
     const vencContainer = document.getElementById('mov-vencimiento-container');
 
-    // Reglas de negocio del prompt maestro
+    // Reglas de negocio
     if (tipo === 'ENTRADA') {
         origenSelect.value = 'ALL';
         destinoSelect.value = 'CDS';
@@ -436,6 +528,8 @@ function handleTipoMovimientoChange(tipo) {
     } else {
         vencContainer.style.display = 'none';
     }
+
+    actualizarStockPreviewEnMovimiento();
 }
 
 function handleItemSelectInMovimiento(codigo) {
@@ -450,14 +544,9 @@ function handleItemSelectInMovimiento(codigo) {
         return;
     }
 
-    // Buscar stock actual en CDS
-    const invItem = appState.inventario.find(i => String(i.codigo) === String(codigo));
-    const stockActual = invItem ? invItem.existencia : 0;
-
     document.getElementById('mov-preview-nombre').textContent = item.nombre;
     document.getElementById('mov-preview-ubicacion').textContent = item.ubicacion_cds || 'A1';
     document.getElementById('mov-preview-unidad').textContent = item.unidad_medida;
-    document.getElementById('mov-preview-stock').textContent = `${stockActual} ${item.unidad_medida}`;
 
     infoDiv.style.display = 'block';
 
@@ -466,10 +555,67 @@ function handleItemSelectInMovimiento(codigo) {
     } else {
         vencContainer.style.display = 'none';
     }
+
+    actualizarStockPreviewEnMovimiento();
+}
+
+async function actualizarStockPreviewEnMovimiento() {
+    const selectedCode = document.getElementById('mov-item-select')?.value;
+    if (!selectedCode) return;
+
+    const item = appState.items.find(i => String(i.codigo) === String(selectedCode));
+    if (!item) return;
+
+    const tipo = document.getElementById('mov-tipo').value;
+    const origenSelect = document.getElementById('mov-bodega-origen');
+    const labelEl = document.getElementById('mov-preview-stock-label');
+    const badgeEl = document.getElementById('mov-preview-stock');
+
+    let bodegaRelevante = 'CDS';
+    if (tipo === 'DEVOLUCION') {
+        bodegaRelevante = (origenSelect && origenSelect.value && origenSelect.value !== 'ALL') ? origenSelect.value : 'PROYECTOS';
+    } else if (tipo === 'ENTREGA' || tipo === 'DISPOSICION FINAL' || tipo === 'AJUSTE NEGATIVO') {
+        bodegaRelevante = (origenSelect && origenSelect.value && origenSelect.value !== 'ALL') ? origenSelect.value : 'CDS';
+    } else {
+        bodegaRelevante = 'CDS';
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/inventario/stock-bodega?codigo_item=${selectedCode}&bodega=${encodeURIComponent(bodegaRelevante)}`);
+        const result = await res.json();
+        const stockActual = result.success ? result.stock : 0;
+
+        if (labelEl) {
+            labelEl.textContent = `Stock Disponible [${bodegaRelevante}]:`;
+        }
+
+        if (badgeEl) {
+            if (tipo === 'DEVOLUCION' || tipo === 'ENTREGA' || tipo === 'DISPOSICION FINAL' || tipo === 'AJUSTE NEGATIVO') {
+                if (stockActual <= 0) {
+                    badgeEl.className = 'badge bg-danger fs-6';
+                    badgeEl.textContent = `0 ${item.unidad_medida} (Sin existencias)`;
+                } else {
+                    badgeEl.className = 'badge bg-success fs-6';
+                    badgeEl.textContent = `${stockActual} ${item.unidad_medida}`;
+                }
+            } else {
+                badgeEl.className = 'badge bg-primary fs-6';
+                badgeEl.textContent = `${stockActual} ${item.unidad_medida}`;
+            }
+        }
+    } catch (err) {
+        console.warn('Error al consultar stock por bodega:', err);
+    }
 }
 
 async function submitMovimiento(e) {
     e.preventDefault();
+
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Registrando...';
+    }
 
     const payload = {
         tipo_movimiento: document.getElementById('mov-tipo').value,
@@ -495,20 +641,137 @@ async function submitMovimiento(e) {
 
         const result = await res.json();
         if (!result.success) {
-            alert(`⚠️ Error: ${result.error}`);
+            showToast(`⚠️ ${result.error}`, 'danger');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = 'Registrar Transacción';
+            }
             return;
         }
 
-        // Cerrar modal y recargar datos
-        bootstrap.Modal.getInstance(document.getElementById('modalMovimiento')).hide();
-        alert(`✅ ${result.message}`);
+        // Cerrar modal limpiamente sin bloquear el thread
+        closeModal('modalMovimiento');
+        showToast(`✅ ${result.message}`, 'success');
 
-        await loadKPIs();
-        await loadInventario();
-        await loadMovimientos();
-        await loadVencimientos();
+        // Resetear formulario para el próximo registro
+        document.getElementById('form-movimiento')?.reset();
+
+        // Recargar datos en segundo plano
+        await Promise.all([
+            loadKPIs(),
+            loadInventario(),
+            loadMovimientos(),
+            loadVencimientos()
+        ]);
     } catch (err) {
-        alert(`Error al registrar movimiento: ${err.message}`);
+        showToast(`Error al registrar movimiento: ${err.message}`, 'danger');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'Registrar Transacción';
+        }
+    }
+}
+
+// ==============================================================
+// 5.1. ELIMINACIÓN Y REVERSIÓN DE MOVIMIENTOS
+// ==============================================================
+async function abrirModalEliminarUltimoMovimiento() {
+    try {
+        const res = await fetch(`${API_BASE}/movimientos/ultimo`);
+        const result = await res.json();
+        if (!result.success || !result.data) {
+            showToast('No hay movimientos registrados para eliminar.', 'warning');
+            return;
+        }
+
+        mostrarModalEliminar(result.data);
+    } catch (err) {
+        showToast(`Error al consultar el último movimiento: ${err.message}`, 'danger');
+    }
+}
+
+async function abrirModalEliminarMovimiento(id) {
+    const mov = appState.movimientos.find(m => m.id === id);
+    if (!mov) {
+        try {
+            const res = await fetch(`${API_BASE}/movimientos`);
+            const result = await res.json();
+            if (result.success) {
+                const found = result.data.find(m => m.id === id);
+                if (found) {
+                    mostrarModalEliminar(found);
+                    return;
+                }
+            }
+        } catch (e) {}
+        showToast('Movimiento no encontrado.', 'warning');
+        return;
+    }
+
+    mostrarModalEliminar(mov);
+}
+
+function mostrarModalEliminar(mov) {
+    document.getElementById('del-mov-id').value = mov.id;
+    document.getElementById('del-mov-n').textContent = mov.n_movimiento;
+    document.getElementById('del-mov-tipo').textContent = mov.tipo_movimiento;
+    document.getElementById('del-mov-item').textContent = `${mov.codigo_item} - ${mov.nombre_item}`;
+    document.getElementById('del-mov-cantidad').textContent = `${mov.cantidad} ${mov.unidad}`;
+    document.getElementById('del-mov-fecha').textContent = `${mov.fecha} ${mov.hora}`;
+    document.getElementById('del-mov-responsable').textContent = mov.responsable || 'CDS';
+
+    const btn = document.getElementById('btn-confirmar-eliminar-mov');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-trash3-fill me-1"></i> Eliminar y Revertir Stock';
+    }
+
+    const modalEl = document.getElementById('modalEliminarMovimiento');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+async function ejecutarEliminarMovimiento() {
+    const id = document.getElementById('del-mov-id').value;
+    if (!id) return;
+
+    const btn = document.getElementById('btn-confirmar-eliminar-mov');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Eliminando...';
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/movimientos/${id}`, {
+            method: 'DELETE'
+        });
+
+        const result = await res.json();
+        if (!result.success) {
+            showToast(`⚠️ ${result.error}`, 'danger');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-trash3-fill me-1"></i> Eliminar y Revertir Stock';
+            }
+            return;
+        }
+
+        closeModal('modalEliminarMovimiento');
+        showToast(`✅ ${result.message}`, 'success');
+
+        await Promise.all([
+            loadKPIs(),
+            loadInventario(),
+            loadMovimientos(),
+            loadVencimientos()
+        ]);
+    } catch (err) {
+        showToast(`Error al eliminar movimiento: ${err.message}`, 'danger');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-trash3-fill me-1"></i> Eliminar y Revertir Stock';
+        }
     }
 }
 
@@ -612,7 +875,8 @@ function openModalNuevoItem() {
 
     sugerirSiguienteCodigo();
 
-    const modal = new bootstrap.Modal(document.getElementById('modalNuevoItem'));
+    const modalEl = document.getElementById('modalNuevoItem');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modal.show();
 }
 
@@ -636,7 +900,8 @@ function editarItem(codigo) {
 
     document.getElementById('modalNuevoItemTitle').innerHTML = '<i class="bi bi-pencil-square text-primary me-2"></i>frmNuevoItem - Modificar Ítem';
 
-    const modal = new bootstrap.Modal(document.getElementById('modalNuevoItem'));
+    const modalEl = document.getElementById('modalNuevoItem');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modal.show();
 }
 
@@ -645,7 +910,7 @@ async function submitItem(e) {
 
     const codigoRaw = document.getElementById('item-codigo').value.trim();
     if (!/^\d+$/.test(codigoRaw)) {
-        alert('❌ Error: El código del ítem debe ser 100% numérico, sin letras ni guiones.');
+        showToast('❌ Error: El código del ítem debe ser 100% numérico, sin letras ni guiones.', 'danger');
         return;
     }
 
@@ -679,18 +944,18 @@ async function submitItem(e) {
 
         const result = await res.json();
         if (!result.success) {
-            alert(`⚠️ Error: ${result.error}`);
+            showToast(`⚠️ ${result.error}`, 'danger');
             return;
         }
 
-        bootstrap.Modal.getInstance(document.getElementById('modalNuevoItem')).hide();
-        alert(`✅ ${result.message}`);
+        closeModal('modalNuevoItem');
+        showToast(`✅ ${result.message}`, 'success');
 
         await loadItems();
         await loadInventario();
         await loadKPIs();
     } catch (err) {
-        alert(`Error al guardar ítem: ${err.message}`);
+        showToast(`Error al guardar ítem: ${err.message}`, 'danger');
     }
 }
 
@@ -764,7 +1029,8 @@ function openModalBajasVencidos() {
         `).join('');
     }
 
-    const modal = new bootstrap.Modal(document.getElementById('modalBajasVencidos'));
+    const modalEl = document.getElementById('modalBajasVencidos');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modal.show();
 }
 
@@ -777,7 +1043,7 @@ function toggleSelectAllBajas(checkbox) {
 async function ejecutarBajasMasivas() {
     const checked = Array.from(document.querySelectorAll('.check-baja-item:checked')).map(cb => parseInt(cb.value, 10));
     if (checked.length === 0) {
-        alert('⚠️ Seleccione al menos un lote vencido para dar de baja.');
+        showToast('⚠️ Seleccione al menos un lote vencido para dar de baja.', 'warning');
         return;
     }
 
@@ -800,19 +1066,19 @@ async function ejecutarBajasMasivas() {
 
         const result = await res.json();
         if (!result.success) {
-            alert(`⚠️ Error: ${result.error}`);
+            showToast(`⚠️ ${result.error}`, 'danger');
             return;
         }
 
-        bootstrap.Modal.getInstance(document.getElementById('modalBajasVencidos')).hide();
-        alert(`✅ ${result.message}`);
+        closeModal('modalBajasVencidos');
+        showToast(`✅ ${result.message}`, 'success');
 
         await loadKPIs();
         await loadInventario();
         await loadMovimientos();
         await loadVencimientos();
     } catch (err) {
-        alert(`Error al ejecutar bajas: ${err.message}`);
+        showToast(`Error al ejecutar bajas: ${err.message}`, 'danger');
     }
 }
 
@@ -833,19 +1099,41 @@ async function loadBodegasYProyectos() {
             appState.bodegas = dataBod.data;
             const tbody = document.getElementById('table-bodegas-body');
             if (tbody) {
-                tbody.innerHTML = dataBod.data.map(b => `
+                tbody.innerHTML = dataBod.data.map(b => {
+                    const esCentral = b.es_central === 1 || b.codigo === 'BOD-001';
+                    return `
                     <tr>
-                        <td><strong>${b.codigo}</strong></td>
+                        <td><span class="badge bg-light text-primary border font-monospace fw-bold">${b.codigo}</span></td>
                         <td>
-                            <div class="fw-bold">${b.nombre}</div>
+                            <div class="fw-bold d-flex align-items-center flex-wrap gap-1">
+                                <span>${b.nombre}</span>
+                                ${esCentral ? '<span class="badge bg-primary shadow-sm small" style="font-size: 0.72rem;"><i class="bi bi-star-fill text-warning me-1"></i>Central</span>' : ''}
+                            </div>
                             <small class="text-muted">${b.ubicacion || ''}</small>
                         </td>
                         <td>${b.responsable || '-'}</td>
                         <td class="text-center">
                             <span class="badge ${b.estado === 'Activa' ? 'bg-success' : 'bg-secondary'}">${b.estado}</span>
                         </td>
+                        <td class="text-center">
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary btn-sm py-1 px-2" onclick="editarBodega('${b.codigo}')" title="Modificar Bodega">
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+                                ${esCentral ? `
+                                    <button class="btn btn-outline-secondary btn-sm py-1 px-2" disabled title="La Bodega Central no se puede eliminar (Solo modificar)">
+                                        <i class="bi bi-lock-fill"></i>
+                                    </button>
+                                ` : `
+                                    <button class="btn btn-outline-danger btn-sm py-1 px-2" onclick="abrirModalEliminarBodega('${b.codigo}')" title="Eliminar Bodega">
+                                        <i class="bi bi-trash3"></i>
+                                    </button>
+                                `}
+                            </div>
+                        </td>
                     </tr>
-                `).join('');
+                `;
+                }).join('');
             }
         }
 
@@ -873,15 +1161,78 @@ async function loadBodegasYProyectos() {
     }
 }
 
-function openModalNuevaBodega() {
+async function openModalNuevaBodega() {
     document.getElementById('form-bodega').reset();
-    const modal = new bootstrap.Modal(document.getElementById('modalNuevaBodega'));
+    document.getElementById('bod-is-edit').value = '0';
+    document.getElementById('modalBodegaTitle').innerHTML = '<i class="bi bi-building-add text-secondary me-2"></i>frmNuevaBodega - Nueva Bodega';
+    
+    const btn = document.getElementById('btn-guardar-bodega');
+    if (btn) btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Guardar Bodega';
+
+    try {
+        const res = await fetch(`${API_BASE}/bodegas/siguiente-codigo`);
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('bod-codigo').value = data.siguienteCodigo;
+            const alertEl = document.getElementById('bod-central-alert');
+            const alertText = document.getElementById('bod-central-alert-text');
+            if (data.esPrimera) {
+                if (alertEl) alertEl.style.display = 'flex';
+                if (alertText) alertText.innerHTML = '<strong>Primera Bodega:</strong> Esta será la primera bodega registrada y funcionará como la <strong>BODEGA CENTRAL</strong> del sistema.';
+            } else {
+                if (alertEl) alertEl.style.display = 'none';
+            }
+        } else {
+            document.getElementById('bod-codigo').value = 'BOD-???';
+        }
+    } catch (err) {
+        document.getElementById('bod-codigo').value = 'BOD-???';
+    }
+
+    const modalEl = document.getElementById('modalNuevaBodega');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+function editarBodega(codigo) {
+    if (!appState.bodegas) return;
+    const bodega = appState.bodegas.find(b => b.codigo === codigo);
+    if (!bodega) return;
+
+    document.getElementById('form-bodega').reset();
+    document.getElementById('bod-is-edit').value = '1';
+    document.getElementById('bod-codigo').value = bodega.codigo;
+    document.getElementById('bod-nombre').value = bodega.nombre;
+    document.getElementById('bod-ubicacion').value = bodega.ubicacion || '';
+    document.getElementById('bod-responsable').value = bodega.responsable || '';
+    document.getElementById('bod-estado').value = bodega.estado || 'Activa';
+    document.getElementById('bod-obs').value = bodega.observaciones || '';
+
+    const esCentral = bodega.es_central === 1 || bodega.codigo === 'BOD-001';
+    const alertEl = document.getElementById('bod-central-alert');
+    const alertText = document.getElementById('bod-central-alert-text');
+
+    if (esCentral) {
+        if (alertEl) alertEl.style.display = 'flex';
+        if (alertText) alertText.innerHTML = '<strong>Bodega Central:</strong> Esta bodega es el almacén central del sistema. Puede actualizar sus datos descriptivos y responsable. Está protegida contra eliminación.';
+    } else {
+        if (alertEl) alertEl.style.display = 'none';
+    }
+
+    document.getElementById('modalBodegaTitle').innerHTML = `<i class="bi bi-pencil-square text-primary me-2"></i>frmNuevaBodega - Modificar Bodega (${bodega.codigo})`;
+    const btn = document.getElementById('btn-guardar-bodega');
+    if (btn) btn.innerHTML = '<i class="bi bi-save me-1"></i> Actualizar Bodega';
+
+    const modalEl = document.getElementById('modalNuevaBodega');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modal.show();
 }
 
 async function submitBodega(e) {
     e.preventDefault();
+    const isEdit = document.getElementById('bod-is-edit').value === '1';
     const payload = {
+        isEdit,
         codigo: document.getElementById('bod-codigo').value.trim().toUpperCase(),
         nombre: document.getElementById('bod-nombre').value.trim().toUpperCase(),
         ubicacion: document.getElementById('bod-ubicacion').value,
@@ -898,19 +1249,89 @@ async function submitBodega(e) {
         });
         const result = await res.json();
         if (result.success) {
-            bootstrap.Modal.getInstance(document.getElementById('modalNuevaBodega')).hide();
-            alert('✅ Bodega guardada con éxito.');
+            closeModal('modalNuevaBodega');
+            showToast(`✅ ${result.message}`, 'success');
             await loadBodegasYProyectos();
             await loadConfig();
+        } else {
+            showToast(`⚠️ ${result.error}`, 'danger');
         }
     } catch (err) {
-        alert('Error al guardar bodega: ' + err.message);
+        showToast('Error al guardar bodega: ' + err.message, 'danger');
+    }
+}
+
+function abrirModalEliminarBodega(codigo) {
+    if (!appState.bodegas) return;
+    const bodega = appState.bodegas.find(b => b.codigo === codigo);
+    if (!bodega) return;
+
+    if (bodega.es_central === 1 || bodega.codigo === 'BOD-001') {
+        showToast('⚠️ La Bodega Central no puede ser eliminada. Solo se permite su modificación.', 'warning');
+        return;
+    }
+
+    document.getElementById('del-bod-cod-input').value = bodega.codigo;
+    document.getElementById('del-bod-codigo').textContent = bodega.codigo;
+    document.getElementById('del-bod-nombre').textContent = bodega.nombre;
+    document.getElementById('del-bod-ubicacion').textContent = bodega.ubicacion || 'No especificada';
+    document.getElementById('del-bod-responsable').textContent = bodega.responsable || 'No asignado';
+    document.getElementById('del-bod-estado').textContent = bodega.estado || 'Activa';
+
+    const btn = document.getElementById('btn-confirmar-eliminar-bodega');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-trash3-fill me-1"></i> Confirmar y Eliminar Bodega';
+    }
+
+    const modalEl = document.getElementById('modalEliminarBodega');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+async function ejecutarEliminarBodega() {
+    const codigo = document.getElementById('del-bod-cod-input').value;
+    if (!codigo) return;
+
+    const btn = document.getElementById('btn-confirmar-eliminar-bodega');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Eliminando...';
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/bodegas/${encodeURIComponent(codigo)}`, {
+            method: 'DELETE'
+        });
+
+        const result = await res.json();
+        if (!result.success) {
+            showToast(`⚠️ ${result.error}`, 'danger');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-trash3-fill me-1"></i> Confirmar y Eliminar Bodega';
+            }
+            return;
+        }
+
+        closeModal('modalEliminarBodega');
+        showToast(`✅ ${result.message}`, 'success');
+
+        await loadBodegasYProyectos();
+        await loadConfig();
+    } catch (err) {
+        showToast(`Error al eliminar bodega: ${err.message}`, 'danger');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-trash3-fill me-1"></i> Confirmar y Eliminar Bodega';
+        }
     }
 }
 
 function openModalNuevoProyecto() {
     document.getElementById('form-proyecto').reset();
-    const modal = new bootstrap.Modal(document.getElementById('modalNuevoProyecto'));
+    const modalEl = document.getElementById('modalNuevoProyecto');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modal.show();
 }
 
@@ -932,13 +1353,15 @@ async function submitProyecto(e) {
         });
         const result = await res.json();
         if (result.success) {
-            bootstrap.Modal.getInstance(document.getElementById('modalNuevoProyecto')).hide();
-            alert('✅ Proyecto guardado con éxito.');
+            closeModal('modalNuevoProyecto');
+            showToast('✅ Proyecto guardado con éxito.', 'success');
             await loadBodegasYProyectos();
             await loadConfig();
+        } else {
+            showToast(`⚠️ ${result.error}`, 'danger');
         }
     } catch (err) {
-        alert('Error al guardar proyecto: ' + err.message);
+        showToast('Error al guardar proyecto: ' + err.message, 'danger');
     }
 }
 

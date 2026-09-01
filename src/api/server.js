@@ -53,9 +53,28 @@ function ensureDatabaseSchema() {
                 ubicacion TEXT,
                 responsable TEXT,
                 estado TEXT DEFAULT 'Activa',
-                observaciones TEXT
+                observaciones TEXT,
+                es_central INTEGER DEFAULT 0
             )
         `);
+
+        // Comprobar y migrar columna es_central si no existe
+        db.all(`PRAGMA table_info(bodegas)`, (err, columns) => {
+            if (!err && columns && columns.length > 0) {
+                const hasEsCentral = columns.some(c => c.name === 'es_central');
+                if (!hasEsCentral) {
+                    db.run(`ALTER TABLE bodegas ADD COLUMN es_central INTEGER DEFAULT 0`, () => {
+                        db.run(`UPDATE bodegas SET es_central = 1 WHERE codigo = 'BOD-001' OR rowid = 1`);
+                    });
+                } else {
+                    db.get(`SELECT COUNT(*) as total, SUM(es_central) as centralCount FROM bodegas`, (e, r) => {
+                        if (!e && r && r.total > 0 && (!r.centralCount || r.centralCount === 0)) {
+                            db.run(`UPDATE bodegas SET es_central = 1 WHERE codigo = 'BOD-001' OR rowid = 1`);
+                        }
+                    });
+                }
+            }
+        });
 
         db.run(`
             CREATE TABLE IF NOT EXISTS proyectos (
@@ -123,14 +142,14 @@ function ensureDatabaseSchema() {
         db.get(`SELECT COUNT(*) as count FROM bodegas`, (err, row) => {
             if (row && row.count === 0) {
                 const bodegas = [
-                    ['BOD-001', 'CDS', 'Sede Principal / Almacén Central', 'Administrador CDS', 'Activa', 'Centro de Distribución y Almacenamiento Principal (Control Oficial)'],
-                    ['BOD-002', 'AOM', 'Sede Operativa AOM', 'Líder Operativo AOM', 'Activa', 'Bodega de Operaciones y Mantenimiento'],
-                    ['BOD-003', 'PROYECTOS', 'Frentes de Obra e Infraestructura', 'Coordinador de Proyectos', 'Activa', 'Destino de materiales y herramientas para proyectos'],
-                    ['BOD-004', 'DISPOSICION FINAL', 'Área de Bajas y Scrap', 'Control Calidad / SST', 'Activa', 'Destino exclusivo de bajas por ítems dañados, gastados o vencidos'],
-                    ['BOD-005', 'MOVILIDAD', 'Vehículos y Flota Operativa', 'Logística / Transporte', 'Activa', 'Bodega operativa para gestión de movilidad y transporte'],
-                    ['BOD-006', 'TRASLADOS', 'Tránsito y Reubicación', 'Logística / Despachos', 'Activa', 'Bodega temporal para traslados y movimientos intersedes']
+                    ['BOD-001', 'CDS', 'Sede Principal / Almacén Central', 'Administrador CDS', 'Activa', 'Centro de Distribución y Almacenamiento Principal (Control Oficial)', 1],
+                    ['BOD-002', 'AOM', 'Sede Operativa AOM', 'Líder Operativo AOM', 'Activa', 'Bodega de Operaciones y Mantenimiento', 0],
+                    ['BOD-003', 'PROYECTOS', 'Frentes de Obra e Infraestructura', 'Coordinador de Proyectos', 'Activa', 'Destino de materiales y herramientas para proyectos', 0],
+                    ['BOD-004', 'DISPOSICION FINAL', 'Área de Bajas y Scrap', 'Control Calidad / SST', 'Activa', 'Destino exclusivo de bajas por ítems dañados, gastados o vencidos', 0],
+                    ['BOD-005', 'MOVILIDAD', 'Vehículos y Flota Operativa', 'Logística / Transporte', 'Activa', 'Bodega operativa para gestión de movilidad y transporte', 0],
+                    ['BOD-006', 'TRASLADOS', 'Tránsito y Reubicación', 'Logística / Despachos', 'Activa', 'Bodega temporal para traslados y movimientos intersedes', 0]
                 ];
-                const stmt = db.prepare(`INSERT OR REPLACE INTO bodegas (codigo, nombre, ubicacion, responsable, estado, observaciones) VALUES (?, ?, ?, ?, ?, ?)`);
+                const stmt = db.prepare(`INSERT OR REPLACE INTO bodegas (codigo, nombre, ubicacion, responsable, estado, observaciones, es_central) VALUES (?, ?, ?, ?, ?, ?, ?)`);
                 bodegas.forEach(b => stmt.run(b));
                 stmt.finalize();
             }
@@ -582,6 +601,43 @@ app.get('/api/movimientos', async (req, res) => {
     }
 });
 
+// Consultar stock de un ítem en una bodega específica
+app.get('/api/inventario/stock-bodega', async (req, res) => {
+    try {
+        const { codigo_item, bodega } = req.query;
+        if (!codigo_item) {
+            return res.status(400).json({ success: false, error: 'Código de ítem requerido.' });
+        }
+        const bodegaTarget = (bodega && bodega !== 'ALL') ? bodega : 'CDS';
+        let stock = 0;
+        if (bodegaTarget === 'CDS') {
+            const stockData = await dbGet(`
+                SELECT 
+                    COALESCE(SUM(
+                        (CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END) -
+                        (CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END)
+                    ), 0) as stock
+                FROM movimientos WHERE codigo_item = ?
+            `, [codigo_item]);
+            stock = stockData ? stockData.stock : 0;
+        } else {
+            const stockData = await dbGet(`
+                SELECT 
+                    COALESCE(SUM(
+                        (CASE WHEN bodega_destino = ? THEN cantidad ELSE 0 END) -
+                        (CASE WHEN bodega_origen = ? THEN cantidad ELSE 0 END)
+                    ), 0) as stock
+                FROM movimientos 
+                WHERE codigo_item = ?
+            `, [bodegaTarget, bodegaTarget, codigo_item]);
+            stock = stockData ? stockData.stock : 0;
+        }
+        res.json({ success: true, codigo_item: parseInt(codigo_item, 10), bodega: bodegaTarget, stock });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // Registrar movimiento
 app.post('/api/movimientos', async (req, res) => {
     try {
@@ -613,26 +669,50 @@ app.post('/api/movimientos', async (req, res) => {
             return res.status(400).json({ success: false, error: `El ítem con código ${codigo_item} no existe en el catálogo.` });
         }
 
-        // Validación de stock en CDS para salidas
-        const esSalidaCDS = (tipo_movimiento === 'ENTREGA' && (bodega_origen === 'CDS' || !bodega_origen)) ||
-                            (tipo_movimiento === 'DISPOSICION FINAL' && (bodega_origen === 'CDS' || !bodega_origen)) ||
-                            (tipo_movimiento === 'AJUSTE NEGATIVO' && (bodega_origen === 'CDS' || !bodega_origen));
+        // Validación estricta de existencias para Salidas y Devoluciones por bodega de origen
+        const esSalidaODevolucion = ['ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO', 'DEVOLUCION'].includes(tipo_movimiento);
+        if (esSalidaODevolucion) {
+            const origenActual = (tipo_movimiento === 'DEVOLUCION') 
+                ? (bodega_origen && bodega_origen !== 'ALL' ? bodega_origen : 'PROYECTOS')
+                : (bodega_origen && bodega_origen !== 'ALL' ? bodega_origen : 'CDS');
+            
+            let stockDisponible = 0;
+            if (origenActual === 'CDS') {
+                const stockData = await dbGet(`
+                    SELECT 
+                        COALESCE(SUM(
+                            (CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END) -
+                            (CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END)
+                        ), 0) as stock
+                    FROM movimientos WHERE codigo_item = ?
+                `, [codigo_item]);
+                stockDisponible = stockData ? stockData.stock : 0;
+            } else {
+                const stockData = await dbGet(`
+                    SELECT 
+                        COALESCE(SUM(
+                            (CASE WHEN bodega_destino = ? THEN cantidad ELSE 0 END) -
+                            (CASE WHEN bodega_origen = ? THEN cantidad ELSE 0 END)
+                        ), 0) as stock
+                    FROM movimientos 
+                    WHERE codigo_item = ?
+                `, [origenActual, origenActual, codigo_item]);
+                stockDisponible = stockData ? stockData.stock : 0;
+            }
 
-        if (esSalidaCDS) {
-            const stockActualData = await dbGet(`
-                SELECT 
-                    COALESCE(SUM(
-                        (CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END) -
-                        (CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END)
-                    ), 0) as stock
-                FROM movimientos WHERE codigo_item = ?
-            `, [codigo_item]);
-
-            const stockActual = stockActualData ? stockActualData.stock : 0;
-            if (stockActual < cantNum) {
+            if (stockDisponible <= 0) {
+                const accion = tipo_movimiento === 'DEVOLUCION' ? 'la devolución' : 'la salida';
                 return res.status(400).json({ 
                     success: false, 
-                    error: `Stock insuficiente en Bodega Central (CDS). Stock disponible: ${stockActual} ${item.unidad_medida}. Intentó retirar: ${cantNum} ${item.unidad_medida}.` 
+                    error: `No se puede realizar ${accion}. La bodega de origen "${origenActual}" no tiene existencias disponibles del ítem "${item.nombre}" (Stock disponible: 0 ${item.unidad_medida}).` 
+                });
+            }
+
+            if (stockDisponible < cantNum) {
+                const accion = tipo_movimiento === 'DEVOLUCION' ? 'devolver' : 'retirar';
+                return res.status(400).json({ 
+                    success: false, 
+                    error: `Stock insuficiente en la bodega de origen "${origenActual}". Stock disponible: ${stockDisponible} ${item.unidad_medida}. Intentó ${accion}: ${cantNum} ${item.unidad_medida}.` 
                 });
             }
         }
@@ -706,6 +786,112 @@ app.post('/api/movimientos', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Obtener el último movimiento registrado
+app.get('/api/movimientos/ultimo', async (req, res) => {
+    try {
+        const lastMov = await dbGet(`SELECT * FROM movimientos ORDER BY id DESC LIMIT 1`);
+        if (!lastMov) {
+            return res.status(404).json({ success: false, error: 'No hay movimientos registrados en la base de datos.' });
+        }
+        res.json({ success: true, data: lastMov });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Función auxiliar para revertir y eliminar un movimiento de forma segura
+async function eliminarMovimientoPorId(movId) {
+    const mov = await dbGet(`SELECT * FROM movimientos WHERE id = ?`, [movId]);
+    if (!mov) {
+        throw new Error(`El movimiento con ID ${movId} no fue encontrado.`);
+    }
+
+    const item = await dbGet(`SELECT * FROM items WHERE codigo = ?`, [mov.codigo_item]);
+    const unidad = item ? item.unidad_medida : (mov.unidad || 'Unidad');
+    const nombreItem = item ? item.nombre : mov.nombre_item;
+
+    // Si el movimiento incrementó stock en CDS (ENTRADA, DEVOLUCION, AJUSTE POSITIVO),
+    // al eliminarlo se restará stock. Debemos verificar que no quede en sobregiro negativo.
+    const esIngresoCDS = (mov.tipo_movimiento === 'ENTRADA' && (mov.bodega_destino === 'CDS' || !mov.bodega_destino)) ||
+                         (mov.tipo_movimiento === 'DEVOLUCION' && mov.bodega_destino === 'CDS') ||
+                         (mov.tipo_movimiento === 'AJUSTE POSITIVO' && (mov.bodega_destino === 'CDS' || !mov.bodega_destino));
+
+    if (esIngresoCDS) {
+        const stockActualData = await dbGet(`
+            SELECT 
+                COALESCE(SUM(
+                    (CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END) -
+                    (CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END)
+                ), 0) as stock
+            FROM movimientos WHERE codigo_item = ?
+        `, [mov.codigo_item]);
+
+        const stockActual = stockActualData ? stockActualData.stock : 0;
+        if (stockActual < mov.cantidad) {
+            throw new Error(`No se puede eliminar la entrada ${mov.n_movimiento}. El ítem "${nombreItem}" tiene stock actual de ${stockActual} ${unidad}, el cual es menor a los ${mov.cantidad} ${unidad} que se ingresaron (ya fueron despachados o consumidos en movimientos posteriores).`);
+        }
+    }
+
+    // Iniciar transacción de eliminación
+    await dbRun('BEGIN TRANSACTION');
+    try {
+        // Si generó lote en control_vencimientos, eliminarlo
+        await dbRun(`DELETE FROM control_vencimientos WHERE n_movimiento_origen = ?`, [mov.n_movimiento]);
+
+        // Si fue una baja de vencimiento (DISPOSICION FINAL), restaurar cant_disponible si aún existe el lote
+        if (mov.tipo_movimiento === 'DISPOSICION FINAL' && mov.observaciones && mov.observaciones.includes('Baja asistida')) {
+            await dbRun(`
+                UPDATE control_vencimientos 
+                SET cant_disponible = cant_disponible + ?, estado = '¡VENCIDO!' 
+                WHERE codigo_item = ? AND estado = 'DADO DE BAJA'
+            `, [mov.cantidad, mov.codigo_item]);
+        }
+
+        // Eliminar el movimiento
+        await dbRun(`DELETE FROM movimientos WHERE id = ?`, [mov.id]);
+
+        await dbRun('COMMIT');
+        return mov;
+    } catch (e) {
+        await dbRun('ROLLBACK');
+        throw e;
+    }
+}
+
+// Eliminar último movimiento
+app.delete('/api/movimientos/ultimo', async (req, res) => {
+    try {
+        const lastMov = await dbGet(`SELECT id FROM movimientos ORDER BY id DESC LIMIT 1`);
+        if (!lastMov) {
+            return res.status(404).json({ success: false, error: 'No hay movimientos registrados para eliminar.' });
+        }
+
+        const eliminado = await eliminarMovimientoPorId(lastMov.id);
+        res.json({
+            success: true,
+            message: `Último movimiento (${eliminado.n_movimiento} - ${eliminado.tipo_movimiento} ${eliminado.cantidad} ${eliminado.unidad}) eliminado y revertido exitosamente.`,
+            data: eliminado
+        });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+});
+
+// Eliminar un movimiento por ID
+app.delete('/api/movimientos/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const eliminado = await eliminarMovimientoPorId(id);
+        res.json({
+            success: true,
+            message: `Movimiento ${eliminado.n_movimiento} (${eliminado.tipo_movimiento}) eliminado y revertido exitosamente.`,
+            data: eliminado
+        });
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
     }
 });
 
@@ -813,10 +999,37 @@ app.post('/api/vencimientos/bajas-automaticas', async (req, res) => {
 // ==========================================
 // 6. BODEGAS, PROYECTOS Y CONFIGURACIONES
 // ==========================================
+app.get('/api/bodegas/siguiente-codigo', async (req, res) => {
+    try {
+        const bodegas = await dbAll(`SELECT codigo FROM bodegas`);
+        let maxNum = 0;
+        bodegas.forEach(b => {
+            if (b.codigo) {
+                const match = b.codigo.match(/\d+/);
+                if (match) {
+                    const num = parseInt(match[0], 10);
+                    if (num > maxNum) maxNum = num;
+                }
+            }
+        });
+        const nextNum = maxNum + 1;
+        const siguienteCodigo = `BOD-${String(nextNum).padStart(3, '0')}`;
+        const esPrimera = bodegas.length === 0;
+        res.json({ success: true, siguienteCodigo, esPrimera });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 app.get('/api/bodegas', async (req, res) => {
     try {
-        const bodegas = await dbAll(`SELECT * FROM bodegas ORDER BY codigo ASC`);
-        res.json({ success: true, data: bodegas });
+        const bodegas = await dbAll(`SELECT rowid, * FROM bodegas ORDER BY codigo ASC`);
+        // Asegurar que al menos la primera bodega sea reconocida como central si no estuviera marcado
+        const data = bodegas.map((b, idx) => ({
+            ...b,
+            es_central: b.es_central === 1 || b.codigo === 'BOD-001' || (idx === 0 && !bodegas.some(x => x.es_central === 1)) ? 1 : 0
+        }));
+        res.json({ success: true, data });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -824,15 +1037,117 @@ app.get('/api/bodegas', async (req, res) => {
 
 app.post('/api/bodegas', async (req, res) => {
     try {
-        const { codigo, nombre, ubicacion, responsable, estado, observaciones } = req.body;
-        if (!codigo || !nombre) {
-            return res.status(400).json({ success: false, error: 'Código y nombre de bodega son obligatorios.' });
+        let { codigo, nombre, ubicacion, responsable, estado, observaciones, isEdit } = req.body;
+        
+        if (!nombre || !nombre.trim()) {
+            return res.status(400).json({ success: false, error: 'El nombre de la bodega es obligatorio.' });
         }
-        await dbRun(`
-            INSERT OR REPLACE INTO bodegas (codigo, nombre, ubicacion, responsable, estado, observaciones)
-            VALUES (?, ?, ?, ?, ?, ?)
-        `, [codigo.trim().toUpperCase(), nombre.trim().toUpperCase(), ubicacion, responsable, estado || 'Activa', observaciones]);
-        res.json({ success: true, message: 'Bodega guardada correctamente.' });
+
+        nombre = nombre.trim().toUpperCase();
+
+        if (isEdit || isEdit === '1' || isEdit === true) {
+            // Edición de bodega: el código NO se permite modificar
+            if (!codigo) {
+                return res.status(400).json({ success: false, error: 'Código de bodega requerido para modificar.' });
+            }
+            const existing = await dbGet(`SELECT * FROM bodegas WHERE codigo = ?`, [codigo]);
+            if (!existing) {
+                return res.status(404).json({ success: false, error: 'La bodega especificada no existe.' });
+            }
+
+            await dbRun(`
+                UPDATE bodegas 
+                SET nombre = ?, ubicacion = ?, responsable = ?, estado = ?, observaciones = ?
+                WHERE codigo = ?
+            `, [nombre, ubicacion || '', responsable || '', estado || 'Activa', observaciones || '', codigo]);
+
+            res.json({ 
+                success: true, 
+                message: `Bodega ${codigo} (${nombre}) modificada exitosamente.`,
+                codigo 
+            });
+        } else {
+            // Creación de bodega: código autoincrementable automático
+            const totalBodegas = await dbGet(`SELECT COUNT(*) as count FROM bodegas`);
+            const esPrimera = (!totalBodegas || totalBodegas.count === 0);
+
+            // Calcular código autoincrementable de forma estricta en servidor
+            const bodegas = await dbAll(`SELECT codigo FROM bodegas`);
+            let maxNum = 0;
+            bodegas.forEach(b => {
+                if (b.codigo) {
+                    const match = b.codigo.match(/\d+/);
+                    if (match) {
+                        const num = parseInt(match[0], 10);
+                        if (num > maxNum) maxNum = num;
+                    }
+                }
+            });
+            const nextCodigo = `BOD-${String(maxNum + 1).padStart(3, '0')}`;
+            const esCentral = esPrimera ? 1 : 0;
+
+            await dbRun(`
+                INSERT INTO bodegas (codigo, nombre, ubicacion, responsable, estado, observaciones, es_central)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            `, [nextCodigo, nombre, ubicacion || '', responsable || '', estado || 'Activa', observaciones || '', esCentral]);
+
+            res.json({ 
+                success: true, 
+                message: `Bodega ${nextCodigo} (${nombre}) creada exitosamente${esPrimera ? ' como BODEGA CENTRAL' : ''}.`,
+                codigo: nextCodigo,
+                es_central: esCentral
+            });
+        }
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Eliminar bodega (Prohibido para Bodega Central)
+app.delete('/api/bodegas/:codigo', async (req, res) => {
+    try {
+        const { codigo } = req.params;
+        const bodega = await dbGet(`SELECT * FROM bodegas WHERE codigo = ?`, [codigo]);
+        if (!bodega) {
+            return res.status(404).json({ success: false, error: 'La bodega especificada no existe.' });
+        }
+
+        // REGLA CRÍTICA: La Bodega Central NO se puede eliminar
+        if (bodega.es_central === 1 || bodega.codigo === 'BOD-001') {
+            return res.status(403).json({ 
+                success: false, 
+                error: 'La BODEGA CENTRAL es la base operativa de control y no puede ser eliminada. Solo se permite su modificación.' 
+            });
+        }
+
+        // Validar si tiene transacciones en movimientos
+        const movCount = await dbGet(`
+            SELECT COUNT(*) as count FROM movimientos 
+            WHERE bodega_origen = ? OR bodega_destino = ?
+        `, [bodega.nombre, bodega.nombre]);
+
+        if (movCount && movCount.count > 0) {
+            return res.status(400).json({ 
+                success: false, 
+                error: `No es posible eliminar la bodega "${bodega.nombre}" porque tiene ${movCount.count} transacciones registradas en el Libro Diario. Si no desea utilizarla, puede modificar su estado a "Inactiva".` 
+            });
+        }
+
+        // Validar si tiene lotes en control de vencimientos
+        const lotesCount = await dbGet(`
+            SELECT COUNT(*) as count FROM control_vencimientos 
+            WHERE bodega = ?
+        `, [bodega.nombre]);
+
+        if (lotesCount && lotesCount.count > 0) {
+            return res.status(400).json({ 
+                success: false, 
+                error: `No es posible eliminar la bodega "${bodega.nombre}" porque tiene lotes en el Control de Vencimientos.` 
+            });
+        }
+
+        await dbRun(`DELETE FROM bodegas WHERE codigo = ?`, [codigo]);
+        res.json({ success: true, message: `Bodega ${bodega.codigo} - ${bodega.nombre} eliminada correctamente.` });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

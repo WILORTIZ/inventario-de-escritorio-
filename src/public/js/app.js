@@ -163,7 +163,7 @@ function navigate(viewName) {
 
     // Actualizar título de la página
     const titles = {
-        'inicio': 'Panel de Control Principal',
+        'inicio': 'Panel de Control',
         'inventario': 'Inventario Físico CDS',
         'movimientos': 'Historial de Movimientos',
         'items': 'Catálogo Maestro de Ítems',

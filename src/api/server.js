@@ -130,6 +130,61 @@ function ensureDatabaseSchema() {
         `);
 
         db.run(`
+            CREATE TABLE IF NOT EXISTS sedes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                codigo TEXT UNIQUE NOT NULL,
+                nombre TEXT NOT NULL,
+                direccion TEXT,
+                responsable TEXT,
+                estado TEXT DEFAULT 'Activa'
+            )
+        `);
+
+        db.run(`
+            CREATE TABLE IF NOT EXISTS tipos_inventario (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                codigo TEXT UNIQUE NOT NULL,
+                nombre TEXT NOT NULL,
+                descripcion TEXT
+            )
+        `);
+
+        // Insertar sedes y tipos base si no existen
+        const sedesBase = [
+            ['SUR', 'Sede Suroriental', 'Sector Suroriental', 'Administrador Regional', 'Activa'],
+            ['MED', 'Sede Medellín', 'Medellín Centro Operativo', 'Administrador Regional', 'Activa']
+        ];
+        const sStmt = db.prepare(`INSERT OR IGNORE INTO sedes (codigo, nombre, direccion, responsable, estado) VALUES (?, ?, ?, ?, ?)`);
+        sedesBase.forEach(s => sStmt.run(s));
+        sStmt.finalize();
+
+        const tiposBase = [
+            ['CDS', 'Inventario CDS', 'Inventario y Almacenamiento Central CDS'],
+            ['MOVILIDAD', 'Inventario Movilidad', 'Inventario Operativo de Movilidad y Transporte']
+        ];
+        const tStmt = db.prepare(`INSERT OR IGNORE INTO tipos_inventario (codigo, nombre, descripcion) VALUES (?, ?, ?)`);
+        tiposBase.forEach(t => tStmt.run(t));
+        tStmt.finalize();
+
+        // Migrar columnas sede y tipo_inventario en tablas operativas
+        ['items', 'movimientos', 'control_vencimientos', 'bodegas'].forEach(tableName => {
+            db.all(`PRAGMA table_info(${tableName})`, (err, cols) => {
+                if (!err && cols && cols.length > 0) {
+                    if (!cols.some(c => c.name === 'sede')) {
+                        db.run(`ALTER TABLE ${tableName} ADD COLUMN sede TEXT DEFAULT 'Sede Suroriental'`, () => {
+                            db.run(`UPDATE ${tableName} SET sede = 'Sede Suroriental' WHERE sede IS NULL`);
+                        });
+                    }
+                    if (!cols.some(c => c.name === 'tipo_inventario')) {
+                        db.run(`ALTER TABLE ${tableName} ADD COLUMN tipo_inventario TEXT DEFAULT 'CDS'`, () => {
+                            db.run(`UPDATE ${tableName} SET tipo_inventario = 'CDS' WHERE tipo_inventario IS NULL`);
+                        });
+                    }
+                }
+            });
+        });
+
+        db.run(`
             CREATE TABLE IF NOT EXISTS listas_config (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 tipo TEXT NOT NULL,
@@ -155,54 +210,65 @@ function ensureDatabaseSchema() {
             }
         });
 
-        // Comprobar si las listas maestras existen
-        db.get(`SELECT COUNT(*) as count FROM listas_config`, (err, row) => {
-            if (row && row.count === 0) {
-                const listas = [
-                    ['categoria', 'Herramientas', 1],
-                    ['categoria', 'Tornilleria', 2],
-                    ['categoria', 'Materiales', 3],
-                    ['categoria', 'Consumibles', 4],
-                    ['categoria', 'Repuestos', 5],
-                    ['categoria', 'Elementos electricos', 6],
-                    ['categoria', 'Elementos de seguridad', 7],
-                    ['categoria', 'Cableado', 8],
-                    ['categoria', 'Otros', 9],
-                    ['unidad_medida', 'Unidad', 1],
-                    ['unidad_medida', 'Caja', 2],
-                    ['unidad_medida', 'Paquete', 3],
-                    ['unidad_medida', 'Metro', 4],
-                    ['unidad_medida', 'Kilogramo', 5],
-                    ['unidad_medida', 'Litro', 6],
-                    ['unidad_medida', 'Rollo', 7],
-                    ['unidad_medida', 'Otro', 8],
-                    ['ubicacion_cds', 'A1', 1],
-                    ['ubicacion_cds', 'A2', 2],
-                    ['ubicacion_cds', 'A3', 3],
-                    ['ubicacion_cds', 'B1', 4],
-                    ['ubicacion_cds', 'B2', 5],
-                    ['ubicacion_cds', 'B3', 6],
-                    ['ubicacion_cds', 'C1', 7],
-                    ['ubicacion_cds', 'C2', 8],
-                    ['ubicacion_cds', 'C3', 9],
-                    ['ubicacion_cds', 'D1', 10],
-                    ['ubicacion_cds', 'D2', 11],
-                    ['ubicacion_cds', 'D3', 12],
-                    ['ubicacion_cds', 'T1', 13],
-                    ['ubicacion_cds', 'T2', 14],
-                    ['ubicacion_cds', 'T3', 15],
-                    ['ubicacion_cds', 'T4', 16],
-                    ['ubicacion_cds', 'T5', 17],
-                    ['causal_disposicion', 'Dañado', 1],
-                    ['causal_disposicion', 'Gastado Interno', 2],
-                    ['causal_disposicion', 'Vencido', 3],
-                    ['causal_disposicion', 'Deterioro Operativo / Merma', 4],
-                    ['causal_disposicion', 'Inutilizable / Scrap', 5]
-                ];
-                const stmt = db.prepare(`INSERT INTO listas_config (tipo, valor, orden) VALUES (?, ?, ?)`);
-                listas.forEach(l => stmt.run(l));
-                stmt.finalize();
-            }
+        // Comprobar si las listas maestras existen por tipo
+        const listasPorDefecto = [
+            ['categoria', 'Herramientas', 1],
+            ['categoria', 'Tornilleria', 2],
+            ['categoria', 'Materiales', 3],
+            ['categoria', 'Consumibles', 4],
+            ['categoria', 'Repuestos', 5],
+            ['categoria', 'Elementos electricos', 6],
+            ['categoria', 'Elementos de seguridad', 7],
+            ['categoria', 'Cableado', 8],
+            ['categoria', 'Otros', 9],
+            ['unidad_medida', 'Unidad', 1],
+            ['unidad_medida', 'Caja', 2],
+            ['unidad_medida', 'Paquete', 3],
+            ['unidad_medida', 'Metro', 4],
+            ['unidad_medida', 'Kilogramo', 5],
+            ['unidad_medida', 'Litro', 6],
+            ['unidad_medida', 'Rollo', 7],
+            ['unidad_medida', 'Otro', 8],
+            ['ubicacion_cds', 'A1', 1],
+            ['ubicacion_cds', 'A2', 2],
+            ['ubicacion_cds', 'A3', 3],
+            ['ubicacion_cds', 'A4', 4],
+            ['ubicacion_cds', 'A5', 5],
+            ['ubicacion_cds', 'B1', 6],
+            ['ubicacion_cds', 'B2', 7],
+            ['ubicacion_cds', 'B3', 8],
+            ['ubicacion_cds', 'B4', 9],
+            ['ubicacion_cds', 'B5', 10],
+            ['ubicacion_cds', 'C1', 11],
+            ['ubicacion_cds', 'C2', 12],
+            ['ubicacion_cds', 'C3', 13],
+            ['ubicacion_cds', 'C4', 14],
+            ['ubicacion_cds', 'C5', 15],
+            ['ubicacion_cds', 'D1', 16],
+            ['ubicacion_cds', 'D2', 17],
+            ['ubicacion_cds', 'D3', 18],
+            ['ubicacion_cds', 'D4', 19],
+            ['ubicacion_cds', 'D5', 20],
+            ['ubicacion_cds', 'T1', 21],
+            ['ubicacion_cds', 'T2', 22],
+            ['ubicacion_cds', 'T3', 23],
+            ['ubicacion_cds', 'T4', 24],
+            ['ubicacion_cds', 'T5', 25],
+            ['causal_disposicion', 'Dañado', 1],
+            ['causal_disposicion', 'Gastado Interno', 2],
+            ['causal_disposicion', 'Vencido', 3],
+            ['causal_disposicion', 'Deterioro Operativo / Merma', 4],
+            ['causal_disposicion', 'Inutilizable / Scrap', 5]
+        ];
+
+        ['categoria', 'unidad_medida', 'ubicacion_cds', 'causal_disposicion'].forEach(tipo => {
+            db.get(`SELECT COUNT(*) as count FROM listas_config WHERE tipo = ?`, [tipo], (err, row) => {
+                if (!err && (!row || row.count === 0)) {
+                    const stmt = db.prepare(`INSERT INTO listas_config (tipo, valor, orden) VALUES (?, ?, ?)`);
+                    listasPorDefecto.filter(l => l[0] === tipo).forEach(l => stmt.run(l));
+                    stmt.finalize();
+                }
+            });
         });
     });
 }
@@ -229,14 +295,55 @@ const dbRun = (sql, params = []) => new Promise((resolve, reject) => {
     });
 });
 
+// Endpoints de Sedes y Tipos de Inventario
+app.get('/api/sedes', async (req, res) => {
+    try {
+        const sedes = await dbAll(`SELECT * FROM sedes ORDER BY id ASC`);
+        res.json({ success: true, data: sedes });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/tipos-inventario', async (req, res) => {
+    try {
+        const tipos = await dbAll(`SELECT * FROM tipos_inventario ORDER BY id ASC`);
+        res.json({ success: true, data: tipos });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // ==========================================
 // 1. ENDPOINTS DE KPIS Y RESUMEN EJECUTIVO
 // ==========================================
 app.get('/api/kpis', async (req, res) => {
     try {
-        const totalItems = (await dbGet(`SELECT COUNT(*) as count FROM items WHERE estado = 'Activo'`)).count;
+        const { sede, tipo_inventario } = req.query;
+        let itemWhere = `WHERE estado = 'Activo'`;
+        let itemParams = [];
+        if (sede && sede !== 'ALL') {
+            itemWhere += ` AND sede = ?`;
+            itemParams.push(sede);
+        }
+        if (tipo_inventario && tipo_inventario !== 'ALL') {
+            itemWhere += ` AND tipo_inventario = ?`;
+            itemParams.push(tipo_inventario);
+        }
+
+        const totalItems = (await dbGet(`SELECT COUNT(*) as count FROM items ${itemWhere}`, itemParams)).count;
         
-        // Stock en CDS
+        let movWhere = `WHERE 1=1`;
+        let movParams = [];
+        if (sede && sede !== 'ALL') {
+            movWhere += ` AND sede = ?`;
+            movParams.push(sede);
+        }
+        if (tipo_inventario && tipo_inventario !== 'ALL') {
+            movWhere += ` AND tipo_inventario = ?`;
+            movParams.push(tipo_inventario);
+        }
+
         const stockCDSData = await dbGet(`
             SELECT 
                 SUM(
@@ -244,31 +351,46 @@ app.get('/api/kpis', async (req, res) => {
                     (CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END)
                 ) as total_stock
             FROM movimientos
-        `);
-        const totalStockCDS = stockCDSData.total_stock || 0;
+            ${movWhere}
+        `, movParams);
+        const totalStockCDS = stockCDSData ? (stockCDSData.total_stock || 0) : 0;
 
-        const totalMovimientos = (await dbGet(`SELECT COUNT(*) as count FROM movimientos`)).count;
+        const totalMovimientos = (await dbGet(`SELECT COUNT(*) as count FROM movimientos ${movWhere}`, movParams)).count;
 
         // Vencimientos
         const today = new Date().toISOString().split('T')[0];
-        const vencidosQuery = await dbGet(`
-            SELECT COUNT(*) as count FROM control_vencimientos 
-            WHERE bodega = 'CDS' AND cant_disponible > 0 AND fecha_vencimiento <= ?
-        `, [today]);
-        const itemsVencidos = vencidosQuery.count || 0;
+        let cvWhere = `WHERE bodega = 'CDS' AND cant_disponible > 0 AND fecha_vencimiento <= ?`;
+        let cvParams = [today];
+        if (sede && sede !== 'ALL') {
+            cvWhere += ` AND (sede = ? OR sede IS NULL)`;
+            cvParams.push(sede);
+        }
+        if (tipo_inventario && tipo_inventario !== 'ALL') {
+            cvWhere += ` AND (tipo_inventario = ? OR tipo_inventario IS NULL)`;
+            cvParams.push(tipo_inventario);
+        }
+        const vencidosQuery = await dbGet(`SELECT COUNT(*) as count FROM control_vencimientos ${cvWhere}`, cvParams);
+        const itemsVencidos = vencidosQuery ? (vencidosQuery.count || 0) : 0;
 
         const proximoMes = new Date();
         proximoMes.setDate(proximoMes.getDate() + 30);
         const proximoMesStr = proximoMes.toISOString().split('T')[0];
 
-        const proximosVencerQuery = await dbGet(`
-            SELECT COUNT(*) as count FROM control_vencimientos 
-            WHERE bodega = 'CDS' AND cant_disponible > 0 AND fecha_vencimiento > ? AND fecha_vencimiento <= ?
-        `, [today, proximoMesStr]);
-        const itemsProximosVencer = proximosVencerQuery.count || 0;
+        let cvProxWhere = `WHERE bodega = 'CDS' AND cant_disponible > 0 AND fecha_vencimiento > ? AND fecha_vencimiento <= ?`;
+        let cvProxParams = [today, proximoMesStr];
+        if (sede && sede !== 'ALL') {
+            cvProxWhere += ` AND (sede = ? OR sede IS NULL)`;
+            cvProxParams.push(sede);
+        }
+        if (tipo_inventario && tipo_inventario !== 'ALL') {
+            cvProxWhere += ` AND (tipo_inventario = ? OR tipo_inventario IS NULL)`;
+            cvProxParams.push(tipo_inventario);
+        }
+        const proximosVencerQuery = await dbGet(`SELECT COUNT(*) as count FROM control_vencimientos ${cvProxWhere}`, cvProxParams);
+        const itemsProximosVencer = proximosVencerQuery ? (proximosVencerQuery.count || 0) : 0;
 
-        // Stock bajo en CDS
-        const stockBajoQuery = await dbAll(`
+        // Stock bajo
+        let stockBajoQueryStr = `
             SELECT 
                 i.codigo,
                 i.stock_minimo,
@@ -279,13 +401,22 @@ app.get('/api/kpis', async (req, res) => {
             FROM items i
             LEFT JOIN movimientos m ON i.codigo = m.codigo_item
             WHERE i.estado = 'Activo'
-            GROUP BY i.codigo
-            HAVING stock_actual <= i.stock_minimo
-        `);
+        `;
+        let stockBajoParams = [];
+        if (sede && sede !== 'ALL') {
+            stockBajoQueryStr += ` AND i.sede = ?`;
+            stockBajoParams.push(sede);
+        }
+        if (tipo_inventario && tipo_inventario !== 'ALL') {
+            stockBajoQueryStr += ` AND i.tipo_inventario = ?`;
+            stockBajoParams.push(tipo_inventario);
+        }
+        stockBajoQueryStr += ` GROUP BY i.codigo HAVING stock_actual <= i.stock_minimo`;
+        const stockBajoQuery = await dbAll(stockBajoQueryStr, stockBajoParams);
         const itemsStockBajo = stockBajoQuery.length;
 
         // Stock por categoría
-        const categoriasStock = await dbAll(`
+        let catQueryStr = `
             SELECT 
                 i.categoria,
                 COUNT(DISTINCT i.codigo) as total_items,
@@ -296,15 +427,32 @@ app.get('/api/kpis', async (req, res) => {
             FROM items i
             LEFT JOIN movimientos m ON i.codigo = m.codigo_item
             WHERE i.estado = 'Activo'
-            GROUP BY i.categoria
-            ORDER BY stock_total DESC
-        `);
+        `;
+        let catParams = [];
+        if (sede && sede !== 'ALL') {
+            catQueryStr += ` AND i.sede = ?`;
+            catParams.push(sede);
+        }
+        if (tipo_inventario && tipo_inventario !== 'ALL') {
+            catQueryStr += ` AND i.tipo_inventario = ?`;
+            catParams.push(tipo_inventario);
+        }
+        catQueryStr += ` GROUP BY i.categoria ORDER BY stock_total DESC`;
+        const categoriasStock = await dbAll(catQueryStr, catParams);
 
         // Movimientos recientes
-        const ultimosMovimientos = await dbAll(`
-            SELECT * FROM movimientos 
-            ORDER BY id DESC LIMIT 5
-        `);
+        let ultimosMovStr = `SELECT * FROM movimientos WHERE 1=1`;
+        let ultimosParams = [];
+        if (sede && sede !== 'ALL') {
+            ultimosMovStr += ` AND sede = ?`;
+            ultimosParams.push(sede);
+        }
+        if (tipo_inventario && tipo_inventario !== 'ALL') {
+            ultimosMovStr += ` AND tipo_inventario = ?`;
+            ultimosParams.push(tipo_inventario);
+        }
+        ultimosMovStr += ` ORDER BY id DESC LIMIT 5`;
+        const ultimosMovimientos = await dbAll(ultimosMovStr, ultimosParams);
 
         res.json({
             success: true,
@@ -326,11 +474,11 @@ app.get('/api/kpis', async (req, res) => {
 });
 
 // ==========================================
-// 2. INVENTARIO FÍSICO OFICIAL CDS
+// 2. INVENTARIO FÍSICO OFICIAL
 // ==========================================
 app.get('/api/inventario', async (req, res) => {
     try {
-        const { categoria, estadoStock, search } = req.query;
+        const { sede, tipo_inventario, categoria, estadoStock, search } = req.query;
 
         let query = `
             SELECT 
@@ -342,6 +490,8 @@ app.get('/api/inventario', async (req, res) => {
                 i.ubicacion_cds,
                 i.aplica_vencimiento,
                 i.stock_minimo,
+                i.sede,
+                i.tipo_inventario,
                 i.estado as item_estado,
                 COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'ENTRADA' AND (m.bodega_destino = 'CDS' OR m.bodega_destino IS NULL) THEN m.cantidad ELSE 0 END), 0) AS entradas,
                 COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'DEVOLUCION' AND m.bodega_destino = 'CDS' THEN m.cantidad ELSE 0 END), 0) AS devoluciones,
@@ -356,6 +506,14 @@ app.get('/api/inventario', async (req, res) => {
         `;
 
         const params = [];
+        if (sede && sede !== 'ALL') {
+            query += ` AND i.sede = ?`;
+            params.push(sede);
+        }
+        if (tipo_inventario && tipo_inventario !== 'ALL') {
+            query += ` AND i.tipo_inventario = ?`;
+            params.push(tipo_inventario);
+        }
         if (categoria && categoria !== 'ALL') {
             query += ` AND i.categoria = ?`;
             params.push(categoria);
@@ -410,10 +568,18 @@ app.get('/api/inventario', async (req, res) => {
 // ==========================================
 app.get('/api/items', async (req, res) => {
     try {
-        const { search, categoria, estado } = req.query;
+        const { sede, tipo_inventario, search, categoria, estado } = req.query;
         let query = `SELECT * FROM items WHERE 1=1`;
         const params = [];
 
+        if (sede && sede !== 'ALL') {
+            query += ` AND sede = ?`;
+            params.push(sede);
+        }
+        if (tipo_inventario && tipo_inventario !== 'ALL') {
+            query += ` AND tipo_inventario = ?`;
+            params.push(tipo_inventario);
+        }
         if (search) {
             query += ` AND (CAST(codigo AS TEXT) LIKE ? OR nombre LIKE ? OR marca LIKE ? OR ubicacion_cds LIKE ?)`;
             params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
@@ -461,7 +627,9 @@ app.post('/api/items', async (req, res) => {
             aplica_vencimiento,
             stock_minimo,
             estado,
-            observaciones
+            observaciones,
+            sede,
+            tipo_inventario
         } = req.body;
 
         if (!/^\d+$/.test(String(codigo).trim())) {
@@ -486,8 +654,9 @@ app.post('/api/items', async (req, res) => {
         await dbRun(`
             INSERT INTO items (
                 codigo, nombre, categoria, subcategoria, unidad_medida, marca, referencia,
-                ubicacion_cds, aplica_vencimiento, stock_minimo, estado, observaciones, fecha_registro
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ubicacion_cds, aplica_vencimiento, stock_minimo, estado, observaciones, fecha_registro,
+                sede, tipo_inventario
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             numericCode,
             nombre.trim().toUpperCase(),
@@ -501,7 +670,9 @@ app.post('/api/items', async (req, res) => {
             parseInt(stock_minimo || 0, 10),
             estado || 'Activo',
             observaciones || 'Alta en catálogo',
-            todayStr
+            todayStr,
+            sede || 'Sede Suroriental',
+            tipo_inventario || 'CDS'
         ]);
 
         res.json({ success: true, message: 'Ítem creado exitosamente con existencia inicial en 0.', codigo: numericCode });
@@ -525,7 +696,9 @@ app.put('/api/items/:codigo', async (req, res) => {
             aplica_vencimiento,
             stock_minimo,
             estado,
-            observaciones
+            observaciones,
+            sede,
+            tipo_inventario
         } = req.body;
 
         await dbRun(`
@@ -540,7 +713,9 @@ app.put('/api/items/:codigo', async (req, res) => {
                 aplica_vencimiento = ?,
                 stock_minimo = ?,
                 estado = ?,
-                observaciones = ?
+                observaciones = ?,
+                sede = COALESCE(?, sede),
+                tipo_inventario = COALESCE(?, tipo_inventario)
             WHERE codigo = ?
         `, [
             nombre.trim().toUpperCase(),
@@ -554,6 +729,8 @@ app.put('/api/items/:codigo', async (req, res) => {
             parseInt(stock_minimo || 0, 10),
             estado,
             observaciones,
+            sede || null,
+            tipo_inventario || null,
             codigo
         ]);
 
@@ -568,10 +745,18 @@ app.put('/api/items/:codigo', async (req, res) => {
 // ==========================================
 app.get('/api/movimientos', async (req, res) => {
     try {
-        const { tipo, bodega, search, fechaInicio, fechaFin } = req.query;
+        const { sede, tipo_inventario, tipo, bodega, search, fechaInicio, fechaFin } = req.query;
         let query = `SELECT * FROM movimientos WHERE 1=1`;
         const params = [];
 
+        if (sede && sede !== 'ALL') {
+            query += ` AND sede = ?`;
+            params.push(sede);
+        }
+        if (tipo_inventario && tipo_inventario !== 'ALL') {
+            query += ` AND tipo_inventario = ?`;
+            params.push(tipo_inventario);
+        }
         if (tipo && tipo !== 'ALL') {
             query += ` AND tipo_movimiento = ?`;
             params.push(tipo);
@@ -604,12 +789,23 @@ app.get('/api/movimientos', async (req, res) => {
 // Consultar stock de un ítem en una bodega específica
 app.get('/api/inventario/stock-bodega', async (req, res) => {
     try {
-        const { codigo_item, bodega } = req.query;
+        const { codigo_item, bodega, sede, tipo_inventario } = req.query;
         if (!codigo_item) {
             return res.status(400).json({ success: false, error: 'Código de ítem requerido.' });
         }
         const bodegaTarget = (bodega && bodega !== 'ALL') ? bodega : 'CDS';
         let stock = 0;
+        let sedeFilter = '';
+        let sedeParams = [];
+        if (sede && sede !== 'ALL') {
+            sedeFilter += ` AND sede = ?`;
+            sedeParams.push(sede);
+        }
+        if (tipo_inventario && tipo_inventario !== 'ALL') {
+            sedeFilter += ` AND tipo_inventario = ?`;
+            sedeParams.push(tipo_inventario);
+        }
+
         if (bodegaTarget === 'CDS') {
             const stockData = await dbGet(`
                 SELECT 
@@ -617,8 +813,8 @@ app.get('/api/inventario/stock-bodega', async (req, res) => {
                         (CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END) -
                         (CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END)
                     ), 0) as stock
-                FROM movimientos WHERE codigo_item = ?
-            `, [codigo_item]);
+                FROM movimientos WHERE codigo_item = ? ${sedeFilter}
+            `, [codigo_item, ...sedeParams]);
             stock = stockData ? stockData.stock : 0;
         } else {
             const stockData = await dbGet(`
@@ -628,8 +824,8 @@ app.get('/api/inventario/stock-bodega', async (req, res) => {
                         (CASE WHEN bodega_origen = ? THEN cantidad ELSE 0 END)
                     ), 0) as stock
                 FROM movimientos 
-                WHERE codigo_item = ?
-            `, [bodegaTarget, bodegaTarget, codigo_item]);
+                WHERE codigo_item = ? AND (bodega_destino = ? OR bodega_origen = ?) ${sedeFilter}
+            `, [bodegaTarget, codigo_item, bodegaTarget, bodegaTarget, ...sedeParams]);
             stock = stockData ? stockData.stock : 0;
         }
         res.json({ success: true, codigo_item: parseInt(codigo_item, 10), bodega: bodegaTarget, stock });
@@ -656,7 +852,9 @@ app.post('/api/movimientos', async (req, res) => {
             observaciones,
             fecha_vencimiento_lote,
             fecha,
-            hora
+            hora,
+            sede,
+            tipo_inventario
         } = req.body;
 
         const cantNum = parseFloat(cantidad);
@@ -668,6 +866,9 @@ app.post('/api/movimientos', async (req, res) => {
         if (!item) {
             return res.status(400).json({ success: false, error: `El ítem con código ${codigo_item} no existe en el catálogo.` });
         }
+
+        const movSede = sede || item.sede || 'Sede Suroriental';
+        const movTipoInv = tipo_inventario || item.tipo_inventario || 'CDS';
 
         // Validación estricta de existencias para Salidas y Devoluciones por bodega de origen
         const esSalidaODevolucion = ['ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO', 'DEVOLUCION'].includes(tipo_movimiento);
@@ -684,8 +885,8 @@ app.post('/api/movimientos', async (req, res) => {
                             (CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END) -
                             (CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END)
                         ), 0) as stock
-                    FROM movimientos WHERE codigo_item = ?
-                `, [codigo_item]);
+                    FROM movimientos WHERE codigo_item = ? AND sede = ? AND tipo_inventario = ?
+                `, [codigo_item, movSede, movTipoInv]);
                 stockDisponible = stockData ? stockData.stock : 0;
             } else {
                 const stockData = await dbGet(`
@@ -695,8 +896,8 @@ app.post('/api/movimientos', async (req, res) => {
                             (CASE WHEN bodega_origen = ? THEN cantidad ELSE 0 END)
                         ), 0) as stock
                     FROM movimientos 
-                    WHERE codigo_item = ?
-                `, [origenActual, origenActual, codigo_item]);
+                    WHERE codigo_item = ? AND (bodega_destino = ? OR bodega_origen = ?) AND sede = ? AND tipo_inventario = ?
+                `, [origenActual, codigo_item, origenActual, origenActual, movSede, movTipoInv]);
                 stockDisponible = stockData ? stockData.stock : 0;
             }
 
@@ -704,7 +905,7 @@ app.post('/api/movimientos', async (req, res) => {
                 const accion = tipo_movimiento === 'DEVOLUCION' ? 'la devolución' : 'la salida';
                 return res.status(400).json({ 
                     success: false, 
-                    error: `No se puede realizar ${accion}. La bodega de origen "${origenActual}" no tiene existencias disponibles del ítem "${item.nombre}" (Stock disponible: 0 ${item.unidad_medida}).` 
+                    error: `No se puede realizar ${accion}. La bodega de origen "${origenActual}" en ${movSede} no tiene existencias disponibles del ítem "${item.nombre}" (Stock disponible: 0 ${item.unidad_medida}).` 
                 });
             }
 
@@ -712,7 +913,7 @@ app.post('/api/movimientos', async (req, res) => {
                 const accion = tipo_movimiento === 'DEVOLUCION' ? 'devolver' : 'retirar';
                 return res.status(400).json({ 
                     success: false, 
-                    error: `Stock insuficiente en la bodega de origen "${origenActual}". Stock disponible: ${stockDisponible} ${item.unidad_medida}. Intentó ${accion}: ${cantNum} ${item.unidad_medida}.` 
+                    error: `Stock insuficiente en la bodega de origen "${origenActual}" (${movSede}). Stock disponible: ${stockDisponible} ${item.unidad_medida}. Intentó ${accion}: ${cantNum} ${item.unidad_medida}.` 
                 });
             }
         }
@@ -729,8 +930,9 @@ app.post('/api/movimientos', async (req, res) => {
             INSERT INTO movimientos (
                 n_movimiento, fecha, hora, tipo_movimiento, codigo_item, nombre_item, cantidad, unidad,
                 bodega_origen, bodega_destino, causal_condicion, ubicacion_cds, proyecto_destino,
-                responsable, persona_recibe_devuelve, documento_referencia, observaciones, fecha_vencimiento_lote
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                responsable, persona_recibe_devuelve, documento_referencia, observaciones, fecha_vencimiento_lote,
+                sede, tipo_inventario
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             n_movimiento,
             movFecha,
@@ -749,7 +951,9 @@ app.post('/api/movimientos', async (req, res) => {
             persona_recibe_devuelve || null,
             documento_referencia || 'REG-AUTOMATICO',
             observaciones || null,
-            fecha_vencimiento_lote || null
+            fecha_vencimiento_lote || null,
+            movSede,
+            movTipoInv
         ]);
 
         if (tipo_movimiento === 'ENTRADA' && item.aplica_vencimiento && fecha_vencimiento_lote) {
@@ -762,8 +966,9 @@ app.post('/api/movimientos', async (req, res) => {
             await dbRun(`
                 INSERT INTO control_vencimientos (
                     codigo_item, nombre_item, bodega, fecha_ingreso, fecha_vencimiento,
-                    cant_inicial, cant_disponible, estado, observaciones, n_movimiento_origen
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    cant_inicial, cant_disponible, estado, observaciones, n_movimiento_origen,
+                    sede, tipo_inventario
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `, [
                 item.codigo,
                 item.nombre,
@@ -774,13 +979,15 @@ app.post('/api/movimientos', async (req, res) => {
                 cantNum,
                 estadoVenc,
                 `Lote ingresado vía ${n_movimiento}`,
-                n_movimiento
+                n_movimiento,
+                movSede,
+                movTipoInv
             ]);
         }
 
         res.json({ 
             success: true, 
-            message: `Movimiento ${n_movimiento} registrado con éxito.`,
+            message: `Movimiento ${n_movimiento} registrado con éxito en ${movSede} (${movTipoInv}).`,
             n_movimiento
         });
     } catch (err) {
@@ -792,7 +999,19 @@ app.post('/api/movimientos', async (req, res) => {
 // Obtener el último movimiento registrado
 app.get('/api/movimientos/ultimo', async (req, res) => {
     try {
-        const lastMov = await dbGet(`SELECT * FROM movimientos ORDER BY id DESC LIMIT 1`);
+        const { sede, tipo_inventario } = req.query;
+        let query = `SELECT * FROM movimientos WHERE 1=1`;
+        let params = [];
+        if (sede && sede !== 'ALL') {
+            query += ` AND sede = ?`;
+            params.push(sede);
+        }
+        if (tipo_inventario && tipo_inventario !== 'ALL') {
+            query += ` AND tipo_inventario = ?`;
+            params.push(tipo_inventario);
+        }
+        query += ` ORDER BY id DESC LIMIT 1`;
+        const lastMov = await dbGet(query, params);
         if (!lastMov) {
             return res.status(404).json({ success: false, error: 'No hay movimientos registrados en la base de datos.' });
         }
@@ -804,6 +1023,14 @@ app.get('/api/movimientos/ultimo', async (req, res) => {
 
 // Función auxiliar para revertir y eliminar un movimiento de forma segura
 async function eliminarMovimientoPorId(movId) {
+    const lastMov = await dbGet(`SELECT id, n_movimiento FROM movimientos ORDER BY id DESC LIMIT 1`);
+    if (!lastMov) {
+        throw new Error('No hay movimientos registrados para eliminar.');
+    }
+    if (parseInt(lastMov.id, 10) !== parseInt(movId, 10)) {
+        throw new Error(`Solo se permite eliminar y revertir el último movimiento registrado (${lastMov.n_movimiento}) para garantizar la coherencia y trazabilidad del kardex.`);
+    }
+
     const mov = await dbGet(`SELECT * FROM movimientos WHERE id = ?`, [movId]);
     if (!mov) {
         throw new Error(`El movimiento con ID ${movId} no fue encontrado.`);
@@ -900,14 +1127,26 @@ app.delete('/api/movimientos/:id', async (req, res) => {
 // ==========================================
 app.get('/api/vencimientos', async (req, res) => {
     try {
+        const { sede, tipo_inventario } = req.query;
         const today = new Date().toISOString().split('T')[0];
+        let where = `WHERE cv.cant_disponible > 0`;
+        let params = [];
+        if (sede && sede !== 'ALL') {
+            where += ` AND (cv.sede = ? OR cv.sede IS NULL)`;
+            params.push(sede);
+        }
+        if (tipo_inventario && tipo_inventario !== 'ALL') {
+            where += ` AND (cv.tipo_inventario = ? OR cv.tipo_inventario IS NULL)`;
+            params.push(tipo_inventario);
+        }
+
         const rows = await dbAll(`
             SELECT cv.*, i.ubicacion_cds, i.unidad_medida 
             FROM control_vencimientos cv
             JOIN items i ON cv.codigo_item = i.codigo
-            WHERE cv.cant_disponible > 0
+            ${where}
             ORDER BY cv.fecha_vencimiento ASC
-        `);
+        `, params);
 
         const formatted = rows.map(r => {
             const diffDias = Math.ceil((new Date(r.fecha_vencimiento) - new Date(today)) / (1000 * 60 * 60 * 24));
@@ -1186,16 +1425,33 @@ app.post('/api/proyectos', async (req, res) => {
 
 app.get('/api/config', async (req, res) => {
     try {
-        const categorias = (await dbAll(`SELECT DISTINCT valor FROM listas_config WHERE tipo = 'categoria' ORDER BY orden ASC`)).map(r => r.valor);
-        const unidades = (await dbAll(`SELECT DISTINCT valor FROM listas_config WHERE tipo = 'unidad_medida' ORDER BY orden ASC`)).map(r => r.valor);
-        const ubicaciones = (await dbAll(`SELECT DISTINCT valor FROM listas_config WHERE tipo = 'ubicacion_cds' ORDER BY orden ASC`)).map(r => r.valor);
-        const causales = (await dbAll(`SELECT DISTINCT valor FROM listas_config WHERE tipo = 'causal_disposicion' ORDER BY orden ASC`)).map(r => r.valor);
-        const bodegas = (await dbAll(`SELECT nombre FROM bodegas WHERE estado = 'Activa' ORDER BY codigo ASC`)).map(r => r.nombre);
-        const proyectos = (await dbAll(`SELECT nombre FROM proyectos WHERE estado = 'Activo' ORDER BY nombre ASC`)).map(r => r.nombre);
+        const sedes = await dbAll(`SELECT * FROM sedes WHERE estado = 'Activa' ORDER BY id ASC`);
+        const tipos_inventario = await dbAll(`SELECT * FROM tipos_inventario ORDER BY id ASC`);
+        let categorias = (await dbAll(`SELECT DISTINCT valor FROM listas_config WHERE tipo = 'categoria' ORDER BY orden ASC`)).map(r => r.valor);
+        let unidades = (await dbAll(`SELECT DISTINCT valor FROM listas_config WHERE tipo = 'unidad_medida' ORDER BY orden ASC`)).map(r => r.valor);
+        let ubicaciones = (await dbAll(`SELECT DISTINCT valor FROM listas_config WHERE tipo = 'ubicacion_cds' ORDER BY orden ASC, valor ASC`)).map(r => r.valor);
+        let causales = (await dbAll(`SELECT DISTINCT valor FROM listas_config WHERE tipo = 'causal_disposicion' ORDER BY orden ASC`)).map(r => r.valor);
+        let bodegas = (await dbAll(`SELECT nombre FROM bodegas WHERE estado = 'Activa' ORDER BY codigo ASC`)).map(r => r.nombre);
+        let proyectos = (await dbAll(`SELECT nombre FROM proyectos WHERE estado = 'Activo' ORDER BY nombre ASC`)).map(r => r.nombre);
+
+        // Si no hay ubicaciones en listas_config, o para incluir ubicaciones existentes en ítems
+        const defaultUbicaciones = [
+            'A1', 'A2', 'A3', 'A4', 'A5',
+            'B1', 'B2', 'B3', 'B4', 'B5',
+            'C1', 'C2', 'C3', 'C4', 'C5',
+            'D1', 'D2', 'D3', 'D4', 'D5',
+            'T1', 'T2', 'T3', 'T4', 'T5'
+        ];
+        const itemUbicaciones = (await dbAll(`SELECT DISTINCT ubicacion_cds FROM items WHERE ubicacion_cds IS NOT NULL AND ubicacion_cds != '' AND ubicacion_cds != '-'`)).map(r => r.ubicacion_cds);
+        
+        const setUbicaciones = new Set([...ubicaciones, ...defaultUbicaciones, ...itemUbicaciones]);
+        ubicaciones = Array.from(setUbicaciones).filter(Boolean).sort();
 
         res.json({
             success: true,
             data: {
+                sedes,
+                tipos_inventario,
                 categorias,
                 unidades,
                 ubicaciones,

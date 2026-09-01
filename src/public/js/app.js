@@ -75,6 +75,8 @@ function closeModal(modalId) {
 // Estado global de la aplicación
 let appState = {
     currentView: 'inicio',
+    currentSede: 'Sede Suroriental',
+    currentInventario: 'CDS',
     items: [],
     inventario: [],
     movimientos: [],
@@ -82,6 +84,8 @@ let appState = {
     bodegas: [],
     proyectos: [],
     config: {
+        sedes: [],
+        tipos_inventario: [],
         categorias: [],
         unidades: [],
         ubicaciones: [],
@@ -95,11 +99,8 @@ let appState = {
 document.addEventListener('DOMContentLoaded', async () => {
     initUI();
     await loadConfig();
-    await loadKPIs();
-    await loadInventario();
-    await loadItems();
-    await loadMovimientos();
-    await loadVencimientos();
+    actualizarBadgesContexto();
+    await recargarDatosContexto();
     await loadBodegasYProyectos();
 });
 
@@ -123,15 +124,6 @@ function initUI() {
         });
     }
 
-    // Navegación Sidebar
-    document.querySelectorAll('.nav-link-custom').forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const view = link.getAttribute('data-view');
-            navigate(view);
-        });
-    });
-
     // Escuchar cambios de hash si aplica
     window.addEventListener('hashchange', () => {
         const hash = window.location.hash.replace('#', '');
@@ -139,14 +131,85 @@ function initUI() {
     });
 }
 
+function cambiarSede(sede) {
+    appState.currentSede = sede;
+    const globalSedeSelect = document.getElementById('global-sede-select');
+    if (globalSedeSelect) globalSedeSelect.value = sede;
+
+    actualizarBadgesContexto();
+    showToast(`📍 Sede activa cambiada a: ${sede}`, 'info');
+    recargarDatosContexto();
+}
+
+function seleccionarInventario(tipoInv, view) {
+    appState.currentInventario = tipoInv;
+    
+    // Actualizar clases activas en sidebar
+    document.querySelectorAll('.nav-link-custom').forEach(link => {
+        const linkView = link.getAttribute('data-view');
+        const linkInv = link.getAttribute('data-inv');
+        if (linkView === view && linkInv === tipoInv) {
+            link.classList.add('active');
+        } else if (linkInv) {
+            link.classList.remove('active');
+        }
+    });
+
+    actualizarBadgesContexto();
+    navigate(view);
+}
+
+function seleccionarAdmin(view) {
+    document.querySelectorAll('.nav-link-custom').forEach(link => {
+        const linkView = link.getAttribute('data-view');
+        if (linkView === view) {
+            link.classList.add('active');
+        } else {
+            link.classList.remove('active');
+        }
+    });
+    navigate(view);
+}
+
+function actualizarBadgesContexto() {
+    const sedeBadge = document.getElementById('navbar-sede-badge');
+    if (sedeBadge) {
+        sedeBadge.innerHTML = `<i class="bi bi-geo-alt-fill me-1 text-danger"></i>${appState.currentSede}`;
+    }
+
+    const invBadge = document.getElementById('navbar-inv-badge');
+    if (invBadge) {
+        const icon = appState.currentInventario === 'MOVILIDAD' ? 'bi-truck' : 'bi-boxes';
+        const label = appState.currentInventario === 'MOVILIDAD' ? 'Inventario Movilidad' : 'Inventario CDS';
+        invBadge.innerHTML = `<i class="bi ${icon} me-1"></i>${label}`;
+    }
+
+    const footerContext = document.getElementById('sidebar-footer-context');
+    if (footerContext) {
+        footerContext.textContent = `${appState.currentSede} • ${appState.currentInventario}`;
+    }
+}
+
+async function recargarDatosContexto() {
+    await Promise.all([
+        loadKPIs(),
+        loadInventario(),
+        loadItems(),
+        loadMovimientos(),
+        loadVencimientos()
+    ]);
+}
+
 function navigate(viewName) {
     appState.currentView = viewName;
 
-    // Actualizar enlaces del sidebar
+    // Actualizar enlaces del sidebar que no tienen data-inv (o correspondientes)
     document.querySelectorAll('.nav-link-custom').forEach(link => {
-        if (link.getAttribute('data-view') === viewName) {
+        const linkView = link.getAttribute('data-view');
+        const linkInv = link.getAttribute('data-inv');
+        if (linkView === viewName && (!linkInv || linkInv === appState.currentInventario)) {
             link.classList.add('active');
-        } else {
+        } else if (!linkInv || linkInv !== appState.currentInventario) {
             link.classList.remove('active');
         }
     });
@@ -162,14 +225,15 @@ function navigate(viewName) {
     }
 
     // Actualizar título de la página
+    const invLabel = appState.currentInventario === 'MOVILIDAD' ? 'Movilidad' : 'CDS';
     const titles = {
-        'inicio': 'Panel de Control',
-        'inventario': 'Inventario Físico CDS',
-        'movimientos': 'Historial de Movimientos',
-        'items': 'Catálogo Maestro de Ítems',
-        'vencimientos': 'Control de Vencimientos',
+        'inicio': `Panel de Control (${invLabel})`,
+        'inventario': `Inventario Físico ${invLabel}`,
+        'movimientos': `Movimientos ${invLabel}`,
+        'items': `Catálogo Ítems ${invLabel}`,
+        'vencimientos': `Control de Vencimientos ${invLabel}`,
         'bodegas': 'Bodegas y Proyectos',
-        'reportes': 'Kardex & Reportes Gerenciales',
+        'reportes': `Kardex & Reportes ${invLabel}`,
         'database': 'Gestión de Base de Datos y Backups'
     };
     const pageTitleEl = document.getElementById('page-title');
@@ -203,7 +267,25 @@ async function loadConfig() {
 }
 
 function populateSelectOptions() {
-    const { categorias, unidades, ubicaciones, causales, bodegas, proyectos } = appState.config;
+    const { sedes, tipos_inventario, categorias, unidades, ubicaciones, causales, bodegas, proyectos } = appState.config;
+
+    const defaultUbicaciones = (ubicaciones && ubicaciones.length > 0)
+        ? ubicaciones
+        : ['A1', 'A2', 'A3', 'A4', 'A5', 'B1', 'B2', 'B3', 'B4', 'B5', 'C1', 'C2', 'C3', 'C4', 'C5', 'D1', 'D2', 'D3', 'D4', 'D5', 'T1', 'T2', 'T3', 'T4', 'T5'];
+
+    const sedesList = (sedes && sedes.length > 0) ? sedes.map(s => s.nombre) : ['Sede Suroriental', 'Sede Medellín'];
+    const tiposList = (tipos_inventario && tipos_inventario.length > 0) ? tipos_inventario.map(t => t.codigo) : ['CDS', 'MOVILIDAD'];
+
+    // Selectores de Sede y Tipo de Inventario en modales y global
+    fillSelect('global-sede-select', sedesList, false);
+    if (document.getElementById('global-sede-select')) {
+        document.getElementById('global-sede-select').value = appState.currentSede;
+    }
+
+    fillSelect('item-sede', sedesList, false);
+    fillSelect('item-tipo-inventario', tiposList, false);
+    fillSelect('mov-sede', sedesList, false);
+    fillSelect('mov-tipo-inventario', tiposList, false);
 
     // Filtros de vistas
     fillSelect('filter-inv-categoria', categorias, true, 'Todas las Categorías');
@@ -213,7 +295,7 @@ function populateSelectOptions() {
     // Selectores de formularios
     fillSelect('item-categoria', categorias, false);
     fillSelect('item-unidad', unidades, false);
-    fillSelect('item-ubicacion', ubicaciones, false);
+    fillSelect('item-ubicacion', defaultUbicaciones, false);
 
     fillSelect('mov-bodega-origen', bodegas, true, '-- Sin Bodega Origen --');
     fillSelect('mov-bodega-destino', bodegas, true, '-- Sin Bodega Destino --');
@@ -237,7 +319,7 @@ function fillSelect(elementId, items, allowEmpty = false, emptyText = '-- Selecc
 // ==============================================================
 async function loadKPIs() {
     try {
-        const res = await fetch(`${API_BASE}/kpis`);
+        const res = await fetch(`${API_BASE}/kpis?sede=${encodeURIComponent(appState.currentSede)}&tipo_inventario=${encodeURIComponent(appState.currentInventario)}`);
         const data = await res.json();
         if (!data.success) return;
 
@@ -251,14 +333,15 @@ async function loadKPIs() {
         document.getElementById('kpi-stock-bajo').textContent = kpis.itemsStockBajo.toLocaleString();
         document.getElementById('kpi-total-movimientos').textContent = kpis.totalMovimientos.toLocaleString();
 
-        // Badges en sidebar
-        const badgeStockBajo = document.getElementById('sidebar-badge-stock-bajo');
+        // Badges en sidebar según el tipo de inventario activo
+        const badgeSuffix = appState.currentInventario === 'MOVILIDAD' ? 'movilidad' : 'cds';
+        const badgeStockBajo = document.getElementById(`sidebar-badge-stock-bajo-${badgeSuffix}`);
         if (badgeStockBajo) {
             badgeStockBajo.textContent = kpis.itemsStockBajo;
             badgeStockBajo.style.display = kpis.itemsStockBajo > 0 ? 'inline-block' : 'none';
         }
 
-        const badgeVencidos = document.getElementById('sidebar-badge-vencidos');
+        const badgeVencidos = document.getElementById(`sidebar-badge-vencidos-${badgeSuffix}`);
         if (badgeVencidos) {
             badgeVencidos.textContent = kpis.itemsVencidos;
             badgeVencidos.style.display = kpis.itemsVencidos > 0 ? 'inline-block' : 'none';
@@ -306,7 +389,7 @@ async function loadKPIs() {
 }
 
 // ==============================================================
-// 4. INVENTARIO FÍSICO OFICIAL CDS
+// 4. INVENTARIO FÍSICO OFICIAL
 // ==============================================================
 async function loadInventario() {
     try {
@@ -315,6 +398,8 @@ async function loadInventario() {
         const estadoStock = document.getElementById('filter-inv-estado')?.value || 'ALL';
 
         const params = new URLSearchParams();
+        params.append('sede', appState.currentSede);
+        params.append('tipo_inventario', appState.currentInventario);
         if (search) params.append('search', search);
         if (categoria && categoria !== 'ALL') params.append('categoria', categoria);
         if (estadoStock && estadoStock !== 'ALL') params.append('estadoStock', estadoStock);
@@ -335,7 +420,7 @@ function renderInventarioTable(items) {
     if (!tbody) return;
 
     if (items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="12" class="text-center py-4 text-muted">No se encontraron productos con los filtros seleccionados.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" class="text-center py-4 text-muted">No se encontraron productos en ${appState.currentSede} (${appState.currentInventario}) con los filtros seleccionados.</td></tr>`;
         return;
     }
 
@@ -385,6 +470,8 @@ async function loadMovimientos() {
         const fechaFin = document.getElementById('filter-mov-fechafin')?.value || '';
 
         const params = new URLSearchParams();
+        params.append('sede', appState.currentSede);
+        params.append('tipo_inventario', appState.currentInventario);
         if (search) params.append('search', search);
         if (tipo && tipo !== 'ALL') params.append('tipo', tipo);
         if (bodega && bodega !== 'ALL') params.append('bodega', bodega);
@@ -407,21 +494,23 @@ function renderMovimientosTable(movs) {
     if (!tbody) return;
 
     if (movs.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="12" class="text-center py-4 text-muted">No se encontraron movimientos registrados.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" class="text-center py-4 text-muted">No se encontraron movimientos registrados para ${appState.currentSede} (${appState.currentInventario}).</td></tr>`;
         return;
     }
 
-    tbody.innerHTML = movs.map((m, index) => {
+    const latestId = appState.movimientos.length > 0 ? Math.max(...appState.movimientos.map(m => m.id)) : 0;
+
+    tbody.innerHTML = movs.map((m) => {
         let badgeClass = 'bg-secondary';
         if (m.tipo_movimiento === 'ENTRADA') badgeClass = 'bg-success';
         if (m.tipo_movimiento === 'ENTREGA') badgeClass = 'bg-warning text-dark';
         if (m.tipo_movimiento === 'DISPOSICION FINAL') badgeClass = 'bg-danger';
         if (m.tipo_movimiento === 'DEVOLUCION') badgeClass = 'bg-info text-dark';
 
-        const isLatest = index === 0;
+        const isLatest = m.id === latestId;
 
         return `
-            <tr class="${isLatest ? 'table-light' : ''}">
+            <tr class="${isLatest ? 'table-light border-start border-primary border-3' : ''}">
                 <td>
                     <strong class="text-primary">${m.n_movimiento}</strong>
                     ${isLatest ? '<span class="badge bg-primary ms-1" style="font-size: 0.65rem;">Último</span>' : ''}
@@ -443,9 +532,15 @@ function renderMovimientosTable(movs) {
                 <td>${m.responsable || '-'}</td>
                 <td class="small text-muted">${m.observaciones || '-'}</td>
                 <td class="text-center">
-                    <button class="btn btn-outline-danger btn-sm py-0 px-2 shadow-sm" onclick="abrirModalEliminarMovimiento(${m.id})" title="Eliminar y revertir este movimiento">
-                        <i class="bi bi-trash3"></i>
-                    </button>
+                    ${isLatest ? `
+                        <button class="btn btn-outline-danger btn-sm py-0 px-2 shadow-sm" onclick="abrirModalEliminarMovimiento(${m.id})" title="Eliminar y revertir el último movimiento registrado">
+                            <i class="bi bi-trash3"></i>
+                        </button>
+                    ` : `
+                        <button class="btn btn-light btn-sm py-0 px-2 text-muted border-0" disabled title="Solo se permite eliminar el último movimiento registrado">
+                            <i class="bi bi-lock-fill opacity-25"></i>
+                        </button>
+                    `}
                 </td>
             </tr>
         `;
@@ -462,6 +557,13 @@ function openModalMovimiento(preselectedCode = null) {
 
     const vencContainer = document.getElementById('mov-vencimiento-container');
     if (vencContainer) vencContainer.style.display = 'none';
+
+    // Precargar sede y tipo de inventario activos
+    const movSede = document.getElementById('mov-sede');
+    if (movSede) movSede.value = appState.currentSede;
+
+    const movTipoInv = document.getElementById('mov-tipo-inventario');
+    if (movTipoInv) movTipoInv.value = appState.currentInventario;
 
     // Asegurar botón habilitado
     const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
@@ -570,6 +672,8 @@ async function actualizarStockPreviewEnMovimiento() {
     const origenSelect = document.getElementById('mov-bodega-origen');
     const labelEl = document.getElementById('mov-preview-stock-label');
     const badgeEl = document.getElementById('mov-preview-stock');
+    const movSede = document.getElementById('mov-sede')?.value || appState.currentSede;
+    const movTipoInv = document.getElementById('mov-tipo-inventario')?.value || appState.currentInventario;
 
     let bodegaRelevante = 'CDS';
     if (tipo === 'DEVOLUCION') {
@@ -581,12 +685,12 @@ async function actualizarStockPreviewEnMovimiento() {
     }
 
     try {
-        const res = await fetch(`${API_BASE}/inventario/stock-bodega?codigo_item=${selectedCode}&bodega=${encodeURIComponent(bodegaRelevante)}`);
+        const res = await fetch(`${API_BASE}/inventario/stock-bodega?codigo_item=${selectedCode}&bodega=${encodeURIComponent(bodegaRelevante)}&sede=${encodeURIComponent(movSede)}&tipo_inventario=${encodeURIComponent(movTipoInv)}`);
         const result = await res.json();
         const stockActual = result.success ? result.stock : 0;
 
         if (labelEl) {
-            labelEl.textContent = `Stock Disponible [${bodegaRelevante}]:`;
+            labelEl.textContent = `Stock Disponible [${bodegaRelevante} - ${movSede}]:`;
         }
 
         if (badgeEl) {
@@ -618,6 +722,8 @@ async function submitMovimiento(e) {
     }
 
     const payload = {
+        sede: document.getElementById('mov-sede')?.value || appState.currentSede,
+        tipo_inventario: document.getElementById('mov-tipo-inventario')?.value || appState.currentInventario,
         tipo_movimiento: document.getElementById('mov-tipo').value,
         codigo_item: parseInt(document.getElementById('mov-item-select').value, 10),
         cantidad: parseFloat(document.getElementById('mov-cantidad').value),
@@ -657,12 +763,7 @@ async function submitMovimiento(e) {
         document.getElementById('form-movimiento')?.reset();
 
         // Recargar datos en segundo plano
-        await Promise.all([
-            loadKPIs(),
-            loadInventario(),
-            loadMovimientos(),
-            loadVencimientos()
-        ]);
+        await recargarDatosContexto();
     } catch (err) {
         showToast(`Error al registrar movimiento: ${err.message}`, 'danger');
     } finally {
@@ -678,7 +779,7 @@ async function submitMovimiento(e) {
 // ==============================================================
 async function abrirModalEliminarUltimoMovimiento() {
     try {
-        const res = await fetch(`${API_BASE}/movimientos/ultimo`);
+        const res = await fetch(`${API_BASE}/movimientos/ultimo?sede=${encodeURIComponent(appState.currentSede)}&tipo_inventario=${encodeURIComponent(appState.currentInventario)}`);
         const result = await res.json();
         if (!result.success || !result.data) {
             showToast('No hay movimientos registrados para eliminar.', 'warning');
@@ -692,10 +793,16 @@ async function abrirModalEliminarUltimoMovimiento() {
 }
 
 async function abrirModalEliminarMovimiento(id) {
+    const latestId = appState.movimientos.length > 0 ? Math.max(...appState.movimientos.map(m => m.id)) : 0;
+    if (id !== latestId) {
+        showToast('⚠️ Solo se permite eliminar y revertir el último movimiento registrado en el sistema para mantener la integridad del kardex.', 'warning');
+        return;
+    }
+
     const mov = appState.movimientos.find(m => m.id === id);
     if (!mov) {
         try {
-            const res = await fetch(`${API_BASE}/movimientos`);
+            const res = await fetch(`${API_BASE}/movimientos?sede=${encodeURIComponent(appState.currentSede)}&tipo_inventario=${encodeURIComponent(appState.currentInventario)}`);
             const result = await res.json();
             if (result.success) {
                 const found = result.data.find(m => m.id === id);
@@ -760,12 +867,7 @@ async function ejecutarEliminarMovimiento() {
         closeModal('modalEliminarMovimiento');
         showToast(`✅ ${result.message}`, 'success');
 
-        await Promise.all([
-            loadKPIs(),
-            loadInventario(),
-            loadMovimientos(),
-            loadVencimientos()
-        ]);
+        await recargarDatosContexto();
     } catch (err) {
         showToast(`Error al eliminar movimiento: ${err.message}`, 'danger');
         if (btn) {
@@ -785,6 +887,8 @@ async function loadItems() {
         const estado = document.getElementById('filter-items-estado')?.value || 'ALL';
 
         const params = new URLSearchParams();
+        params.append('sede', appState.currentSede);
+        params.append('tipo_inventario', appState.currentInventario);
         if (search) params.append('search', search);
         if (categoria && categoria !== 'ALL') params.append('categoria', categoria);
         if (estado && estado !== 'ALL') params.append('estado', estado);
@@ -815,7 +919,7 @@ function renderItemsTable(items) {
     if (!tbody) return;
 
     if (items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-muted">No se encontraron ítems en el catálogo.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-muted">No se encontraron ítems en ${appState.currentSede} (${appState.currentInventario}).</td></tr>`;
         return;
     }
 
@@ -855,11 +959,15 @@ function renderItemsTable(items) {
 }
 
 async function sugerirSiguienteCodigo() {
+    const codigoInput = document.getElementById('item-codigo');
+    // Si el campo está en solo lectura (modo edición), no permitir alterar el código
+    if (codigoInput && codigoInput.readOnly) return;
+
     try {
         const res = await fetch(`${API_BASE}/items/next-code`);
         const result = await res.json();
-        if (result.success) {
-            document.getElementById('item-codigo').value = result.nextCode;
+        if (result.success && codigoInput && !codigoInput.readOnly) {
+            codigoInput.value = result.nextCode;
         }
     } catch (err) {
         console.error('Error al sugerir código:', err);
@@ -870,8 +978,34 @@ function openModalNuevoItem() {
     const form = document.getElementById('form-item');
     if (form) form.reset();
 
-    document.getElementById('item-codigo').readOnly = false;
-    document.getElementById('modalNuevoItemTitle').innerHTML = '<i class="bi bi-plus-square-fill text-success me-2"></i>Alta y Edición de Ítems en Catálogo';
+    const sedeSelect = document.getElementById('item-sede');
+    if (sedeSelect) sedeSelect.value = appState.currentSede;
+
+    const tipoInvSelect = document.getElementById('item-tipo-inventario');
+    if (tipoInvSelect) tipoInvSelect.value = appState.currentInventario;
+
+    const codigoInput = document.getElementById('item-codigo');
+    codigoInput.readOnly = false;
+    codigoInput.classList.remove('bg-light');
+
+    const autoBtn = document.getElementById('btn-auto-codigo');
+    if (autoBtn) {
+        autoBtn.disabled = false;
+        autoBtn.style.display = '';
+    }
+
+    const helpEl = document.getElementById('item-codigo-help');
+    if (helpEl) {
+        helpEl.innerHTML = '<span class="text-muted"><i class="bi bi-info-circle me-1"></i>Código numérico asignado para el nuevo ítem</span>';
+    }
+
+    document.getElementById('modalNuevoItemTitle').innerHTML = `<i class="bi bi-plus-square-fill text-success me-2"></i>Alta de Ítem (${appState.currentSede} - ${appState.currentInventario})`;
+
+    // Seleccionar la primera ubicación disponible por defecto
+    const ubicacionSelect = document.getElementById('item-ubicacion');
+    if (ubicacionSelect && ubicacionSelect.options.length > 0) {
+        ubicacionSelect.selectedIndex = 0;
+    }
 
     sugerirSiguienteCodigo();
 
@@ -884,15 +1018,51 @@ function editarItem(codigo) {
     const item = appState.items.find(i => i.codigo === codigo);
     if (!item) return;
 
-    document.getElementById('item-codigo').value = item.codigo;
-    document.getElementById('item-codigo').readOnly = true;
+    // Sede y Tipo de Inventario
+    const sedeSelect = document.getElementById('item-sede');
+    if (sedeSelect) sedeSelect.value = item.sede || appState.currentSede;
+
+    const tipoInvSelect = document.getElementById('item-tipo-inventario');
+    if (tipoInvSelect) tipoInvSelect.value = item.tipo_inventario || appState.currentInventario;
+
+    // 1. Bloqueo estricto del código: una vez creado el ítem NO se permite modificar el código
+    const codigoInput = document.getElementById('item-codigo');
+    codigoInput.value = item.codigo;
+    codigoInput.readOnly = true;
+    codigoInput.classList.add('bg-light');
+
+    const autoBtn = document.getElementById('btn-auto-codigo');
+    if (autoBtn) {
+        autoBtn.disabled = true;
+        autoBtn.style.display = 'none';
+    }
+
+    const helpEl = document.getElementById('item-codigo-help');
+    if (helpEl) {
+        helpEl.innerHTML = '<span class="text-danger fw-semibold"><i class="bi bi-lock-fill me-1"></i>Código bloqueado (no modificable)</span>';
+    }
+
     document.getElementById('item-nombre').value = item.nombre;
     document.getElementById('item-categoria').value = item.categoria;
     document.getElementById('item-subcategoria').value = item.subcategoria || 'General';
     document.getElementById('item-unidad').value = item.unidad_medida;
     document.getElementById('item-marca').value = item.marca || 'Generico';
     document.getElementById('item-referencia').value = item.referencia || '-';
-    document.getElementById('item-ubicacion').value = item.ubicacion_cds || 'A1';
+
+    // 2. Selección de Ubicación garantizada
+    const ubicacionSelect = document.getElementById('item-ubicacion');
+    const itemUbicacion = item.ubicacion_cds || 'A1';
+    if (ubicacionSelect) {
+        const optionExists = Array.from(ubicacionSelect.options).some(opt => opt.value === itemUbicacion);
+        if (!optionExists && itemUbicacion) {
+            const opt = document.createElement('option');
+            opt.value = itemUbicacion;
+            opt.textContent = itemUbicacion;
+            ubicacionSelect.appendChild(opt);
+        }
+        ubicacionSelect.value = itemUbicacion;
+    }
+
     document.getElementById('item-stock-minimo').value = item.stock_minimo || 0;
     document.getElementById('item-aplica-vencimiento').value = item.aplica_vencimiento ? '1' : '0';
     document.getElementById('item-estado').value = item.estado || 'Activo';
@@ -919,13 +1089,15 @@ async function submitItem(e) {
 
     const payload = {
         codigo,
+        sede: document.getElementById('item-sede')?.value || appState.currentSede,
+        tipo_inventario: document.getElementById('item-tipo-inventario')?.value || appState.currentInventario,
         nombre: document.getElementById('item-nombre').value.trim().toUpperCase(),
         categoria: document.getElementById('item-categoria').value,
         subcategoria: document.getElementById('item-subcategoria').value,
         unidad_medida: document.getElementById('item-unidad').value,
         marca: document.getElementById('item-marca').value,
         referencia: document.getElementById('item-referencia').value,
-        ubicacion_cds: document.getElementById('item-ubicacion').value,
+        ubicacion_cds: document.getElementById('item-ubicacion').value || 'A1',
         stock_minimo: parseInt(document.getElementById('item-stock-minimo').value, 10) || 0,
         aplica_vencimiento: document.getElementById('item-aplica-vencimiento').value === '1',
         estado: document.getElementById('item-estado').value,
@@ -951,9 +1123,7 @@ async function submitItem(e) {
         closeModal('modalNuevoItem');
         showToast(`✅ ${result.message}`, 'success');
 
-        await loadItems();
-        await loadInventario();
-        await loadKPIs();
+        await recargarDatosContexto();
     } catch (err) {
         showToast(`Error al guardar ítem: ${err.message}`, 'danger');
     }
@@ -964,7 +1134,7 @@ async function submitItem(e) {
 // ==============================================================
 async function loadVencimientos() {
     try {
-        const res = await fetch(`${API_BASE}/vencimientos`);
+        const res = await fetch(`${API_BASE}/vencimientos?sede=${encodeURIComponent(appState.currentSede)}&tipo_inventario=${encodeURIComponent(appState.currentInventario)}`);
         const result = await res.json();
         if (!result.success) return;
 
@@ -1383,7 +1553,7 @@ async function loadKardexItem(codigo) {
         currentKardexData = result;
 
         document.getElementById('kardex-item-titulo').textContent = `${item.codigo} - ${item.nombre}`;
-        document.getElementById('kardex-item-subtitulo').textContent = `Categoría: ${item.categoria} | Ubicación CDS: ${item.ubicacion_cds} | Unidad: ${item.unidad_medida}`;
+        document.getElementById('kardex-item-subtitulo').textContent = `Sede: ${item.sede || appState.currentSede} | Inventario: ${item.tipo_inventario || appState.currentInventario} | Categoría: ${item.categoria} | Ubicación: ${item.ubicacion_cds} | Unidad: ${item.unidad_medida}`;
         document.getElementById('kardex-saldo-final').textContent = `${saldo_final} ${item.unidad_medida}`;
 
         const tbody = document.getElementById('table-kardex-body');

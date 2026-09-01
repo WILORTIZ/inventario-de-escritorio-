@@ -1,4 +1,4 @@
-﻿:root {
+:root {
     --sidebar-width: 260px;
     --sidebar-bg: #0f172a;
     --sidebar-color: #94a3b8;
@@ -42,7 +42,23 @@ body {
 
 .sidebar-nav {
     flex-grow: 1;
-    padding: 1rem 0;
+    padding: 0.5rem 0;
+    overflow-y: auto;
+    max-height: calc(100vh - 140px);
+}
+
+.sidebar-nav::-webkit-scrollbar {
+    width: 5px;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+}
+
+.sidebar-section-header {
+    font-size: 0.72rem;
+    letter-spacing: 0.8px;
 }
 
 .nav-link-custom {

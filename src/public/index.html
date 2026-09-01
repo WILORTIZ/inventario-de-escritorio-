@@ -16,47 +16,102 @@
         <!-- SIDEBAR LATERAL IZQUIERDA -->
         <aside id="sidebar-wrapper">
             <div class="sidebar-heading d-flex align-items-center text-white">
-                <div class="bg-primary text-white rounded-3 p-2 me-2 d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                <div class="bg-primary text-white rounded-3 p-2 me-2 d-flex align-items-center justify-content-center shadow-sm" style="width: 38px; height: 38px;">
                     <i class="bi bi-box-seam-fill fs-5"></i>
                 </div>
                 <div>
                     <div class="fw-bold tracking-wide">INVENTARIO</div>
-                    <div class="text-white-50" style="font-size: 0.72rem; letter-spacing: 0.5px;">SISTEMA MULTI-BODEGA</div>
+                    <div class="text-white-50" style="font-size: 0.72rem; letter-spacing: 0.5px;">SISTEMA MULTI-SEDE</div>
                 </div>
             </div>
 
+            <!-- SELECTOR DE SEDE OPERATIVA -->
+            <div class="px-3 py-2 border-bottom border-white border-opacity-10 bg-black bg-opacity-20">
+                <label class="form-label text-white-50 small mb-1 fw-bold text-uppercase d-flex align-items-center justify-content-between" style="font-size: 0.68rem; letter-spacing: 0.5px;">
+                    <span><i class="bi bi-geo-alt-fill text-danger me-1"></i>Sede Activa</span>
+                    <span class="badge bg-success" style="font-size: 0.6rem;">Online</span>
+                </label>
+                <select class="form-select form-select-sm bg-dark text-white border-secondary fw-semibold shadow-sm" id="global-sede-select" onchange="cambiarSede(this.value)">
+                    <option value="Sede Suroriental">🏢 Sede Suroriental</option>
+                    <option value="Sede Medellín">🏢 Sede Medellín</option>
+                </select>
+            </div>
+
+            <!-- NAVEGACIÓN ORGANIZADA EN SUBMENÚS -->
             <div class="sidebar-nav">
-                <a href="#inicio" class="nav-link-custom active" data-view="inicio">
+                <!-- INVENTARIO CDS -->
+                <div class="sidebar-section-header px-3 pt-2 pb-1 text-uppercase fw-bold text-info d-flex align-items-center justify-content-between">
+                    <span><i class="bi bi-boxes me-1"></i> Inventario CDS</span>
+                    <span class="badge bg-info bg-opacity-25 text-info" style="font-size: 0.6rem;">Principal</span>
+                </div>
+                <a href="#inicio" class="nav-link-custom active" data-view="inicio" data-inv="CDS" onclick="seleccionarInventario('CDS', 'inicio')">
                     <i class="bi bi-speedometer2"></i>
-                    <span>Panel de Control</span>
+                    <span>Panel CDS</span>
                 </a>
-                <a href="#inventario" class="nav-link-custom" data-view="inventario">
-                    <i class="bi bi-boxes"></i>
-                    <span>Inventario CDS</span>
-                    <span class="badge bg-warning text-dark ms-auto" id="sidebar-badge-stock-bajo" style="display:none;">0</span>
+                <a href="#inventario" class="nav-link-custom" data-view="inventario" data-inv="CDS" onclick="seleccionarInventario('CDS', 'inventario')">
+                    <i class="bi bi-box-seam"></i>
+                    <span>Stock Físico CDS</span>
+                    <span class="badge bg-warning text-dark ms-auto" id="sidebar-badge-stock-bajo-cds" style="display:none;">0</span>
                 </a>
-                <a href="#movimientos" class="nav-link-custom" data-view="movimientos">
+                <a href="#movimientos" class="nav-link-custom" data-view="movimientos" data-inv="CDS" onclick="seleccionarInventario('CDS', 'movimientos')">
                     <i class="bi bi-arrow-left-right"></i>
-                    <span>Movimientos</span>
+                    <span>Movimientos CDS</span>
                 </a>
-                <a href="#items" class="nav-link-custom" data-view="items">
+                <a href="#items" class="nav-link-custom" data-view="items" data-inv="CDS" onclick="seleccionarInventario('CDS', 'items')">
                     <i class="bi bi-tags"></i>
-                    <span>Catálogo Ítems</span>
+                    <span>Catálogo CDS</span>
                 </a>
-                <a href="#vencimientos" class="nav-link-custom" data-view="vencimientos">
+                <a href="#vencimientos" class="nav-link-custom" data-view="vencimientos" data-inv="CDS" onclick="seleccionarInventario('CDS', 'vencimientos')">
                     <i class="bi bi-calendar-event"></i>
-                    <span>Vencimientos</span>
-                    <span class="badge bg-danger ms-auto" id="sidebar-badge-vencidos" style="display:none;">0</span>
+                    <span>Vencimientos CDS</span>
+                    <span class="badge bg-danger ms-auto" id="sidebar-badge-vencidos-cds" style="display:none;">0</span>
                 </a>
-                <a href="#bodegas" class="nav-link-custom" data-view="bodegas">
+                <a href="#reportes" class="nav-link-custom" data-view="reportes" data-inv="CDS" onclick="seleccionarInventario('CDS', 'reportes')">
+                    <i class="bi bi-file-earmark-bar-graph"></i>
+                    <span>Kardex CDS</span>
+                </a>
+
+                <!-- INVENTARIO MOVILIDAD -->
+                <div class="sidebar-section-header px-3 pt-3 pb-1 text-uppercase fw-bold text-warning border-top border-white border-opacity-10 d-flex align-items-center justify-content-between">
+                    <span><i class="bi bi-truck me-1"></i> Inventario Movilidad</span>
+                    <span class="badge bg-warning bg-opacity-25 text-warning" style="font-size: 0.6rem;">Flota</span>
+                </div>
+                <a href="#inicio" class="nav-link-custom" data-view="inicio" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'inicio')">
+                    <i class="bi bi-speedometer2"></i>
+                    <span>Panel Movilidad</span>
+                </a>
+                <a href="#inventario" class="nav-link-custom" data-view="inventario" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'inventario')">
+                    <i class="bi bi-box-seam"></i>
+                    <span>Stock Movilidad</span>
+                    <span class="badge bg-warning text-dark ms-auto" id="sidebar-badge-stock-bajo-movilidad" style="display:none;">0</span>
+                </a>
+                <a href="#movimientos" class="nav-link-custom" data-view="movimientos" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'movimientos')">
+                    <i class="bi bi-arrow-left-right"></i>
+                    <span>Movimientos Mov.</span>
+                </a>
+                <a href="#items" class="nav-link-custom" data-view="items" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'items')">
+                    <i class="bi bi-tags"></i>
+                    <span>Catálogo Movilidad</span>
+                </a>
+                <a href="#vencimientos" class="nav-link-custom" data-view="vencimientos" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'vencimientos')">
+                    <i class="bi bi-calendar-event"></i>
+                    <span>Vencimientos Mov.</span>
+                    <span class="badge bg-danger ms-auto" id="sidebar-badge-vencidos-movilidad" style="display:none;">0</span>
+                </a>
+                <a href="#reportes" class="nav-link-custom" data-view="reportes" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'reportes')">
+                    <i class="bi bi-file-earmark-bar-graph"></i>
+                    <span>Kardex Movilidad</span>
+                </a>
+
+                <!-- ADMINISTRACIÓN -->
+                <div class="sidebar-section-header px-3 pt-3 pb-1 text-uppercase fw-bold text-white-50 border-top border-white border-opacity-10">
+                    <i class="bi bi-gear-fill me-1"></i> Administración
+                </div>
+                <a href="#bodegas" class="nav-link-custom" data-view="bodegas" onclick="seleccionarAdmin('bodegas')">
                     <i class="bi bi-building"></i>
                     <span>Bodegas y Proyectos</span>
                 </a>
-                <a href="#reportes" class="nav-link-custom" data-view="reportes">
-                    <i class="bi bi-file-earmark-bar-graph"></i>
-                    <span>Kardex & Reportes</span>
-                </a>
-                <a href="#database" class="nav-link-custom" data-view="database">
+                <a href="#database" class="nav-link-custom" data-view="database" onclick="seleccionarAdmin('database')">
                     <i class="bi bi-database-fill-gear"></i>
                     <span>Base de Datos & Backup</span>
                 </a>
@@ -67,7 +122,7 @@
                     <span class="badge bg-success p-1 rounded-circle me-2" style="width: 8px; height: 8px;"></span>
                     <span class="text-xs fw-semibold text-light">Modo 100% Offline (SQLite)</span>
                 </div>
-                <div style="font-size: 0.7rem;" class="text-white-50">Control Oficial Bodega CDS</div>
+                <div style="font-size: 0.7rem;" class="text-white-50" id="sidebar-footer-context">Sede Suroriental • CDS</div>
             </div>
         </aside>
 
@@ -79,8 +134,10 @@
                     <button class="btn btn-light border me-3 shadow-sm" id="sidebarToggle" title="Ocultar / Mostrar Menú Lateral (Modo Pantalla Completa)" aria-label="Alternar Menú Lateral">
                         <i class="bi bi-list fs-5"></i>
                     </button>
-                    <div class="d-none d-md-block">
+                    <div class="d-none d-md-flex align-items-center flex-wrap gap-2">
                         <span class="fw-bold text-dark fs-6" id="page-title">Panel de Control</span>
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1" id="navbar-sede-badge"><i class="bi bi-geo-alt-fill me-1 text-danger"></i>Sede Suroriental</span>
+                        <span class="badge bg-info-subtle text-info border border-info-subtle px-2 py-1" id="navbar-inv-badge"><i class="bi bi-boxes me-1"></i>Inventario CDS</span>
                         <span class="text-muted ms-2" style="font-size: 0.85rem;" id="system-date"></span>
                     </div>
                 </div>
@@ -855,6 +912,16 @@
                     <div class="modal-body p-4">
                         <div class="row g-3">
                             <div class="col-12 col-md-6">
+                                <label class="form-label fw-bold small"><i class="bi bi-geo-alt-fill text-danger me-1"></i>Sede Operativa <span class="text-danger">*</span></label>
+                                <select class="form-select bg-light fw-semibold" id="mov-sede" required onchange="actualizarStockPreviewEnMovimiento()"></select>
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-bold small"><i class="bi bi-boxes text-info me-1"></i>Tipo de Inventario <span class="text-danger">*</span></label>
+                                <select class="form-select bg-light fw-semibold" id="mov-tipo-inventario" required onchange="actualizarStockPreviewEnMovimiento()"></select>
+                            </div>
+
+                            <div class="col-12 col-md-6">
                                 <label class="form-label fw-bold small">Tipo de Movimiento <span class="text-danger">*</span></label>
                                 <select class="form-select" id="mov-tipo" required onchange="handleTipoMovimientoChange(this.value)">
                                     <option value="ENTRADA">ENTRADA (Ingreso a CDS)</option>
@@ -1053,12 +1120,23 @@
                             <i class="bi bi-shield-check me-1"></i> <strong>Reglas estrictas:</strong> Código 100% numérico. Todo producto nuevo se crea con <strong>existencia inicial en cero (0)</strong>; el stock se ingresa mediante un movimiento formal de ENTRADA.
                         </div>
                         <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-bold small"><i class="bi bi-geo-alt-fill text-danger me-1"></i>Sede Asignada <span class="text-danger">*</span></label>
+                                <select class="form-select bg-light fw-semibold" id="item-sede" required></select>
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-bold small"><i class="bi bi-boxes text-info me-1"></i>Tipo de Inventario <span class="text-danger">*</span></label>
+                                <select class="form-select bg-light fw-semibold" id="item-tipo-inventario" required></select>
+                            </div>
+
                             <div class="col-12 col-md-4">
                                 <label class="form-label fw-bold small">Código Ítem (100% Numérico) <span class="text-danger">*</span></label>
                                 <div class="input-group">
                                     <input type="text" pattern="[0-9]+" class="form-control" id="item-codigo" required placeholder="Ej: 7538">
-                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="sugerirSiguienteCodigo()" title="Sugerir consecutivo">Auto</button>
+                                    <button class="btn btn-outline-secondary btn-sm" id="btn-auto-codigo" type="button" onclick="sugerirSiguienteCodigo()" title="Sugerir consecutivo">Auto</button>
                                 </div>
+                                <div id="item-codigo-help" class="form-text mt-1" style="font-size: 0.75rem;"></div>
                             </div>
 
                             <div class="col-12 col-md-8">

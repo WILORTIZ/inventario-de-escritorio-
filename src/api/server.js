@@ -320,28 +320,27 @@ app.get('/api/tipos-inventario', async (req, res) => {
 app.get('/api/kpis', async (req, res) => {
     try {
         const { sede, tipo_inventario } = req.query;
-        let itemWhere = `WHERE estado = 'Activo'`;
-        let itemParams = [];
-        if (sede && sede !== 'ALL') {
-            itemWhere += ` AND sede = ?`;
-            itemParams.push(sede);
-        }
-        if (tipo_inventario && tipo_inventario !== 'ALL') {
-            itemWhere += ` AND tipo_inventario = ?`;
-            itemParams.push(tipo_inventario);
-        }
 
-        const totalItems = (await dbGet(`SELECT COUNT(*) as count FROM items ${itemWhere}`, itemParams)).count;
+        // Catálogo Maestro Unificado: Total de ítems activos registrados en la empresa
+        const totalItems = (await dbGet(`SELECT COUNT(*) as count FROM items WHERE estado = 'Activo'`)).count;
         
+        // Movimientos y Stock Físico filtrados por la Sede y Tipo de Inventario activos
         let movWhere = `WHERE 1=1`;
         let movParams = [];
+        let mJoin = '';
+        let mJoinParams = [];
+
         if (sede && sede !== 'ALL') {
             movWhere += ` AND sede = ?`;
             movParams.push(sede);
+            mJoin += ` AND m.sede = ?`;
+            mJoinParams.push(sede);
         }
         if (tipo_inventario && tipo_inventario !== 'ALL') {
             movWhere += ` AND tipo_inventario = ?`;
             movParams.push(tipo_inventario);
+            mJoin += ` AND m.tipo_inventario = ?`;
+            mJoinParams.push(tipo_inventario);
         }
 
         const stockCDSData = await dbGet(`
@@ -389,7 +388,7 @@ app.get('/api/kpis', async (req, res) => {
         const proximosVencerQuery = await dbGet(`SELECT COUNT(*) as count FROM control_vencimientos ${cvProxWhere}`, cvProxParams);
         const itemsProximosVencer = proximosVencerQuery ? (proximosVencerQuery.count || 0) : 0;
 
-        // Stock bajo
+        // Stock bajo en la Sede/Inventario actual
         let stockBajoQueryStr = `
             SELECT 
                 i.codigo,
@@ -399,23 +398,14 @@ app.get('/api/kpis', async (req, res) => {
                     (CASE WHEN m.tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (m.bodega_origen = 'CDS' OR m.bodega_origen IS NULL) THEN m.cantidad ELSE 0 END)
                 ), 0) as stock_actual
             FROM items i
-            LEFT JOIN movimientos m ON i.codigo = m.codigo_item
+            LEFT JOIN movimientos m ON i.codigo = m.codigo_item ${mJoin}
             WHERE i.estado = 'Activo'
+            GROUP BY i.codigo HAVING stock_actual <= i.stock_minimo
         `;
-        let stockBajoParams = [];
-        if (sede && sede !== 'ALL') {
-            stockBajoQueryStr += ` AND i.sede = ?`;
-            stockBajoParams.push(sede);
-        }
-        if (tipo_inventario && tipo_inventario !== 'ALL') {
-            stockBajoQueryStr += ` AND i.tipo_inventario = ?`;
-            stockBajoParams.push(tipo_inventario);
-        }
-        stockBajoQueryStr += ` GROUP BY i.codigo HAVING stock_actual <= i.stock_minimo`;
-        const stockBajoQuery = await dbAll(stockBajoQueryStr, stockBajoParams);
+        const stockBajoQuery = await dbAll(stockBajoQueryStr, mJoinParams);
         const itemsStockBajo = stockBajoQuery.length;
 
-        // Stock por categoría
+        // Stock por categoría en la Sede/Inventario actual
         let catQueryStr = `
             SELECT 
                 i.categoria,
@@ -425,20 +415,11 @@ app.get('/api/kpis', async (req, res) => {
                     (CASE WHEN m.tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (m.bodega_origen = 'CDS' OR m.bodega_origen IS NULL) THEN m.cantidad ELSE 0 END)
                 ), 0) as stock_total
             FROM items i
-            LEFT JOIN movimientos m ON i.codigo = m.codigo_item
+            LEFT JOIN movimientos m ON i.codigo = m.codigo_item ${mJoin}
             WHERE i.estado = 'Activo'
+            GROUP BY i.categoria ORDER BY stock_total DESC
         `;
-        let catParams = [];
-        if (sede && sede !== 'ALL') {
-            catQueryStr += ` AND i.sede = ?`;
-            catParams.push(sede);
-        }
-        if (tipo_inventario && tipo_inventario !== 'ALL') {
-            catQueryStr += ` AND i.tipo_inventario = ?`;
-            catParams.push(tipo_inventario);
-        }
-        catQueryStr += ` GROUP BY i.categoria ORDER BY stock_total DESC`;
-        const categoriasStock = await dbAll(catQueryStr, catParams);
+        const categoriasStock = await dbAll(catQueryStr, mJoinParams);
 
         // Movimientos recientes
         let ultimosMovStr = `SELECT * FROM movimientos WHERE 1=1`;
@@ -480,6 +461,17 @@ app.get('/api/inventario', async (req, res) => {
     try {
         const { sede, tipo_inventario, categoria, estadoStock, search } = req.query;
 
+        let mJoin = '';
+        let mJoinParams = [];
+        if (sede && sede !== 'ALL') {
+            mJoin += ` AND m.sede = ?`;
+            mJoinParams.push(sede);
+        }
+        if (tipo_inventario && tipo_inventario !== 'ALL') {
+            mJoin += ` AND m.tipo_inventario = ?`;
+            mJoinParams.push(tipo_inventario);
+        }
+
         let query = `
             SELECT 
                 i.codigo,
@@ -490,8 +482,6 @@ app.get('/api/inventario', async (req, res) => {
                 i.ubicacion_cds,
                 i.aplica_vencimiento,
                 i.stock_minimo,
-                i.sede,
-                i.tipo_inventario,
                 i.estado as item_estado,
                 COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'ENTRADA' AND (m.bodega_destino = 'CDS' OR m.bodega_destino IS NULL) THEN m.cantidad ELSE 0 END), 0) AS entradas,
                 COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'DEVOLUCION' AND m.bodega_destino = 'CDS' THEN m.cantidad ELSE 0 END), 0) AS devoluciones,
@@ -501,19 +491,11 @@ app.get('/api/inventario', async (req, res) => {
                 COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'DISPOSICION FINAL' AND (m.bodega_origen = 'CDS' OR m.bodega_origen IS NULL) THEN m.cantidad ELSE 0 END), 0) AS disp_final,
                 COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'AJUSTE NEGATIVO' AND (m.bodega_origen = 'CDS' OR m.bodega_origen IS NULL) THEN m.cantidad ELSE 0 END), 0) AS ajustes_neg
             FROM items i
-            LEFT JOIN movimientos m ON i.codigo = m.codigo_item
+            LEFT JOIN movimientos m ON i.codigo = m.codigo_item ${mJoin}
             WHERE 1=1
         `;
 
-        const params = [];
-        if (sede && sede !== 'ALL') {
-            query += ` AND i.sede = ?`;
-            params.push(sede);
-        }
-        if (tipo_inventario && tipo_inventario !== 'ALL') {
-            query += ` AND i.tipo_inventario = ?`;
-            params.push(tipo_inventario);
-        }
+        const params = [...mJoinParams];
         if (categoria && categoria !== 'ALL') {
             query += ` AND i.categoria = ?`;
             params.push(categoria);
@@ -568,18 +550,10 @@ app.get('/api/inventario', async (req, res) => {
 // ==========================================
 app.get('/api/items', async (req, res) => {
     try {
-        const { sede, tipo_inventario, search, categoria, estado } = req.query;
+        const { search, categoria, estado } = req.query;
         let query = `SELECT * FROM items WHERE 1=1`;
         const params = [];
 
-        if (sede && sede !== 'ALL') {
-            query += ` AND sede = ?`;
-            params.push(sede);
-        }
-        if (tipo_inventario && tipo_inventario !== 'ALL') {
-            query += ` AND tipo_inventario = ?`;
-            params.push(tipo_inventario);
-        }
         if (search) {
             query += ` AND (CAST(codigo AS TEXT) LIKE ? OR nombre LIKE ? OR marca LIKE ? OR ubicacion_cds LIKE ?)`;
             params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);

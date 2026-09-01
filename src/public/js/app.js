@@ -878,7 +878,7 @@ async function ejecutarEliminarMovimiento() {
 }
 
 // ==============================================================
-// 6. CATÁLOGO DE ITEMS (frmNuevoItem)
+// 6. CATÁLOGO MAESTRO DE ITEMS (frmNuevoItem)
 // ==============================================================
 async function loadItems() {
     try {
@@ -887,8 +887,6 @@ async function loadItems() {
         const estado = document.getElementById('filter-items-estado')?.value || 'ALL';
 
         const params = new URLSearchParams();
-        params.append('sede', appState.currentSede);
-        params.append('tipo_inventario', appState.currentInventario);
         if (search) params.append('search', search);
         if (categoria && categoria !== 'ALL') params.append('categoria', categoria);
         if (estado && estado !== 'ALL') params.append('estado', estado);
@@ -903,7 +901,7 @@ async function loadItems() {
         // Actualizar selector de Kardex
         const repSelect = document.getElementById('reporte-item-select');
         if (repSelect) {
-            let html = '<option value="">-- Seleccionar Ítem del Catálogo --</option>';
+            let html = '<option value="">-- Seleccionar Ítem del Catálogo Maestro --</option>';
             result.data.forEach(item => {
                 html += `<option value="${item.codigo}">${item.codigo} - ${item.nombre}</option>`;
             });
@@ -919,7 +917,7 @@ function renderItemsTable(items) {
     if (!tbody) return;
 
     if (items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-muted">No se encontraron ítems en ${appState.currentSede} (${appState.currentInventario}).</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-muted">No se encontraron ítems en el catálogo maestro.</td></tr>`;
         return;
     }
 
@@ -996,10 +994,10 @@ function openModalNuevoItem() {
 
     const helpEl = document.getElementById('item-codigo-help');
     if (helpEl) {
-        helpEl.innerHTML = '<span class="text-muted"><i class="bi bi-info-circle me-1"></i>Código numérico asignado para el nuevo ítem</span>';
+        helpEl.innerHTML = '<span class="text-muted"><i class="bi bi-info-circle me-1"></i>Código numérico único en el Catálogo Maestro</span>';
     }
 
-    document.getElementById('modalNuevoItemTitle').innerHTML = `<i class="bi bi-plus-square-fill text-success me-2"></i>Alta de Ítem (${appState.currentSede} - ${appState.currentInventario})`;
+    document.getElementById('modalNuevoItemTitle').innerHTML = `<i class="bi bi-plus-square-fill text-success me-2"></i>Alta de Ítem en Catálogo Maestro`;
 
     // Seleccionar la primera ubicación disponible por defecto
     const ubicacionSelect = document.getElementById('item-ubicacion');

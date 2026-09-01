@@ -1,6 +1,6 @@
 {
   "name": "inventario-cds",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Sistema Empresarial de Gestión Física y Control de Vencimientos CDS",
   "main": "main.js",
   "scripts": {

@@ -28,7 +28,7 @@
             <div class="sidebar-nav">
                 <a href="#inicio" class="nav-link-custom active" data-view="inicio">
                     <i class="bi bi-speedometer2"></i>
-                    <span>Inicio / Dashboard</span>
+                    <span>Panel de Control</span>
                 </a>
                 <a href="#inventario" class="nav-link-custom" data-view="inventario">
                     <i class="bi bi-boxes"></i>
@@ -76,11 +76,11 @@
             <!-- TOP NAVBAR -->
             <header class="top-navbar d-flex align-items-center justify-content-between">
                 <div class="d-flex align-items-center">
-                    <button class="btn btn-light border me-3" id="sidebarToggle" title="Ocultar/Mostrar Barra Lateral">
+                    <button class="btn btn-light border me-3 shadow-sm" id="sidebarToggle" title="Ocultar / Mostrar Menú Lateral (Modo Pantalla Completa)" aria-label="Alternar Menú Lateral">
                         <i class="bi bi-list fs-5"></i>
                     </button>
                     <div class="d-none d-md-block">
-                        <span class="fw-bold text-dark fs-6" id="page-title">Dashboard Ejecutivo</span>
+                        <span class="fw-bold text-dark fs-6" id="page-title">Panel de Control Principal</span>
                         <span class="text-muted ms-2" style="font-size: 0.85rem;" id="system-date"></span>
                     </div>
                 </div>
@@ -190,65 +190,65 @@
                     <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
                         <div class="d-flex align-items-center justify-content-between mb-3">
                             <h6 class="fw-bold mb-0 text-dark">
-                                <i class="bi bi-grid-fill text-primary me-2"></i>Centro de Operaciones y Formularios
+                                <i class="bi bi-grid-fill text-primary me-2"></i>Centro de Operaciones y Módulos
                             </h6>
-                            <span class="badge bg-light text-secondary border">7 Accesos Rápidos</span>
+                            <span class="badge bg-light text-secondary border">Accesos Rápidos</span>
                         </div>
                         <div class="row g-3">
                             <div class="col-6 col-md-3 col-xl">
                                 <div class="btn-action-tile h-100" onclick="openModalMovimiento()">
                                     <i class="bi bi-arrow-left-right text-primary"></i>
                                     <span class="fw-semibold">1. Registrar Movimiento</span>
-                                    <small class="text-muted">frmMovimiento</small>
+                                    <small class="text-muted">Entradas, Salidas y Traslados</small>
                                 </div>
                             </div>
                             <div class="col-6 col-md-3 col-xl">
                                 <div class="btn-action-tile h-100" onclick="openModalBajasVencidos()">
                                     <i class="bi bi-trash3-fill text-danger"></i>
                                     <span class="fw-semibold">2. Bajas Vencidos</span>
-                                    <small class="text-muted">frmBajasVencidos</small>
+                                    <small class="text-muted">Traslado a Disposición Final</small>
                                 </div>
                             </div>
                             <div class="col-6 col-md-3 col-xl">
                                 <div class="btn-action-tile h-100" data-bs-toggle="modal" data-bs-target="#modalBuscarItem">
                                     <i class="bi bi-search text-info"></i>
                                     <span class="fw-semibold">3. Buscar Ítem</span>
-                                    <small class="text-muted">frmBuscarItem</small>
+                                    <small class="text-muted">Consulta Rápida de Stock</small>
                                 </div>
                             </div>
                             <div class="col-6 col-md-3 col-xl">
                                 <div class="btn-action-tile h-100" onclick="openModalNuevoItem()">
                                     <i class="bi bi-plus-square-fill text-success"></i>
                                     <span class="fw-semibold">4. Catálogo Ítems</span>
-                                    <small class="text-muted">frmNuevoItem</small>
+                                    <small class="text-muted">Crear y Editar Productos</small>
                                 </div>
                             </div>
                             <div class="col-6 col-md-3 col-xl">
                                 <div class="btn-action-tile h-100" onclick="openModalNuevoProyecto()">
                                     <i class="bi bi-cone-striped text-warning"></i>
                                     <span class="fw-semibold">5. Proyectos</span>
-                                    <small class="text-muted">frmNuevoProyecto</small>
+                                    <small class="text-muted">Frentes de Obra y Destinos</small>
                                 </div>
                             </div>
                             <div class="col-6 col-md-3 col-xl">
                                 <div class="btn-action-tile h-100" onclick="openModalNuevaBodega()">
                                     <i class="bi bi-building-add text-secondary"></i>
                                     <span class="fw-semibold">6. Bodegas</span>
-                                    <small class="text-muted">frmNuevaBodega</small>
+                                    <small class="text-muted">Almacenes y Sedes</small>
                                 </div>
                             </div>
                             <div class="col-6 col-md-3 col-xl">
                                 <div class="btn-action-tile h-100" onclick="navigate('reportes')">
                                     <i class="bi bi-file-earmark-spreadsheet-fill text-dark"></i>
                                     <span class="fw-semibold">7. Kardex</span>
-                                    <small class="text-muted">frmReportes</small>
+                                    <small class="text-muted">Auditoría y Reportes Excel</small>
                                 </div>
                             </div>
                             <div class="col-6 col-md-3 col-xl">
                                 <div class="btn-action-tile h-100" onclick="navigate('database')">
                                     <i class="bi bi-database-fill-gear text-primary"></i>
                                     <span class="fw-semibold">8. Base de Datos</span>
-                                    <small class="text-muted">Backup / Import</small>
+                                    <small class="text-muted">Copias de Seguridad y Excel</small>
                                 </div>
                             </div>
                         </div>
@@ -841,13 +841,13 @@
         </div>
     </div>
 
-    <!-- MODAL 1: frmMovimiento -->
+    <!-- MODAL 1: Registro de Movimientos -->
     <div class="modal fade" id="modalMovimiento" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
                 <div class="modal-header modal-header-custom p-3">
                     <h6 class="modal-title fw-bold text-white">
-                        <i class="bi bi-arrow-left-right text-warning me-2"></i>frmMovimiento - Registro Transaccional
+                        <i class="bi bi-arrow-left-right text-warning me-2"></i>Registro Transaccional de Movimientos
                     </h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
@@ -950,13 +950,13 @@
         </div>
     </div>
 
-    <!-- MODAL 2: frmBajasVencidos -->
+    <!-- MODAL 2: Bajas por Caducidad -->
     <div class="modal fade" id="modalBajasVencidos" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-xl modal-dialog-centered">
             <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
                 <div class="modal-header bg-danger text-white p-3">
                     <h6 class="modal-title fw-bold text-white">
-                        <i class="bi bi-trash3-fill text-white me-2"></i>frmBajasVencidos - Asistente de Bajas por Caducidad
+                        <i class="bi bi-trash3-fill text-white me-2"></i>Asistente de Bajas por Caducidad
                     </h6>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
@@ -1001,13 +1001,13 @@
         </div>
     </div>
 
-    <!-- MODAL 3: frmBuscarItem -->
+    <!-- MODAL 3: Buscador de Ítems -->
     <div class="modal fade" id="modalBuscarItem" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
                 <div class="modal-header modal-header-custom p-3">
                     <h6 class="modal-title fw-bold text-white">
-                        <i class="bi bi-search text-info me-2"></i>frmBuscarItem - Consulta Rápida de Stock y Ubicación
+                        <i class="bi bi-search text-info me-2"></i>Consulta Rápida de Stock y Ubicación
                     </h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
@@ -1037,13 +1037,13 @@
         </div>
     </div>
 
-    <!-- MODAL 4: frmNuevoItem -->
+    <!-- MODAL 4: Catálogo de Ítems -->
     <div class="modal fade" id="modalNuevoItem" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
                 <div class="modal-header modal-header-custom p-3">
                     <h6 class="modal-title fw-bold text-white" id="modalNuevoItemTitle">
-                        <i class="bi bi-plus-square-fill text-success me-2"></i>frmNuevoItem - Alta y Edición de Catálogo
+                        <i class="bi bi-plus-square-fill text-success me-2"></i>Alta y Edición de Ítems en Catálogo
                     </h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
@@ -1132,13 +1132,13 @@
         </div>
     </div>
 
-    <!-- MODAL 5: frmNuevoProyecto -->
+    <!-- MODAL 5: Proyectos -->
     <div class="modal fade" id="modalNuevoProyecto" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
                 <div class="modal-header modal-header-custom p-3">
                     <h6 class="modal-title fw-bold text-white">
-                        <i class="bi bi-cone-striped text-warning me-2"></i>frmNuevoProyecto - Administrador de Proyectos
+                        <i class="bi bi-cone-striped text-warning me-2"></i>Administrador de Proyectos y Frentes
                     </h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
@@ -1174,13 +1174,13 @@
         </div>
     </div>
 
-    <!-- MODAL 6: frmNuevaBodega -->
+    <!-- MODAL 6: Bodegas -->
     <div class="modal fade" id="modalNuevaBodega" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
                 <div class="modal-header modal-header-custom p-3">
                     <h6 class="modal-title fw-bold text-white" id="modalBodegaTitle">
-                        <i class="bi bi-building-add text-secondary me-2"></i>frmNuevaBodega - Administrador de Bodegas
+                        <i class="bi bi-building-add text-secondary me-2"></i>Administrador de Bodegas y Almacenes
                     </h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>

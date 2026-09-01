@@ -163,7 +163,7 @@ function navigate(viewName) {
 
     // Actualizar título de la página
     const titles = {
-        'inicio': 'Dashboard Ejecutivo',
+        'inicio': 'Panel de Control Principal',
         'inventario': 'Inventario Físico CDS',
         'movimientos': 'Historial de Movimientos',
         'items': 'Catálogo Maestro de Ítems',
@@ -871,7 +871,7 @@ function openModalNuevoItem() {
     if (form) form.reset();
 
     document.getElementById('item-codigo').readOnly = false;
-    document.getElementById('modalNuevoItemTitle').innerHTML = '<i class="bi bi-plus-square-fill text-success me-2"></i>frmNuevoItem - Alta de Producto en Catálogo';
+    document.getElementById('modalNuevoItemTitle').innerHTML = '<i class="bi bi-plus-square-fill text-success me-2"></i>Alta y Edición de Ítems en Catálogo';
 
     sugerirSiguienteCodigo();
 
@@ -898,7 +898,7 @@ function editarItem(codigo) {
     document.getElementById('item-estado').value = item.estado || 'Activo';
     document.getElementById('item-observaciones').value = item.observaciones || '';
 
-    document.getElementById('modalNuevoItemTitle').innerHTML = '<i class="bi bi-pencil-square text-primary me-2"></i>frmNuevoItem - Modificar Ítem';
+    document.getElementById('modalNuevoItemTitle').innerHTML = `<i class="bi bi-pencil-square text-primary me-2"></i>Modificar Ítem en Catálogo (${item.codigo})`;
 
     const modalEl = document.getElementById('modalNuevoItem');
     const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
@@ -1164,7 +1164,7 @@ async function loadBodegasYProyectos() {
 async function openModalNuevaBodega() {
     document.getElementById('form-bodega').reset();
     document.getElementById('bod-is-edit').value = '0';
-    document.getElementById('modalBodegaTitle').innerHTML = '<i class="bi bi-building-add text-secondary me-2"></i>frmNuevaBodega - Nueva Bodega';
+    document.getElementById('modalBodegaTitle').innerHTML = '<i class="bi bi-building-add text-secondary me-2"></i>Nueva Bodega (Autogenerada)';
     
     const btn = document.getElementById('btn-guardar-bodega');
     if (btn) btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Guardar Bodega';
@@ -1219,7 +1219,7 @@ function editarBodega(codigo) {
         if (alertEl) alertEl.style.display = 'none';
     }
 
-    document.getElementById('modalBodegaTitle').innerHTML = `<i class="bi bi-pencil-square text-primary me-2"></i>frmNuevaBodega - Modificar Bodega (${bodega.codigo})`;
+    document.getElementById('modalBodegaTitle').innerHTML = `<i class="bi bi-pencil-square text-primary me-2"></i>Modificar Bodega (${bodega.codigo})`;
     const btn = document.getElementById('btn-guardar-bodega');
     if (btn) btn.innerHTML = '<i class="bi bi-save me-1"></i> Actualizar Bodega';
 

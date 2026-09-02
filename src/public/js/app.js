@@ -517,9 +517,13 @@ function renderMovimientosTable(movs) {
     tbody.innerHTML = movs.map((m) => {
         let badgeClass = 'bg-secondary';
         if (m.tipo_movimiento === 'ENTRADA') badgeClass = 'bg-success';
+        if (m.tipo_movimiento === 'ENTRADA POR TRASLADO') badgeClass = 'bg-primary text-white';
         if (m.tipo_movimiento === 'ENTREGA') badgeClass = 'bg-warning text-dark';
+        if (m.tipo_movimiento === 'SALIDA POR TRASLADO') badgeClass = 'bg-warning bg-opacity-75 text-dark border border-warning';
         if (m.tipo_movimiento === 'DISPOSICION FINAL') badgeClass = 'bg-danger';
         if (m.tipo_movimiento === 'DEVOLUCION') badgeClass = 'bg-info text-dark';
+        if (m.tipo_movimiento === 'AJUSTE POSITIVO') badgeClass = 'bg-success bg-opacity-75';
+        if (m.tipo_movimiento === 'AJUSTE NEGATIVO') badgeClass = 'bg-danger bg-opacity-75';
 
         const isLatest = m.id === latestId;
 

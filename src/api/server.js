@@ -376,8 +376,8 @@ app.get('/api/kpis', async (req, res) => {
         const stockCDSData = await dbGet(`
             SELECT 
                 SUM(
-                    (CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END) -
-                    (CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END)
+                    (CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO', 'ENTRADA POR TRASLADO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END) -
+                    (CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO', 'SALIDA POR TRASLADO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END)
                 ) as total_stock
             FROM movimientos
             ${movWhere}
@@ -424,8 +424,8 @@ app.get('/api/kpis', async (req, res) => {
                 i.codigo,
                 i.stock_minimo,
                 COALESCE(SUM(
-                    (CASE WHEN m.tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (m.bodega_destino = 'CDS' OR m.bodega_destino IS NULL) THEN m.cantidad ELSE 0 END) -
-                    (CASE WHEN m.tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (m.bodega_origen = 'CDS' OR m.bodega_origen IS NULL) THEN m.cantidad ELSE 0 END)
+                    (CASE WHEN m.tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO', 'ENTRADA POR TRASLADO') AND (m.bodega_destino = 'CDS' OR m.bodega_destino IS NULL) THEN m.cantidad ELSE 0 END) -
+                    (CASE WHEN m.tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO', 'SALIDA POR TRASLADO') AND (m.bodega_origen = 'CDS' OR m.bodega_origen IS NULL) THEN m.cantidad ELSE 0 END)
                 ), 0) as stock_actual
             FROM items i
             LEFT JOIN movimientos m ON i.codigo = m.codigo_item ${mJoin}
@@ -441,8 +441,8 @@ app.get('/api/kpis', async (req, res) => {
                 i.categoria,
                 COUNT(DISTINCT i.codigo) as total_items,
                 COALESCE(SUM(
-                    (CASE WHEN m.tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (m.bodega_destino = 'CDS' OR m.bodega_destino IS NULL) THEN m.cantidad ELSE 0 END) -
-                    (CASE WHEN m.tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (m.bodega_origen = 'CDS' OR m.bodega_origen IS NULL) THEN m.cantidad ELSE 0 END)
+                    (CASE WHEN m.tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO', 'ENTRADA POR TRASLADO') AND (m.bodega_destino = 'CDS' OR m.bodega_destino IS NULL) THEN m.cantidad ELSE 0 END) -
+                    (CASE WHEN m.tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO', 'SALIDA POR TRASLADO') AND (m.bodega_origen = 'CDS' OR m.bodega_origen IS NULL) THEN m.cantidad ELSE 0 END)
                 ), 0) as stock_total
             FROM items i
             LEFT JOIN movimientos m ON i.codigo = m.codigo_item ${mJoin}
@@ -513,11 +513,11 @@ app.get('/api/inventario', async (req, res) => {
                 i.aplica_vencimiento,
                 i.stock_minimo,
                 i.estado as item_estado,
-                COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'ENTRADA' AND (m.bodega_destino = 'CDS' OR m.bodega_destino IS NULL) THEN m.cantidad ELSE 0 END), 0) AS entradas,
+                COALESCE(SUM(CASE WHEN m.tipo_movimiento IN ('ENTRADA', 'ENTRADA POR TRASLADO') AND (m.bodega_destino = 'CDS' OR m.bodega_destino IS NULL) THEN m.cantidad ELSE 0 END), 0) AS entradas,
                 COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'DEVOLUCION' AND m.bodega_destino = 'CDS' THEN m.cantidad ELSE 0 END), 0) AS devoluciones,
                 COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'ENTREGA' AND m.bodega_destino = 'CDS' THEN m.cantidad ELSE 0 END), 0) AS entregas_recibidas,
                 COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'AJUSTE POSITIVO' AND (m.bodega_destino = 'CDS' OR m.bodega_destino IS NULL) THEN m.cantidad ELSE 0 END), 0) AS ajustes_pos,
-                COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'ENTREGA' AND (m.bodega_origen = 'CDS' OR m.bodega_origen IS NULL) THEN m.cantidad ELSE 0 END), 0) AS entregas_enviadas,
+                COALESCE(SUM(CASE WHEN m.tipo_movimiento IN ('ENTREGA', 'SALIDA POR TRASLADO') AND (m.bodega_origen = 'CDS' OR m.bodega_origen IS NULL) THEN m.cantidad ELSE 0 END), 0) AS entregas_enviadas,
                 COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'DISPOSICION FINAL' AND (m.bodega_origen = 'CDS' OR m.bodega_origen IS NULL) THEN m.cantidad ELSE 0 END), 0) AS disp_final,
                 COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'AJUSTE NEGATIVO' AND (m.bodega_origen = 'CDS' OR m.bodega_origen IS NULL) THEN m.cantidad ELSE 0 END), 0) AS ajustes_neg
             FROM items i
@@ -886,8 +886,8 @@ app.post('/api/movimientos', async (req, res) => {
                 const stockData = await dbGet(`
                     SELECT 
                         COALESCE(SUM(
-                            (CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END) -
-                            (CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END)
+                            (CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO', 'ENTRADA POR TRASLADO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END) -
+                            (CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO', 'SALIDA POR TRASLADO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END)
                         ), 0) as stock
                     FROM movimientos WHERE codigo_item = ? AND sede = ? AND tipo_inventario = ?
                 `, [codigo_item, movSede, movTipoInv]);
@@ -1044,9 +1044,9 @@ async function eliminarMovimientoPorId(movId) {
     const unidad = item ? item.unidad_medida : (mov.unidad || 'Unidad');
     const nombreItem = item ? item.nombre : mov.nombre_item;
 
-    // Si el movimiento incrementó stock en CDS (ENTRADA, DEVOLUCION, AJUSTE POSITIVO),
+    // Si el movimiento incrementó stock en CDS (ENTRADA, DEVOLUCION, AJUSTE POSITIVO, ENTRADA POR TRASLADO),
     // al eliminarlo se restará stock. Debemos verificar que no quede en sobregiro negativo.
-    const esIngresoCDS = (mov.tipo_movimiento === 'ENTRADA' && (mov.bodega_destino === 'CDS' || !mov.bodega_destino)) ||
+    const esIngresoCDS = (['ENTRADA', 'ENTRADA POR TRASLADO'].includes(mov.tipo_movimiento) && (mov.bodega_destino === 'CDS' || !mov.bodega_destino)) ||
                          (mov.tipo_movimiento === 'DEVOLUCION' && mov.bodega_destino === 'CDS') ||
                          (mov.tipo_movimiento === 'AJUSTE POSITIVO' && (mov.bodega_destino === 'CDS' || !mov.bodega_destino));
 
@@ -1054,8 +1054,8 @@ async function eliminarMovimientoPorId(movId) {
         const stockActualData = await dbGet(`
             SELECT 
                 COALESCE(SUM(
-                    (CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END) -
-                    (CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END)
+                    (CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO', 'ENTRADA POR TRASLADO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END) -
+                    (CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO', 'SALIDA POR TRASLADO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END)
                 ), 0) as stock
             FROM movimientos WHERE codigo_item = ?
         `, [mov.codigo_item]);
@@ -1618,10 +1618,10 @@ app.post('/api/traslados', async (req, res) => {
         const stockData = await dbGet(`
             SELECT 
                 COALESCE(SUM(
-                    CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END
+                    CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO', 'ENTRADA POR TRASLADO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END
                 ), 0) -
                 COALESCE(SUM(
-                    CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END
+                    CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO', 'SALIDA POR TRASLADO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END
                 ), 0) AS stock_disponible
             FROM movimientos
             WHERE sede = ? AND tipo_inventario = ? AND codigo_item = ?
@@ -1694,10 +1694,10 @@ app.post('/api/traslados/:id/aceptar', async (req, res) => {
         const stockData = await dbGet(`
             SELECT 
                 COALESCE(SUM(
-                    CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END
+                    CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO', 'ENTRADA POR TRASLADO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END
                 ), 0) -
                 COALESCE(SUM(
-                    CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END
+                    CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO', 'SALIDA POR TRASLADO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END
                 ), 0) AS stock_disponible
             FROM movimientos
             WHERE sede = ? AND tipo_inventario = ? AND codigo_item = ?
@@ -1737,7 +1737,7 @@ app.post('/api/traslados/:id/aceptar', async (req, res) => {
                 bodega_origen, bodega_destino, ubicacion_cds,
                 proyecto_destino, responsable, persona_recibe_devuelve,
                 documento_referencia, observaciones, sede, tipo_inventario
-            ) VALUES (?, ?, ?, 'ENTREGA', ?, ?, ?, ?, 'CDS', 'TRASLADOS', ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, 'SALIDA POR TRASLADO', ?, ?, ?, ?, 'CDS', 'TRASLADOS', ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             n_mov_salida, fecha, hora,
             traslado.codigo_item, traslado.nombre_item, traslado.cantidad, traslado.unidad,
@@ -1759,7 +1759,7 @@ app.post('/api/traslados/:id/aceptar', async (req, res) => {
                 bodega_origen, bodega_destino, ubicacion_cds,
                 proyecto_destino, responsable, persona_recibe_devuelve,
                 documento_referencia, observaciones, sede, tipo_inventario
-            ) VALUES (?, ?, ?, 'ENTRADA', ?, ?, ?, ?, 'TRASLADOS', 'CDS', ?, NULL, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, 'ENTRADA POR TRASLADO', ?, ?, ?, ?, 'TRASLADOS', 'CDS', ?, NULL, ?, ?, ?, ?, ?, ?)
         `, [
             n_mov_entrada, fecha, hora,
             traslado.codigo_item, traslado.nombre_item, traslado.cantidad, traslado.unidad,
@@ -1961,8 +1961,8 @@ app.get('/api/reportes/kardex/:codigo', async (req, res) => {
 
         let saldo = 0;
         const kardex = movimientos.map(m => {
-            const esEntrada = ['ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO'].includes(m.tipo_movimiento) && (m.bodega_destino === 'CDS' || !m.bodega_destino);
-            const esSalida = ['ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO'].includes(m.tipo_movimiento) && (m.bodega_origen === 'CDS' || !m.bodega_origen);
+            const esEntrada = ['ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO', 'ENTRADA POR TRASLADO'].includes(m.tipo_movimiento) && (m.bodega_destino === 'CDS' || !m.bodega_destino);
+            const esSalida = ['ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO', 'SALIDA POR TRASLADO'].includes(m.tipo_movimiento) && (m.bodega_origen === 'CDS' || !m.bodega_origen);
 
             const entradaCant = esEntrada ? m.cantidad : 0;
             const salidaCant = esSalida ? m.cantidad : 0;

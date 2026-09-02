@@ -7,18 +7,34 @@ para actualizar instalaciones existentes sin perder la base de datos de movimien
 
 HISTORIAL DE VERSIONES Y CAMBIOS:
 ----------------------------------------------------------------------
-[Versión 1.0.6] (Última versión estable)
+[Versión 1.1.2] (Última versión estable oficial)
+- Tipos de movimiento explícitos: ENTRADA POR TRASLADO y SALIDA POR TRASLADO para traslados entre bodegas centrales.
+- Integración en Kardex, balances, libro diario y paneles con badges visuales diferenciados.
+
+[Versión 1.1.1]
+- Selector dinámico de Bodegas Centrales de destino en la emisión de traslados pendientes.
+- Regla de exclusión automática de la bodega central de origen activa.
+
+[Versión 1.1.0]
+- Arquitectura Multi-Sede y Multi-Inventario (Sede Suroriental / Sede Medellín y submenús CDS / Movilidad).
+- Catálogo maestro compartido de 653 ítems con stock independiente por Sede e Inventario.
+- Módulo de Traslados Pendientes entre Bodegas Centrales con confirmación en dos fases.
+- Gestión contextual de bodegas satélites y proyectos por Sede e Inventario.
+
+[Versión 1.0.7]
+- Limpieza de nombres técnicos del VBA y estandarización a "Panel de Control".
+- Tooltip informativo en menú lateral.
+
+[Versión 1.0.6]
 - Módulo de Bodegas con código autoincrementable automático (BOD-001, BOD-002...).
 - Bloqueo de modificación manual del código de bodega (Solo lectura).
 - Asignación automática de la primera bodega creada como BODEGA CENTRAL.
 - Protección total de la Bodega Central (solo permite modificación descriptiva, no eliminación).
 - Botones de Modificación y Eliminación con validación de movimientos para bodegas secundarias.
-- Refuerzo de la regla de inventario oficial gobernado por Bodega Central y control de stock previo en devoluciones.
 
 [Versión 1.0.5]
-- Botón "Deshacer / Eliminar Último Movimiento" en Libro Diario.
-- Eliminación individual de transacciones con reversión estricta de stock y lotes.
-- Sistema de notificaciones modernas (Toasts) en sustitución de alertas del navegador.
+- Botón "Deshacer / Eliminar Último Movimiento" en Libro Diario con reversión estricta.
+- Sistema de notificaciones Toast modernas.
 - Selector dinámico de stock disponible según la Bodega Origen seleccionada.
 
 [Versión 1.0.4]

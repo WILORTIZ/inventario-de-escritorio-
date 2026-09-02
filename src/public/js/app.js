@@ -74,6 +74,7 @@ function closeModal(modalId) {
 
 // Estado global de la aplicación
 let appState = {
+    currentUser: JSON.parse(localStorage.getItem('inventario_user') || 'null'),
     currentView: 'inicio',
     currentSede: 'Sede Suroriental',
     currentInventario: 'CDS',
@@ -98,6 +99,7 @@ let appState = {
 // Inicialización al cargar el DOM
 document.addEventListener('DOMContentLoaded', async () => {
     initUI();
+    checkAuth();
     await loadConfig();
     actualizarBadgesContexto();
     await recargarDatosContexto();
@@ -131,6 +133,129 @@ function initUI() {
     });
 }
 
+// Control del Acordeón / Submenús Desplegables en Sidebar
+function toggleSubmenu(invId) {
+    const header = document.getElementById(`header-submenu-${invId}`);
+    const container = document.getElementById(`submenu-${invId}`);
+    if (!container || !header) return;
+
+    const isOpen = container.classList.contains('open');
+    if (isOpen) {
+        container.classList.remove('open');
+        header.classList.remove('open');
+    } else {
+        container.classList.add('open');
+        header.classList.add('open');
+    }
+}
+
+function asegurarSubmenuAbierto(invId) {
+    const header = document.getElementById(`header-submenu-${invId}`);
+    const container = document.getElementById(`submenu-${invId}`);
+    if (container && header) {
+        container.classList.add('open');
+        header.classList.add('open');
+    }
+}
+
+// ==============================================================
+// 1.1. AUTENTICACIÓN, SESIONES Y ROLES
+// ==============================================================
+function checkAuth() {
+    const user = appState.currentUser;
+    const loginScreen = document.getElementById('login-screen');
+    if (!user) {
+        if (loginScreen) loginScreen.style.display = 'flex';
+        return false;
+    }
+    if (loginScreen) loginScreen.style.display = 'none';
+    actualizarWidgetUsuario(user);
+    return true;
+}
+
+function actualizarWidgetUsuario(user) {
+    const avatar = document.getElementById('user-avatar-text');
+    const name = document.getElementById('nav-user-name');
+    const rol = document.getElementById('nav-user-rol');
+    const fullname = document.getElementById('dropdown-user-fullname');
+    const username = document.getElementById('dropdown-user-username');
+
+    const initial = user.nombre ? user.nombre.charAt(0).toUpperCase() : 'A';
+    if (avatar) avatar.textContent = initial;
+    if (name) name.textContent = user.nombre || user.username;
+    if (rol) rol.textContent = user.rol === 'ADMINISTRADOR' ? 'Administrador del Sistema' : user.rol;
+    if (fullname) fullname.textContent = user.nombre || user.username;
+    if (username) username.textContent = `@${user.username}`;
+}
+
+async function ejecutarLogin(e) {
+    e.preventDefault();
+    const usernameInput = document.getElementById('login-username');
+    const passwordInput = document.getElementById('login-password');
+    const alertBox = document.getElementById('login-alert');
+    const submitBtn = document.getElementById('btn-login-submit');
+
+    const username = usernameInput ? usernameInput.value.trim() : '';
+    const password = passwordInput ? passwordInput.value : '';
+
+    if (!username || !password) {
+        if (alertBox) {
+            alertBox.textContent = 'Ingrese su usuario y contraseña.';
+            alertBox.style.display = 'block';
+        }
+        return;
+    }
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Verificando...';
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const result = await res.json();
+
+        if (result.success && result.user) {
+            appState.currentUser = result.user;
+            localStorage.setItem('inventario_user', JSON.stringify(result.user));
+            if (alertBox) alertBox.style.display = 'none';
+            
+            const loginScreen = document.getElementById('login-screen');
+            if (loginScreen) loginScreen.style.display = 'none';
+
+            actualizarWidgetUsuario(result.user);
+            showToast(`👋 ¡Bienvenido de nuevo, ${result.user.nombre}!`, 'success');
+        } else {
+            if (alertBox) {
+                alertBox.textContent = result.error || 'Credenciales no válidas.';
+                alertBox.style.display = 'block';
+            }
+        }
+    } catch (err) {
+        if (alertBox) {
+            alertBox.textContent = 'No fue posible conectar con el servidor.';
+            alertBox.style.display = 'block';
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="bi bi-door-open-fill me-2"></i><span>Iniciar Sesión</span>';
+        }
+    }
+}
+
+function cerrarSesion() {
+    appState.currentUser = null;
+    localStorage.removeItem('inventario_user');
+    const loginScreen = document.getElementById('login-screen');
+    if (loginScreen) loginScreen.style.display = 'flex';
+    showToast('🔒 Sesión cerrada exitosamente.', 'info');
+}
+
 function cambiarSede(sede) {
     appState.currentSede = sede;
     const globalSedeSelect = document.getElementById('global-sede-select');
@@ -144,6 +269,10 @@ function cambiarSede(sede) {
 function seleccionarInventario(tipoInv, view) {
     appState.currentInventario = tipoInv;
     
+    // Asegurar que el submenú de este inventario esté abierto
+    const invKey = tipoInv.toLowerCase();
+    asegurarSubmenuAbierto(invKey);
+
     // Actualizar clases activas en sidebar
     document.querySelectorAll('.nav-link-custom').forEach(link => {
         const linkView = link.getAttribute('data-view');
@@ -160,6 +289,7 @@ function seleccionarInventario(tipoInv, view) {
 }
 
 function seleccionarAdmin(view) {
+    asegurarSubmenuAbierto('admin');
     document.querySelectorAll('.nav-link-custom').forEach(link => {
         const linkView = link.getAttribute('data-view');
         if (linkView === view) {

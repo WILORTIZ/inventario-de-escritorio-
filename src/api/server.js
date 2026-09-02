@@ -300,6 +300,29 @@ function ensureDatabaseSchema() {
                 }
             });
         });
+
+        // Tabla de Usuarios, Roles y Permisos
+        db.run(`
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                nombre TEXT NOT NULL,
+                rol TEXT NOT NULL,
+                estado TEXT DEFAULT 'Activo',
+                permisos TEXT DEFAULT 'ALL',
+                fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `, () => {
+            db.get(`SELECT COUNT(*) as count FROM usuarios WHERE username = 'administrador'`, (err, row) => {
+                if (!err && (!row || row.count === 0)) {
+                    db.run(`
+                        INSERT INTO usuarios (username, password, nombre, rol, estado, permisos)
+                        VALUES ('administrador', '123456', 'Administrador', 'ADMINISTRADOR', 'Activo', 'ALL')
+                    `);
+                }
+            });
+        });
     });
 }
 
@@ -323,6 +346,49 @@ const dbRun = (sql, params = []) => new Promise((resolve, reject) => {
         if (err) reject(err);
         else resolve(this);
     });
+});
+
+// ==========================================
+// 0. AUTENTICACIÓN, USUARIOS Y PERMISOS
+// ==========================================
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        if (!username || !password) {
+            return res.status(400).json({ success: false, error: 'Debe ingresar usuario y contraseña.' });
+        }
+
+        const user = await dbGet(`SELECT id, username, password, nombre, rol, estado, permisos FROM usuarios WHERE LOWER(username) = LOWER(?)`, [username.trim()]);
+        if (!user) {
+            return res.status(401).json({ success: false, error: 'Usuario no encontrado en el sistema.' });
+        }
+
+        if (user.estado !== 'Activo') {
+            return res.status(403).json({ success: false, error: 'El usuario se encuentra inactivo. Contacte al administrador.' });
+        }
+
+        if (user.password !== password) {
+            return res.status(401).json({ success: false, error: 'Contraseña incorrecta.' });
+        }
+
+        const { password: _, ...userSafe } = user;
+        res.json({
+            success: true,
+            message: `Bienvenido, ${user.nombre}`,
+            user: userSafe
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/usuarios', async (req, res) => {
+    try {
+        const users = await dbAll(`SELECT id, username, nombre, rol, estado, permisos, fecha_creacion FROM usuarios ORDER BY id ASC`);
+        res.json({ success: true, data: users });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 // Endpoints de Sedes y Tipos de Inventario

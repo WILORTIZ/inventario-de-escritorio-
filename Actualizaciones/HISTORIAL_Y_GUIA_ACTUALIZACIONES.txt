@@ -7,7 +7,13 @@ para actualizar instalaciones existentes sin perder la base de datos de movimien
 
 HISTORIAL DE VERSIONES Y CAMBIOS:
 ----------------------------------------------------------------------
-[Versión 1.1.2] (Última versión estable oficial)
+[Versión 1.1.3] (Última versión estable oficial)
+- Menú lateral desplegable tipo acordeón con animaciones y flechas indicadoras (chevron) por inventario (CDS, Movilidad, Administración).
+- Módulo de Autenticación, Usuarios, Roles y Permisos (Fase 1).
+- Usuario inicial 'administrador' (Rol: Administrador del Sistema, Clave: 123456, Permisos: Acceso Total).
+- Pantalla de Login segura con tarjeta glassmorphism y widget de perfil de usuario en Navbar superior con botón para Cerrar Sesión.
+
+[Versión 1.1.2]
 - Tipos de movimiento explícitos: ENTRADA POR TRASLADO y SALIDA POR TRASLADO para traslados entre bodegas centrales.
 - Integración en Kardex, balances, libro diario y paneles con badges visuales diferenciados.
 

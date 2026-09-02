@@ -7,21 +7,66 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/custom.css">
-</head>
-<body>
+</head><body>
+    <!-- PANTALLA DE INICIO DE SESIÓN (LOGIN) -->
+    <div id="login-screen" style="display: none;">
+        <div class="login-card p-4 p-md-5 text-white">
+            <div class="text-center mb-4">
+                <div class="d-inline-flex align-items-center justify-content-center bg-primary bg-opacity-25 p-3 rounded-circle mb-3 border border-primary border-opacity-50 shadow">
+                    <i class="bi bi-boxes text-info fs-1"></i>
+                </div>
+                <h3 class="fw-bold mb-1 text-white">INVENTARIO CDS</h3>
+                <p class="text-white-50 small mb-0">Sistema Multi-Sede & Control de Inventarios</p>
+            </div>
+
+            <form id="form-login" onsubmit="ejecutarLogin(event)">
+                <div id="login-alert" class="alert alert-danger py-2 small" style="display: none;"></div>
+                
+                <div class="mb-3">
+                    <label class="form-label text-white-50 small fw-semibold">Usuario</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-dark border-secondary text-white-50"><i class="bi bi-person-fill"></i></span>
+                        <input type="text" class="form-control bg-dark text-white border-secondary" id="login-username" placeholder="Ingrese su usuario" required autocomplete="username" value="administrador">
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label text-white-50 small fw-semibold">Contraseña</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-dark border-secondary text-white-50"><i class="bi bi-key-fill"></i></span>
+                        <input type="password" class="form-control bg-dark text-white border-secondary" id="login-password" placeholder="Ingrese su clave" required autocomplete="current-password" value="123456">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 py-2 fw-bold shadow d-flex align-items-center justify-content-center gap-2" id="btn-login-submit">
+                    <i class="bi bi-door-open-fill"></i>
+                    <span>Iniciar Sesión</span>
+                </button>
+            </form>
+
+            <div class="text-center mt-4 pt-3 border-top border-white border-opacity-10">
+                <small class="text-white-50" style="font-size: 0.72rem;">
+                    <i class="bi bi-shield-check text-success me-1"></i> Acceso Seguro • Rol Administrador
+                </small>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification Container -->
     <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 11000;" id="toastContainer"></div>
 
     <div class="d-flex" id="wrapper">
         <!-- SIDEBAR LATERAL IZQUIERDA -->
         <aside id="sidebar-wrapper">
-            <div class="sidebar-heading d-flex align-items-center text-white">
-                <div class="bg-primary text-white rounded-3 p-2 me-2 d-flex align-items-center justify-content-center shadow-sm" style="width: 38px; height: 38px;">
-                    <i class="bi bi-box-seam-fill fs-5"></i>
-                </div>
-                <div>
-                    <div class="fw-bold tracking-wide">INVENTARIO</div>
-                    <div class="text-white-50" style="font-size: 0.72rem; letter-spacing: 0.5px;">SISTEMA MULTI-SEDE</div>
+            <div class="sidebar-heading text-white d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center">
+                    <div class="bg-primary bg-gradient p-2 rounded-3 text-white me-2 shadow-sm d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                        <i class="bi bi-box-seam-fill fs-5"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold lh-1" style="font-size: 1.1rem; letter-spacing: 0.5px;">INVENTARIO</div>
+                        <span class="text-white-50 fw-semibold" style="font-size: 0.7rem;">SISTEMA MULTI-SEDE</span>
+                    </div>
                 </div>
             </div>
 
@@ -37,94 +82,109 @@
                 </select>
             </div>
 
-            <!-- NAVEGACIÓN ORGANIZADA EN SUBMENÚS -->
+            <!-- NAVEGACIÓN ORGANIZADA EN SUBMENÚS DESPLEGABLES (ACORDEÓN) -->
             <div class="sidebar-nav">
-                <!-- INVENTARIO CDS -->
-                <div class="sidebar-section-header px-3 pt-2 pb-1 text-uppercase fw-bold text-info d-flex align-items-center justify-content-between">
-                    <span><i class="bi bi-boxes me-1"></i> Inventario CDS</span>
-                    <span class="badge bg-info bg-opacity-25 text-info" style="font-size: 0.6rem;">Principal</span>
+                <!-- 1. INVENTARIO CDS (DESPLEGABLE) -->
+                <div class="sidebar-section-header clickable open d-flex align-items-center justify-content-between" id="header-submenu-cds" onclick="toggleSubmenu('cds')">
+                    <span class="text-info fw-bold"><i class="bi bi-boxes me-2"></i>Inventario CDS</span>
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="badge bg-info bg-opacity-25 text-info" style="font-size: 0.6rem;">Principal</span>
+                        <i class="bi bi-chevron-down submenu-chevron text-white-50"></i>
+                    </div>
                 </div>
-                <a href="#inicio" class="nav-link-custom active" data-view="inicio" data-inv="CDS" onclick="seleccionarInventario('CDS', 'inicio')">
-                    <i class="bi bi-speedometer2"></i>
-                    <span>Panel CDS</span>
-                </a>
-                <a href="#inventario" class="nav-link-custom" data-view="inventario" data-inv="CDS" onclick="seleccionarInventario('CDS', 'inventario')">
-                    <i class="bi bi-box-seam"></i>
-                    <span>Stock Físico CDS</span>
-                    <span class="badge bg-warning text-dark ms-auto" id="sidebar-badge-stock-bajo-cds" style="display:none;">0</span>
-                </a>
-                <a href="#movimientos" class="nav-link-custom" data-view="movimientos" data-inv="CDS" onclick="seleccionarInventario('CDS', 'movimientos')">
-                    <i class="bi bi-arrow-left-right"></i>
-                    <span>Movimientos CDS</span>
-                </a>
-                <a href="#items" class="nav-link-custom" data-view="items" data-inv="CDS" onclick="seleccionarInventario('CDS', 'items')">
-                    <i class="bi bi-tags"></i>
-                    <span>Catálogo CDS</span>
-                </a>
-                <a href="#vencimientos" class="nav-link-custom" data-view="vencimientos" data-inv="CDS" onclick="seleccionarInventario('CDS', 'vencimientos')">
-                    <i class="bi bi-calendar-event"></i>
-                    <span>Vencimientos CDS</span>
-                    <span class="badge bg-danger ms-auto" id="sidebar-badge-vencidos-cds" style="display:none;">0</span>
-                </a>
-                <a href="#traslados" class="nav-link-custom" data-view="traslados" data-inv="CDS" onclick="seleccionarInventario('CDS', 'traslados')">
-                    <i class="bi bi-arrow-left-right"></i>
-                    <span>Traslados Pendientes</span>
-                    <span class="badge bg-danger ms-auto" id="sidebar-badge-traslados-cds" style="display:none;">0</span>
-                </a>
-                <a href="#reportes" class="nav-link-custom" data-view="reportes" data-inv="CDS" onclick="seleccionarInventario('CDS', 'reportes')">
-                    <i class="bi bi-file-earmark-bar-graph"></i>
-                    <span>Kardex CDS</span>
-                </a>
+                <div class="submenu-container open" id="submenu-cds">
+                    <a href="#inicio" class="nav-link-custom active" data-view="inicio" data-inv="CDS" onclick="seleccionarInventario('CDS', 'inicio')">
+                        <i class="bi bi-speedometer2"></i>
+                        <span>Panel CDS</span>
+                    </a>
+                    <a href="#inventario" class="nav-link-custom" data-view="inventario" data-inv="CDS" onclick="seleccionarInventario('CDS', 'inventario')">
+                        <i class="bi bi-box-seam"></i>
+                        <span>Stock Físico CDS</span>
+                        <span class="badge bg-warning text-dark ms-auto" id="sidebar-badge-stock-bajo-cds" style="display:none;">0</span>
+                    </a>
+                    <a href="#movimientos" class="nav-link-custom" data-view="movimientos" data-inv="CDS" onclick="seleccionarInventario('CDS', 'movimientos')">
+                        <i class="bi bi-arrow-left-right"></i>
+                        <span>Movimientos CDS</span>
+                    </a>
+                    <a href="#items" class="nav-link-custom" data-view="items" data-inv="CDS" onclick="seleccionarInventario('CDS', 'items')">
+                        <i class="bi bi-tags"></i>
+                        <span>Catálogo CDS</span>
+                    </a>
+                    <a href="#vencimientos" class="nav-link-custom" data-view="vencimientos" data-inv="CDS" onclick="seleccionarInventario('CDS', 'vencimientos')">
+                        <i class="bi bi-calendar-event"></i>
+                        <span>Vencimientos CDS</span>
+                        <span class="badge bg-danger ms-auto" id="sidebar-badge-vencidos-cds" style="display:none;">0</span>
+                    </a>
+                    <a href="#traslados" class="nav-link-custom" data-view="traslados" data-inv="CDS" onclick="seleccionarInventario('CDS', 'traslados')">
+                        <i class="bi bi-arrow-left-right"></i>
+                        <span>Traslados Pendientes</span>
+                        <span class="badge bg-danger ms-auto" id="sidebar-badge-traslados-cds" style="display:none;">0</span>
+                    </a>
+                    <a href="#reportes" class="nav-link-custom" data-view="reportes" data-inv="CDS" onclick="seleccionarInventario('CDS', 'reportes')">
+                        <i class="bi bi-file-earmark-bar-graph"></i>
+                        <span>Kardex CDS</span>
+                    </a>
+                </div>
 
-                <!-- INVENTARIO MOVILIDAD -->
-                <div class="sidebar-section-header px-3 pt-3 pb-1 text-uppercase fw-bold text-warning border-top border-white border-opacity-10 d-flex align-items-center justify-content-between">
-                    <span><i class="bi bi-truck me-1"></i> Inventario Movilidad</span>
-                    <span class="badge bg-warning bg-opacity-25 text-warning" style="font-size: 0.6rem;">Flota</span>
+                <!-- 2. INVENTARIO MOVILIDAD (DESPLEGABLE) -->
+                <div class="sidebar-section-header clickable d-flex align-items-center justify-content-between border-top border-white border-opacity-10 mt-1" id="header-submenu-movilidad" onclick="toggleSubmenu('movilidad')">
+                    <span class="text-warning fw-bold"><i class="bi bi-truck me-2"></i>Inventario Movilidad</span>
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="badge bg-warning bg-opacity-25 text-warning" style="font-size: 0.6rem;">Flota</span>
+                        <i class="bi bi-chevron-down submenu-chevron text-white-50"></i>
+                    </div>
                 </div>
-                <a href="#inicio" class="nav-link-custom" data-view="inicio" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'inicio')">
-                    <i class="bi bi-speedometer2"></i>
-                    <span>Panel Movilidad</span>
-                </a>
-                <a href="#inventario" class="nav-link-custom" data-view="inventario" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'inventario')">
-                    <i class="bi bi-box-seam"></i>
-                    <span>Stock Movilidad</span>
-                    <span class="badge bg-warning text-dark ms-auto" id="sidebar-badge-stock-bajo-movilidad" style="display:none;">0</span>
-                </a>
-                <a href="#movimientos" class="nav-link-custom" data-view="movimientos" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'movimientos')">
-                    <i class="bi bi-arrow-left-right"></i>
-                    <span>Movimientos Mov.</span>
-                </a>
-                <a href="#items" class="nav-link-custom" data-view="items" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'items')">
-                    <i class="bi bi-tags"></i>
-                    <span>Catálogo Movilidad</span>
-                </a>
-                <a href="#vencimientos" class="nav-link-custom" data-view="vencimientos" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'vencimientos')">
-                    <i class="bi bi-calendar-event"></i>
-                    <span>Vencimientos Mov.</span>
-                    <span class="badge bg-danger ms-auto" id="sidebar-badge-vencidos-movilidad" style="display:none;">0</span>
-                </a>
-                <a href="#traslados" class="nav-link-custom" data-view="traslados" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'traslados')">
-                    <i class="bi bi-arrow-left-right"></i>
-                    <span>Traslados Pendientes</span>
-                    <span class="badge bg-danger ms-auto" id="sidebar-badge-traslados-movilidad" style="display:none;">0</span>
-                </a>
-                <a href="#reportes" class="nav-link-custom" data-view="reportes" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'reportes')">
-                    <i class="bi bi-file-earmark-bar-graph"></i>
-                    <span>Kardex Movilidad</span>
-                </a>
+                <div class="submenu-container" id="submenu-movilidad">
+                    <a href="#inicio" class="nav-link-custom" data-view="inicio" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'inicio')">
+                        <i class="bi bi-speedometer2"></i>
+                        <span>Panel Movilidad</span>
+                    </a>
+                    <a href="#inventario" class="nav-link-custom" data-view="inventario" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'inventario')">
+                        <i class="bi bi-box-seam"></i>
+                        <span>Stock Movilidad</span>
+                        <span class="badge bg-warning text-dark ms-auto" id="sidebar-badge-stock-bajo-movilidad" style="display:none;">0</span>
+                    </a>
+                    <a href="#movimientos" class="nav-link-custom" data-view="movimientos" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'movimientos')">
+                        <i class="bi bi-arrow-left-right"></i>
+                        <span>Movimientos Mov.</span>
+                    </a>
+                    <a href="#items" class="nav-link-custom" data-view="items" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'items')">
+                        <i class="bi bi-tags"></i>
+                        <span>Catálogo Movilidad</span>
+                    </a>
+                    <a href="#vencimientos" class="nav-link-custom" data-view="vencimientos" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'vencimientos')">
+                        <i class="bi bi-calendar-event"></i>
+                        <span>Vencimientos Mov.</span>
+                        <span class="badge bg-danger ms-auto" id="sidebar-badge-vencidos-movilidad" style="display:none;">0</span>
+                    </a>
+                    <a href="#traslados" class="nav-link-custom" data-view="traslados" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'traslados')">
+                        <i class="bi bi-arrow-left-right"></i>
+                        <span>Traslados Pendientes</span>
+                        <span class="badge bg-danger ms-auto" id="sidebar-badge-traslados-movilidad" style="display:none;">0</span>
+                    </a>
+                    <a href="#reportes" class="nav-link-custom" data-view="reportes" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'reportes')">
+                        <i class="bi bi-file-earmark-bar-graph"></i>
+                        <span>Kardex Movilidad</span>
+                    </a>
+                </div>
 
-                <!-- ADMINISTRACIÓN -->
-                <div class="sidebar-section-header px-3 pt-3 pb-1 text-uppercase fw-bold text-white-50 border-top border-white border-opacity-10">
-                    <i class="bi bi-gear-fill me-1"></i> Administración
+                <!-- 3. ADMINISTRACIÓN (DESPLEGABLE) -->
+                <div class="sidebar-section-header clickable open d-flex align-items-center justify-content-between border-top border-white border-opacity-10 mt-1" id="header-submenu-admin" onclick="toggleSubmenu('admin')">
+                    <span class="text-white-50 fw-bold"><i class="bi bi-shield-lock-fill me-2 text-info"></i>Administración</span>
+                    <div class="d-flex align-items-center gap-1">
+                        <i class="bi bi-chevron-down submenu-chevron text-white-50"></i>
+                    </div>
                 </div>
-                <a href="#bodegas" class="nav-link-custom" data-view="bodegas" onclick="seleccionarAdmin('bodegas')">
-                    <i class="bi bi-building"></i>
-                    <span>Bodegas y Proyectos</span>
-                </a>
-                <a href="#database" class="nav-link-custom" data-view="database" onclick="seleccionarAdmin('database')">
-                    <i class="bi bi-database-fill-gear"></i>
-                    <span>Base de Datos & Backup</span>
-                </a>
+                <div class="submenu-container open" id="submenu-admin">
+                    <a href="#bodegas" class="nav-link-custom" data-view="bodegas" onclick="seleccionarAdmin('bodegas')">
+                        <i class="bi bi-building"></i>
+                        <span>Bodegas y Proyectos</span>
+                    </a>
+                    <a href="#database" class="nav-link-custom" data-view="database" onclick="seleccionarAdmin('database')">
+                        <i class="bi bi-database-fill-gear"></i>
+                        <span>Base de Datos & Backup</span>
+                    </a>
+                </div>
             </div>
 
             <div class="sidebar-footer text-white-50">
@@ -165,6 +225,28 @@
                         <i class="bi bi-plus-circle-fill me-2"></i>
                         <span>Nuevo Movimiento</span>
                     </button>
+
+                    <!-- USUARIO ACTIVO / ROLES -->
+                    <div class="dropdown ms-2">
+                        <button class="btn btn-light btn-sm border d-flex align-items-center gap-2 shadow-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" id="user-dropdown-btn">
+                            <div class="user-avatar-circle" id="user-avatar-text">A</div>
+                            <div class="text-start d-none d-lg-block">
+                                <div class="fw-bold text-dark lh-1" style="font-size: 0.8rem;" id="nav-user-name">Administrador</div>
+                                <span class="text-muted" style="font-size: 0.68rem;" id="nav-user-rol">Administrador del Sistema</span>
+                            </div>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="min-width: 200px;">
+                            <li class="px-3 py-2 border-bottom">
+                                <div class="fw-bold text-dark small" id="dropdown-user-fullname">Administrador</div>
+                                <div class="text-muted text-xs" id="dropdown-user-username">@administrador</div>
+                            </li>
+                            <li>
+                                <button class="dropdown-item py-2 text-danger small d-flex align-items-center" onclick="cerrarSesion()">
+                                    <i class="bi bi-box-arrow-right me-2 fs-6"></i> Cerrar Sesión
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </header>
 

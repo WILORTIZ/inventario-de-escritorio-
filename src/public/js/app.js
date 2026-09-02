@@ -263,6 +263,8 @@ async function loadConfig() {
         const result = await res.json();
         if (result.success) {
             appState.config = result.data;
+            appState.sedes = result.data.sedes;
+            appState.tipos_inventario = result.data.tipos_inventario;
             populateSelectOptions();
         }
     } catch (err) {
@@ -1552,38 +1554,70 @@ async function actualizarBadgesTraslados() {
     }
 }
 
-function openModalNuevoTraslado() {
+async function openModalNuevoTraslado() {
     const form = document.getElementById('form-nuevo-traslado');
     if (form) form.reset();
 
-    // 1. Origen configurado con la sede e inventario activos
-    document.getElementById('tras-origen-sede-label').textContent = appState.currentSede;
-    document.getElementById('tras-origen-sede').value = appState.currentSede;
+    // Asegurar que la configuración esté cargada
+    if (!appState.config || !appState.config.sedes) {
+        await loadConfig();
+    }
 
-    const invNombre = appState.currentInventario === 'MOVILIDAD' ? 'Inventario Movilidad' : 'Inventario CDS';
+    // 1. Origen configurado con la sede e inventario activos
+    const origenSede = appState.currentSede || 'Sede Suroriental';
+    const origenInv = appState.currentInventario || 'CDS';
+
+    document.getElementById('tras-origen-sede-label').textContent = origenSede;
+    document.getElementById('tras-origen-sede').value = origenSede;
+
+    const invNombre = origenInv === 'MOVILIDAD' ? 'Inventario Movilidad' : 'Inventario CDS';
     document.getElementById('tras-origen-inv-label').textContent = invNombre;
-    document.getElementById('tras-origen-tipo-inv').value = appState.currentInventario;
+    document.getElementById('tras-origen-tipo-inv').value = origenInv;
 
     // 2. Destino: todas las bodegas centrales posibles excepto el origen exacto
+    const sedes = (appState.config && appState.config.sedes && appState.config.sedes.length > 0)
+        ? appState.config.sedes
+        : [{ nombre: 'Sede Suroriental' }, { nombre: 'Sede Medellín' }];
+
+    const tiposInv = (appState.config && appState.config.tipos_inventario && appState.config.tipos_inventario.length > 0)
+        ? appState.config.tipos_inventario
+        : [{ codigo: 'CDS', nombre: 'Inventario CDS' }, { codigo: 'MOVILIDAD', nombre: 'Inventario Movilidad' }];
+
     const destinoSelect = document.getElementById('tras-destino-select');
     if (destinoSelect) {
         let html = '<option value="">-- Seleccionar Bodega Central Destino --</option>';
-        (appState.sedes || []).forEach(s => {
-            (appState.tipos_inventario || []).forEach(t => {
-                const esMismoOrigen = s.nombre === appState.currentSede && t.codigo === appState.currentInventario;
+        let countDestinos = 0;
+        sedes.forEach(s => {
+            tiposInv.forEach(t => {
+                const sNombre = s.nombre;
+                const tCodigo = t.codigo;
+                const tNombre = t.nombre || (tCodigo === 'MOVILIDAD' ? 'Inventario Movilidad' : 'Inventario CDS');
+                const esMismoOrigen = (sNombre === origenSede && tCodigo === origenInv);
+                
+                // REGLA: No se puede realizar un traslado a su misma bodega central de origen
                 if (!esMismoOrigen) {
-                    html += `<option value="${s.nombre}|${t.codigo}">${s.nombre} • ${t.nombre}</option>`;
+                    html += `<option value="${sNombre}|${tCodigo}">${sNombre} • ${tNombre} (Bodega Central)</option>`;
+                    countDestinos++;
                 }
             });
         });
+
+        if (countDestinos === 0) {
+            html += '<option value="" disabled>No hay otras bodegas centrales disponibles</option>';
+        }
+
         destinoSelect.innerHTML = html;
     }
 
     // 3. Llenar ítems del catálogo maestro
+    if (!appState.items || appState.items.length === 0) {
+        await loadItems();
+    }
+
     const itemSelect = document.getElementById('tras-item-select');
     if (itemSelect) {
         let html = '<option value="">-- Seleccionar Ítem del Catálogo Maestro --</option>';
-        appState.items.filter(i => i.estado === 'Activo').forEach(item => {
+        (appState.items || []).filter(i => i.estado === 'Activo').forEach(item => {
             html += `<option value="${item.codigo}">${item.codigo} - ${item.nombre}</option>`;
         });
         itemSelect.innerHTML = html;

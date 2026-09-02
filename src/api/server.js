@@ -197,7 +197,7 @@ function ensureDatabaseSchema() {
         tStmt.finalize();
 
         // Migrar columnas sede y tipo_inventario en tablas operativas
-        ['items', 'movimientos', 'control_vencimientos', 'bodegas'].forEach(tableName => {
+        ['items', 'movimientos', 'control_vencimientos', 'bodegas', 'proyectos'].forEach(tableName => {
             db.all(`PRAGMA table_info(${tableName})`, (err, cols) => {
                 if (!err && cols && cols.length > 0) {
                     if (!cols.some(c => c.name === 'sede')) {
@@ -1266,7 +1266,22 @@ app.get('/api/bodegas/siguiente-codigo', async (req, res) => {
 
 app.get('/api/bodegas', async (req, res) => {
     try {
-        const bodegas = await dbAll(`SELECT rowid, * FROM bodegas ORDER BY codigo ASC`);
+        const { sede, tipo_inventario } = req.query;
+        let query = `SELECT rowid, * FROM bodegas WHERE 1=1`;
+        const params = [];
+
+        if (sede && sede !== 'TODAS' && sede !== 'ALL') {
+            query += ` AND (sede = ? OR sede = 'TODAS' OR sede = 'ALL' OR sede IS NULL)`;
+            params.push(sede);
+        }
+        if (tipo_inventario && tipo_inventario !== 'TODOS' && tipo_inventario !== 'ALL') {
+            query += ` AND (tipo_inventario = ? OR tipo_inventario = 'TODOS' OR tipo_inventario = 'ALL' OR tipo_inventario IS NULL)`;
+            params.push(tipo_inventario);
+        }
+
+        query += ` ORDER BY es_central DESC, codigo ASC`;
+        const bodegas = await dbAll(query, params);
+
         // Asegurar que al menos la primera bodega sea reconocida como central si no estuviera marcado
         const data = bodegas.map((b, idx) => ({
             ...b,
@@ -1280,13 +1295,15 @@ app.get('/api/bodegas', async (req, res) => {
 
 app.post('/api/bodegas', async (req, res) => {
     try {
-        let { codigo, nombre, ubicacion, responsable, estado, observaciones, isEdit } = req.body;
+        let { codigo, nombre, ubicacion, responsable, estado, observaciones, sede, tipo_inventario, isEdit } = req.body;
         
         if (!nombre || !nombre.trim()) {
             return res.status(400).json({ success: false, error: 'El nombre de la bodega es obligatorio.' });
         }
 
         nombre = nombre.trim().toUpperCase();
+        const sedeVal = sede || 'Sede Suroriental';
+        const tipoInvVal = tipo_inventario || 'CDS';
 
         if (isEdit || isEdit === '1' || isEdit === true) {
             // Edición de bodega: el código NO se permite modificar
@@ -1300,9 +1317,9 @@ app.post('/api/bodegas', async (req, res) => {
 
             await dbRun(`
                 UPDATE bodegas 
-                SET nombre = ?, ubicacion = ?, responsable = ?, estado = ?, observaciones = ?
+                SET nombre = ?, ubicacion = ?, responsable = ?, estado = ?, observaciones = ?, sede = ?, tipo_inventario = ?
                 WHERE codigo = ?
-            `, [nombre, ubicacion || '', responsable || '', estado || 'Activa', observaciones || '', codigo]);
+            `, [nombre, ubicacion || '', responsable || '', estado || 'Activa', observaciones || '', sedeVal, tipoInvVal, codigo]);
 
             res.json({ 
                 success: true, 
@@ -1330,9 +1347,9 @@ app.post('/api/bodegas', async (req, res) => {
             const esCentral = esPrimera ? 1 : 0;
 
             await dbRun(`
-                INSERT INTO bodegas (codigo, nombre, ubicacion, responsable, estado, observaciones, es_central)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            `, [nextCodigo, nombre, ubicacion || '', responsable || '', estado || 'Activa', observaciones || '', esCentral]);
+                INSERT INTO bodegas (codigo, nombre, ubicacion, responsable, estado, observaciones, es_central, sede, tipo_inventario)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [nextCodigo, nombre, ubicacion || '', responsable || '', estado || 'Activa', observaciones || '', esCentral, sedeVal, tipoInvVal]);
 
             res.json({ 
                 success: true, 
@@ -1398,7 +1415,21 @@ app.delete('/api/bodegas/:codigo', async (req, res) => {
 
 app.get('/api/proyectos', async (req, res) => {
     try {
-        const proyectos = await dbAll(`SELECT * FROM proyectos ORDER BY nombre ASC`);
+        const { sede, tipo_inventario } = req.query;
+        let query = `SELECT * FROM proyectos WHERE 1=1`;
+        const params = [];
+
+        if (sede && sede !== 'TODAS' && sede !== 'ALL') {
+            query += ` AND (sede = ? OR sede = 'TODAS' OR sede = 'ALL' OR sede IS NULL)`;
+            params.push(sede);
+        }
+        if (tipo_inventario && tipo_inventario !== 'TODOS' && tipo_inventario !== 'ALL') {
+            query += ` AND (tipo_inventario = ? OR tipo_inventario = 'TODOS' OR tipo_inventario = 'ALL' OR tipo_inventario IS NULL)`;
+            params.push(tipo_inventario);
+        }
+
+        query += ` ORDER BY nombre ASC`;
+        const proyectos = await dbAll(query, params);
         res.json({ success: true, data: proyectos });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -1407,21 +1438,55 @@ app.get('/api/proyectos', async (req, res) => {
 
 app.post('/api/proyectos', async (req, res) => {
     try {
-        const { id, nombre, responsable, estado, observaciones } = req.body;
+        const { id, nombre, responsable, estado, observaciones, sede, tipo_inventario } = req.body;
         if (!nombre || !nombre.trim()) {
             return res.status(400).json({ success: false, error: 'Nombre del proyecto es obligatorio.' });
         }
+
+        const sedeVal = sede || 'Sede Suroriental';
+        const tipoInvVal = tipo_inventario || 'CDS';
+
         if (id) {
             await dbRun(`
-                UPDATE proyectos SET nombre = ?, responsable = ?, estado = ?, observaciones = ? WHERE id = ?
-            `, [nombre.trim(), responsable, estado || 'Activo', observaciones, id]);
+                UPDATE proyectos 
+                SET nombre = ?, responsable = ?, estado = ?, observaciones = ?, sede = ?, tipo_inventario = ? 
+                WHERE id = ?
+            `, [nombre.trim(), responsable, estado || 'Activo', observaciones, sedeVal, tipoInvVal, id]);
         } else {
             await dbRun(`
-                INSERT INTO proyectos (nombre, responsable, estado, observaciones)
-                VALUES (?, ?, ?, ?)
-            `, [nombre.trim(), responsable, estado || 'Activo', observaciones]);
+                INSERT INTO proyectos (nombre, responsable, estado, observaciones, sede, tipo_inventario)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `, [nombre.trim(), responsable, estado || 'Activo', observaciones, sedeVal, tipoInvVal]);
         }
         res.json({ success: true, message: 'Proyecto guardado correctamente.' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.delete('/api/proyectos/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const proyecto = await dbGet(`SELECT * FROM proyectos WHERE id = ?`, [id]);
+        if (!proyecto) {
+            return res.status(404).json({ success: false, error: 'El proyecto especificado no existe.' });
+        }
+
+        // Validar si tiene transacciones en movimientos
+        const movCount = await dbGet(`
+            SELECT COUNT(*) as count FROM movimientos 
+            WHERE proyecto_destino = ?
+        `, [proyecto.nombre]);
+
+        if (movCount && movCount.count > 0) {
+            return res.status(400).json({ 
+                success: false, 
+                error: `No es posible eliminar el proyecto "${proyecto.nombre}" porque tiene ${movCount.count} entregas o despachos registrados en el historial de movimientos. Si ya finalizó, puede cambiar su estado a "Inactivo".` 
+            });
+        }
+
+        await dbRun(`DELETE FROM proyectos WHERE id = ?`, [id]);
+        res.json({ success: true, message: `Proyecto "${proyecto.nombre}" eliminado correctamente.` });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

@@ -291,10 +291,18 @@ function populateSelectOptions() {
     fillSelect('mov-sede', sedesList, false);
     fillSelect('mov-tipo-inventario', tiposList, false);
 
+    // Selectores para Bodegas y Proyectos
+    fillSelect('bod-sede', sedesList, false);
+    fillSelect('bod-tipo-inventario', tiposList, false);
+    fillSelect('proy-sede', sedesList, false);
+    fillSelect('proy-tipo-inventario', tiposList, false);
+
     // Filtros de vistas
     fillSelect('filter-inv-categoria', categorias, true, 'Todas las Categorías');
     fillSelect('filter-items-categoria', categorias, true, 'Todas las Categorías');
     fillSelect('filter-mov-bodega', bodegas, true, 'Todas las Bodegas');
+    fillSelect('filter-bodegas-sede', sedesList, true, 'Todas las Sedes');
+    fillSelect('filter-bodegas-inv', tiposList, true, 'Todos los Inventarios');
 
     // Selectores de formularios
     fillSelect('item-categoria', categorias, false);
@@ -660,6 +668,42 @@ function handleItemSelectInMovimiento(codigo) {
         vencContainer.style.display = 'block';
     } else {
         vencContainer.style.display = 'none';
+    }
+
+    actualizarStockPreviewEnMovimiento();
+}
+
+async function actualizarContextoEnMovimiento() {
+    const movSede = document.getElementById('mov-sede')?.value || appState.currentSede;
+    const movTipoInv = document.getElementById('mov-tipo-inventario')?.value || appState.currentInventario;
+
+    try {
+        const [resBod, resProy] = await Promise.all([
+            fetch(`${API_BASE}/bodegas?sede=${encodeURIComponent(movSede)}&tipo_inventario=${encodeURIComponent(movTipoInv)}`),
+            fetch(`${API_BASE}/proyectos?sede=${encodeURIComponent(movSede)}&tipo_inventario=${encodeURIComponent(movTipoInv)}`)
+        ]);
+
+        const dataBod = await resBod.json();
+        const dataProy = await resProy.json();
+
+        if (dataBod.success) {
+            const currentOrigen = document.getElementById('mov-bodega-origen')?.value;
+            const currentDestino = document.getElementById('mov-bodega-destino')?.value;
+            const bodList = dataBod.data.map(b => b.nombre);
+            fillSelect('mov-bodega-origen', bodList, true, '-- Sin Bodega Origen --');
+            fillSelect('mov-bodega-destino', bodList, true, '-- Sin Bodega Destino --');
+            if (currentOrigen && document.getElementById('mov-bodega-origen')) document.getElementById('mov-bodega-origen').value = currentOrigen;
+            if (currentDestino && document.getElementById('mov-bodega-destino')) document.getElementById('mov-bodega-destino').value = currentDestino;
+        }
+
+        if (dataProy.success) {
+            const currentProy = document.getElementById('mov-proyecto')?.value;
+            const proyList = dataProy.data.map(p => p.nombre);
+            fillSelect('mov-proyecto', proyList, true, 'Operación Central / General');
+            if (currentProy && document.getElementById('mov-proyecto')) document.getElementById('mov-proyecto').value = currentProy;
+        }
+    } catch (err) {
+        console.warn('Error al actualizar listas contextuales en movimiento:', err);
     }
 
     actualizarStockPreviewEnMovimiento();
@@ -1859,11 +1903,29 @@ async function cancelarTraslado(id) {
 // ==============================================================
 // 8. BODEGAS Y PROYECTOS
 // ==============================================================
+function sincronizarFiltrosBodegasConContexto() {
+    const sedeFilter = document.getElementById('filter-bodegas-sede');
+    const invFilter = document.getElementById('filter-bodegas-inv');
+    if (sedeFilter) sedeFilter.value = appState.currentSede;
+    if (invFilter) invFilter.value = appState.currentInventario;
+    loadBodegasYProyectos();
+}
+
 async function loadBodegasYProyectos() {
     try {
+        const sedeFilterEl = document.getElementById('filter-bodegas-sede');
+        const invFilterEl = document.getElementById('filter-bodegas-inv');
+
+        const sede = sedeFilterEl ? sedeFilterEl.value : 'TODAS';
+        const tipo_inventario = invFilterEl ? invFilterEl.value : 'TODOS';
+
+        const params = new URLSearchParams();
+        if (sede && sede !== 'TODAS' && sede !== 'ALL') params.append('sede', sede);
+        if (tipo_inventario && tipo_inventario !== 'TODOS' && tipo_inventario !== 'ALL') params.append('tipo_inventario', tipo_inventario);
+
         const [resBod, resProy] = await Promise.all([
-            fetch(`${API_BASE}/bodegas`),
-            fetch(`${API_BASE}/proyectos`)
+            fetch(`${API_BASE}/bodegas?${params.toString()}`),
+            fetch(`${API_BASE}/proyectos?${params.toString()}`)
         ]);
 
         const dataBod = await resBod.json();
@@ -1873,41 +1935,49 @@ async function loadBodegasYProyectos() {
             appState.bodegas = dataBod.data;
             const tbody = document.getElementById('table-bodegas-body');
             if (tbody) {
-                tbody.innerHTML = dataBod.data.map(b => {
-                    const esCentral = b.es_central === 1 || b.codigo === 'BOD-001';
-                    return `
-                    <tr>
-                        <td><span class="badge bg-light text-primary border font-monospace fw-bold">${b.codigo}</span></td>
-                        <td>
-                            <div class="fw-bold d-flex align-items-center flex-wrap gap-1">
-                                <span>${b.nombre}</span>
-                                ${esCentral ? '<span class="badge bg-primary shadow-sm small" style="font-size: 0.72rem;"><i class="bi bi-star-fill text-warning me-1"></i>Central</span>' : ''}
-                            </div>
-                            <small class="text-muted">${b.ubicacion || ''}</small>
-                        </td>
-                        <td>${b.responsable || '-'}</td>
-                        <td class="text-center">
-                            <span class="badge ${b.estado === 'Activa' ? 'bg-success' : 'bg-secondary'}">${b.estado}</span>
-                        </td>
-                        <td class="text-center">
-                            <div class="btn-group btn-group-sm">
-                                <button class="btn btn-outline-primary btn-sm py-1 px-2" onclick="editarBodega('${b.codigo}')" title="Modificar Bodega">
-                                    <i class="bi bi-pencil-square"></i>
-                                </button>
-                                ${esCentral ? `
-                                    <button class="btn btn-outline-secondary btn-sm py-1 px-2" disabled title="La Bodega Central no se puede eliminar (Solo modificar)">
-                                        <i class="bi bi-lock-fill"></i>
+                if (dataBod.data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted">No se encontraron bodegas para los filtros seleccionados.</td></tr>`;
+                } else {
+                    tbody.innerHTML = dataBod.data.map(b => {
+                        const esCentral = b.es_central === 1 || b.codigo === 'BOD-001';
+                        return `
+                        <tr>
+                            <td><span class="badge bg-light text-primary border font-monospace fw-bold">${b.codigo}</span></td>
+                            <td>
+                                <div class="fw-bold d-flex align-items-center flex-wrap gap-1">
+                                    <span>${b.nombre}</span>
+                                    ${esCentral ? '<span class="badge bg-primary shadow-sm small" style="font-size: 0.72rem;"><i class="bi bi-star-fill text-warning me-1"></i>Central</span>' : ''}
+                                </div>
+                                <small class="text-muted">${b.ubicacion || ''}</small>
+                            </td>
+                            <td>
+                                <div class="small fw-semibold text-dark">${b.sede || 'Global'}</div>
+                                <span class="badge bg-info bg-opacity-10 text-info border">${b.tipo_inventario || 'CDS'}</span>
+                            </td>
+                            <td>${b.responsable || '-'}</td>
+                            <td class="text-center">
+                                <span class="badge ${b.estado === 'Activa' ? 'bg-success' : 'bg-secondary'}">${b.estado}</span>
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary btn-sm py-1 px-2" onclick="editarBodega('${b.codigo}')" title="Modificar Bodega">
+                                        <i class="bi bi-pencil-square"></i>
                                     </button>
-                                ` : `
-                                    <button class="btn btn-outline-danger btn-sm py-1 px-2" onclick="abrirModalEliminarBodega('${b.codigo}')" title="Eliminar Bodega">
-                                        <i class="bi bi-trash3"></i>
-                                    </button>
-                                `}
-                            </div>
-                        </td>
-                    </tr>
-                `;
-                }).join('');
+                                    ${esCentral ? `
+                                        <button class="btn btn-outline-secondary btn-sm py-1 px-2" disabled title="La Bodega Central no se puede eliminar (Solo modificar)">
+                                            <i class="bi bi-lock-fill"></i>
+                                        </button>
+                                    ` : `
+                                        <button class="btn btn-outline-danger btn-sm py-1 px-2" onclick="abrirModalEliminarBodega('${b.codigo}')" title="Eliminar Bodega">
+                                            <i class="bi bi-trash3"></i>
+                                        </button>
+                                    `}
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                    }).join('');
+                }
             }
         }
 
@@ -1915,19 +1985,37 @@ async function loadBodegasYProyectos() {
             appState.proyectos = dataProy.data;
             const tbody = document.getElementById('table-proyectos-body');
             if (tbody) {
-                tbody.innerHTML = dataProy.data.map(p => `
-                    <tr>
-                        <td>#${p.id}</td>
-                        <td>
-                            <div class="fw-bold">${p.nombre}</div>
-                            <small class="text-muted">${p.observaciones || ''}</small>
-                        </td>
-                        <td>${p.responsable || '-'}</td>
-                        <td class="text-center">
-                            <span class="badge ${p.estado === 'Activo' ? 'bg-success' : 'bg-secondary'}">${p.estado}</span>
-                        </td>
-                    </tr>
-                `).join('');
+                if (dataProy.data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted">No se encontraron proyectos para los filtros seleccionados.</td></tr>`;
+                } else {
+                    tbody.innerHTML = dataProy.data.map(p => `
+                        <tr>
+                            <td><span class="badge bg-light text-secondary border font-monospace">#${p.id}</span></td>
+                            <td>
+                                <div class="fw-bold">${p.nombre}</div>
+                                <small class="text-muted">${p.observaciones || ''}</small>
+                            </td>
+                            <td>
+                                <div class="small fw-semibold text-dark">${p.sede || 'Global'}</div>
+                                <span class="badge bg-warning bg-opacity-10 text-dark border">${p.tipo_inventario || 'CDS'}</span>
+                            </td>
+                            <td>${p.responsable || '-'}</td>
+                            <td class="text-center">
+                                <span class="badge ${p.estado === 'Activo' ? 'bg-success' : 'bg-secondary'}">${p.estado}</span>
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary btn-sm py-1 px-2" onclick="editarProyecto(${p.id})" title="Modificar Proyecto">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger btn-sm py-1 px-2" onclick="abrirModalEliminarProyecto(${p.id})" title="Eliminar Proyecto">
+                                        <i class="bi bi-trash3"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
             }
         }
     } catch (err) {
@@ -1940,6 +2028,13 @@ async function openModalNuevaBodega() {
     document.getElementById('bod-is-edit').value = '0';
     document.getElementById('modalBodegaTitle').innerHTML = '<i class="bi bi-building-add text-secondary me-2"></i>Nueva Bodega (Autogenerada)';
     
+    // Setear Sede y Tipo de Inventario por defecto al contexto actual
+    const sedeSelect = document.getElementById('bod-sede');
+    if (sedeSelect) sedeSelect.value = appState.currentSede;
+
+    const invSelect = document.getElementById('bod-tipo-inventario');
+    if (invSelect) invSelect.value = appState.currentInventario;
+
     const btn = document.getElementById('btn-guardar-bodega');
     if (btn) btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Guardar Bodega';
 
@@ -1982,6 +2077,12 @@ function editarBodega(codigo) {
     document.getElementById('bod-estado').value = bodega.estado || 'Activa';
     document.getElementById('bod-obs').value = bodega.observaciones || '';
 
+    const sedeSelect = document.getElementById('bod-sede');
+    if (sedeSelect) sedeSelect.value = bodega.sede || appState.currentSede;
+
+    const invSelect = document.getElementById('bod-tipo-inventario');
+    if (invSelect) invSelect.value = bodega.tipo_inventario || appState.currentInventario;
+
     const esCentral = bodega.es_central === 1 || bodega.codigo === 'BOD-001';
     const alertEl = document.getElementById('bod-central-alert');
     const alertText = document.getElementById('bod-central-alert-text');
@@ -2012,7 +2113,9 @@ async function submitBodega(e) {
         ubicacion: document.getElementById('bod-ubicacion').value,
         responsable: document.getElementById('bod-responsable').value,
         estado: document.getElementById('bod-estado').value,
-        observaciones: document.getElementById('bod-obs').value
+        observaciones: document.getElementById('bod-obs').value,
+        sede: document.getElementById('bod-sede')?.value || appState.currentSede,
+        tipo_inventario: document.getElementById('bod-tipo-inventario')?.value || appState.currentInventario
     };
 
     try {
@@ -2104,6 +2207,40 @@ async function ejecutarEliminarBodega() {
 
 function openModalNuevoProyecto() {
     document.getElementById('form-proyecto').reset();
+    document.getElementById('proy-id').value = '';
+    document.getElementById('modalProyectoTitle').innerHTML = '<i class="bi bi-cone-striped text-warning me-2"></i>Nuevo Frente / Proyecto';
+
+    const sedeSelect = document.getElementById('proy-sede');
+    if (sedeSelect) sedeSelect.value = appState.currentSede;
+
+    const invSelect = document.getElementById('proy-tipo-inventario');
+    if (invSelect) invSelect.value = appState.currentInventario;
+
+    const modalEl = document.getElementById('modalNuevoProyecto');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+function editarProyecto(id) {
+    if (!appState.proyectos) return;
+    const proy = appState.proyectos.find(p => p.id === id);
+    if (!proy) return;
+
+    document.getElementById('form-proyecto').reset();
+    document.getElementById('proy-id').value = proy.id;
+    document.getElementById('proy-nombre').value = proy.nombre;
+    document.getElementById('proy-responsable').value = proy.responsable || '';
+    document.getElementById('proy-estado').value = proy.estado || 'Activo';
+    document.getElementById('proy-obs').value = proy.observaciones || '';
+
+    const sedeSelect = document.getElementById('proy-sede');
+    if (sedeSelect) sedeSelect.value = proy.sede || appState.currentSede;
+
+    const invSelect = document.getElementById('proy-tipo-inventario');
+    if (invSelect) invSelect.value = proy.tipo_inventario || appState.currentInventario;
+
+    document.getElementById('modalProyectoTitle').innerHTML = `<i class="bi bi-pencil-square text-warning me-2"></i>Modificar Proyecto (#${proy.id})`;
+
     const modalEl = document.getElementById('modalNuevoProyecto');
     const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modal.show();
@@ -2116,7 +2253,9 @@ async function submitProyecto(e) {
         nombre: document.getElementById('proy-nombre').value.trim(),
         responsable: document.getElementById('proy-responsable').value,
         estado: document.getElementById('proy-estado').value,
-        observaciones: document.getElementById('proy-obs').value
+        observaciones: document.getElementById('proy-obs').value,
+        sede: document.getElementById('proy-sede')?.value || appState.currentSede,
+        tipo_inventario: document.getElementById('proy-tipo-inventario')?.value || appState.currentInventario
     };
 
     try {
@@ -2136,6 +2275,67 @@ async function submitProyecto(e) {
         }
     } catch (err) {
         showToast('Error al guardar proyecto: ' + err.message, 'danger');
+    }
+}
+
+function abrirModalEliminarProyecto(id) {
+    if (!appState.proyectos) return;
+    const proy = appState.proyectos.find(p => p.id === id);
+    if (!proy) return;
+
+    document.getElementById('del-proy-id-input').value = proy.id;
+    document.getElementById('del-proy-id-text').textContent = `#${proy.id}`;
+    document.getElementById('del-proy-nombre').textContent = proy.nombre;
+    document.getElementById('del-proy-responsable').textContent = proy.responsable || 'No asignado';
+    document.getElementById('del-proy-estado').textContent = proy.estado || 'Activo';
+
+    const btn = document.getElementById('btn-confirmar-eliminar-proy');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-trash3-fill me-1"></i> Confirmar y Eliminar Proyecto';
+    }
+
+    const modalEl = document.getElementById('modalEliminarProyecto');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+async function ejecutarEliminarProyecto() {
+    const id = document.getElementById('del-proy-id-input').value;
+    if (!id) return;
+
+    const btn = document.getElementById('btn-confirmar-eliminar-proy');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Eliminando...';
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/proyectos/${id}`, {
+            method: 'DELETE'
+        });
+
+        const result = await res.json();
+        if (!result.success) {
+            showToast(`⚠️ ${result.error}`, 'danger');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-trash3-fill me-1"></i> Confirmar y Eliminar Proyecto';
+            }
+            return;
+        }
+
+        closeModal('modalEliminarProyecto');
+        showToast(`✅ ${result.message}`, 'success');
+
+        await loadBodegasYProyectos();
+        await loadConfig();
+    } catch (err) {
+        showToast(`Error al eliminar proyecto: ${err.message}`, 'danger');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-trash3-fill me-1"></i> Confirmar y Eliminar Proyecto';
+        }
     }
 }
 

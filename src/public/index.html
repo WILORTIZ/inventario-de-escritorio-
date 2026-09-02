@@ -605,24 +605,66 @@
 
                 <!-- 6. VISTA BODEGAS Y PROYECTOS -->
                 <section id="view-bodegas" class="app-view" style="display: none;">
+                    <!-- HEADER Y FILTROS DE CONTEXTO -->
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
+                            <div>
+                                <h5 class="fw-bold mb-1 text-dark">
+                                    <i class="bi bi-building text-primary me-2"></i>Gestión de Bodegas y Proyectos Finales
+                                </h5>
+                                <p class="text-muted mb-0 small">
+                                    Configuración y asignación de bodegas físicas y frentes de obra por sede y tipo de inventario.
+                                </p>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <button class="btn btn-outline-secondary btn-sm" onclick="loadBodegasYProyectos()">
+                                    <i class="bi bi-arrow-clockwise me-1"></i> Actualizar
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- BARRA DE FILTRADO CONTEXTUAL -->
+                        <div class="row g-3 bg-light p-3 rounded-3 border">
+                            <div class="col-12 col-md-5">
+                                <label class="form-label fw-bold small mb-1"><i class="bi bi-geo-alt-fill text-danger me-1"></i>Filtrar por Sede:</label>
+                                <select class="form-select form-select-sm fw-semibold" id="filter-bodegas-sede" onchange="loadBodegasYProyectos()">
+                                    <option value="TODAS">-- Todas las Sedes --</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-5">
+                                <label class="form-label fw-bold small mb-1"><i class="bi bi-boxes text-info me-1"></i>Filtrar por Inventario:</label>
+                                <select class="form-select form-select-sm fw-semibold" id="filter-bodegas-inv" onchange="loadBodegasYProyectos()">
+                                    <option value="TODOS">-- Todos los Inventarios --</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-2 d-flex align-items-end">
+                                <button class="btn btn-primary btn-sm w-100 fw-semibold" onclick="sincronizarFiltrosBodegasConContexto()">
+                                    <i class="bi bi-pin-map-fill me-1"></i> Sede Actual
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="row g-4">
+                        <!-- PANEL BODEGAS -->
                         <div class="col-12 col-lg-6">
                             <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
                                 <div class="d-flex align-items-center justify-content-between mb-3">
                                     <div>
-                                        <h5 class="fw-bold mb-1 text-dark">Bodegas / Almacenes</h5>
-                                        <p class="text-muted mb-0 small">Estructura oficial de bodegas físicas</p>
+                                        <h6 class="fw-bold mb-1 text-dark"><i class="bi bi-shop me-1 text-primary"></i>Bodegas / Almacenes Físicos</h6>
+                                        <p class="text-muted mb-0 small">Bodegas centrales y almacenes satélites</p>
                                     </div>
-                                    <button class="btn btn-primary btn-sm" onclick="openModalNuevaBodega()">
-                                        <i class="bi bi-plus-lg me-1"></i> Nueva Bodega
+                                    <button class="btn btn-primary btn-sm px-3 fw-semibold shadow-sm" onclick="openModalNuevaBodega()">
+                                        <i class="bi bi-plus-circle-fill me-1"></i> Nueva Bodega
                                     </button>
                                 </div>
                                 <div class="table-responsive">
-                                    <table class="table table-hover align-middle mb-0" style="font-size: 0.88rem;">
-                                        <thead class="table-light">
+                                    <table class="table table-hover align-middle mb-0 table-custom" style="font-size: 0.85rem;">
+                                        <thead>
                                             <tr>
                                                 <th>Código</th>
                                                 <th>Bodega</th>
+                                                <th>Sede / Inv.</th>
                                                 <th>Responsable</th>
                                                 <th class="text-center">Estado</th>
                                                 <th class="text-center">Acciones</th>
@@ -634,25 +676,28 @@
                             </div>
                         </div>
 
+                        <!-- PANEL PROYECTOS -->
                         <div class="col-12 col-lg-6">
                             <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
                                 <div class="d-flex align-items-center justify-content-between mb-3">
                                     <div>
-                                        <h5 class="fw-bold mb-1 text-dark">Frentes de Obra / Proyectos</h5>
-                                        <p class="text-muted mb-0 small">Destinos finales de materiales</p>
+                                        <h6 class="fw-bold mb-1 text-dark"><i class="bi bi-cone-striped me-1 text-warning"></i>Frentes de Obra / Proyectos Finales</h6>
+                                        <p class="text-muted mb-0 small">Destinos operativos finales de entrega de materiales</p>
                                     </div>
-                                    <button class="btn btn-primary btn-sm" onclick="openModalNuevoProyecto()">
-                                        <i class="bi bi-plus-lg me-1"></i> Nuevo Proyecto
+                                    <button class="btn btn-warning btn-sm px-3 fw-semibold shadow-sm text-dark" onclick="openModalNuevoProyecto()">
+                                        <i class="bi bi-plus-circle-fill me-1"></i> Nuevo Proyecto
                                     </button>
                                 </div>
                                 <div class="table-responsive">
-                                    <table class="table table-hover align-middle mb-0" style="font-size: 0.88rem;">
-                                        <thead class="table-light">
+                                    <table class="table table-hover align-middle mb-0 table-custom" style="font-size: 0.85rem;">
+                                        <thead>
                                             <tr>
                                                 <th>ID</th>
                                                 <th>Proyecto / Frente</th>
+                                                <th>Sede / Inv.</th>
                                                 <th>Responsable</th>
                                                 <th class="text-center">Estado</th>
+                                                <th class="text-center">Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody id="table-proyectos-body"></tbody>
@@ -1114,12 +1159,12 @@
                         <div class="row g-3">
                             <div class="col-12 col-md-6">
                                 <label class="form-label fw-bold small"><i class="bi bi-geo-alt-fill text-danger me-1"></i>Sede Operativa <span class="text-danger">*</span></label>
-                                <select class="form-select bg-light fw-semibold" id="mov-sede" required onchange="actualizarStockPreviewEnMovimiento()"></select>
+                                <select class="form-select bg-light fw-semibold" id="mov-sede" required onchange="actualizarContextoEnMovimiento()"></select>
                             </div>
 
                             <div class="col-12 col-md-6">
                                 <label class="form-label fw-bold small"><i class="bi bi-boxes text-info me-1"></i>Tipo de Inventario <span class="text-danger">*</span></label>
-                                <select class="form-select bg-light fw-semibold" id="mov-tipo-inventario" required onchange="actualizarStockPreviewEnMovimiento()"></select>
+                                <select class="form-select bg-light fw-semibold" id="mov-tipo-inventario" required onchange="actualizarContextoEnMovimiento()"></select>
                             </div>
 
                             <div class="col-12 col-md-6">
@@ -1416,7 +1461,7 @@
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
                 <div class="modal-header modal-header-custom p-3">
-                    <h6 class="modal-title fw-bold text-white">
+                    <h6 class="modal-title fw-bold text-white" id="modalProyectoTitle">
                         <i class="bi bi-cone-striped text-warning me-2"></i>Administrador de Proyectos y Frentes
                     </h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -1424,9 +1469,21 @@
                 <form id="form-proyecto" onsubmit="submitProyecto(event)">
                     <div class="modal-body p-4">
                         <input type="hidden" id="proy-id">
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-bold small"><i class="bi bi-geo-alt-fill text-danger me-1"></i>Sede Asociada <span class="text-danger">*</span></label>
+                                <select class="form-select bg-light fw-semibold" id="proy-sede" required></select>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-bold small"><i class="bi bi-boxes text-info me-1"></i>Inventario Asociado <span class="text-danger">*</span></label>
+                                <select class="form-select bg-light fw-semibold" id="proy-tipo-inventario" required></select>
+                            </div>
+                        </div>
+
                         <div class="mb-3">
                             <label class="form-label fw-bold small">Nombre del Frente / Proyecto <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="proy-nombre" required placeholder="Ej: Camisas Barbaras, Movilidad...">
+                            <input type="text" class="form-control" id="proy-nombre" required placeholder="Ej: Camisas Barbaras, Movilidad, Expansión...">
                         </div>
                         <div class="mb-3">
                             <label class="form-label fw-bold small">Responsable del Frente</label>
@@ -1441,7 +1498,7 @@
                         </div>
                         <div class="mb-3">
                             <label class="form-label fw-bold small">Observaciones</label>
-                            <input type="text" class="form-control" id="proy-obs" placeholder="Detalles del proyecto">
+                            <input type="text" class="form-control" id="proy-obs" placeholder="Detalles del proyecto o frente">
                         </div>
                     </div>
                     <div class="modal-footer bg-light p-3">
@@ -1472,6 +1529,17 @@
                             <i class="bi bi-star-fill text-warning fs-5 flex-shrink-0"></i>
                             <div id="bod-central-alert-text">
                                 <strong>Bodega Central:</strong> Esta bodega es el almacén central operativo. Puede modificar sus datos, pero no puede ser eliminada.
+                            </div>
+                        </div>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-bold small"><i class="bi bi-geo-alt-fill text-danger me-1"></i>Sede de la Bodega <span class="text-danger">*</span></label>
+                                <select class="form-select bg-light fw-semibold" id="bod-sede" required></select>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-bold small"><i class="bi bi-boxes text-info me-1"></i>Inventario <span class="text-danger">*</span></label>
+                                <select class="form-select bg-light fw-semibold" id="bod-tipo-inventario" required></select>
                             </div>
                         </div>
 
@@ -1556,6 +1624,46 @@
                     <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancelar</button>
                     <button type="button" class="btn btn-danger btn-sm px-4 fw-bold shadow-sm" id="btn-confirmar-eliminar-bodega" onclick="ejecutarEliminarBodega()">
                         <i class="bi bi-trash3-fill me-1"></i> Confirmar y Eliminar Bodega
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Confirmar Eliminación de Proyecto -->
+    <div class="modal fade" id="modalEliminarProyecto" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+                <div class="modal-header bg-danger text-white p-3">
+                    <h6 class="modal-title fw-bold text-white">
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Confirmar Eliminación de Proyecto
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="alert alert-warning border-warning d-flex align-items-start gap-2 mb-3">
+                        <i class="bi bi-info-circle-fill text-warning fs-5 flex-shrink-0 mt-1"></i>
+                        <div class="small">
+                            <strong>Atención:</strong> Solo se pueden eliminar proyectos o frentes que no tengan movimientos ni entregas registradas en el historial.
+                        </div>
+                    </div>
+                    
+                    <div class="card border rounded-3 p-3 bg-light mb-3">
+                        <div class="row g-2 small">
+                            <div class="col-6"><span class="text-muted">ID Proyecto:</span> <strong class="text-primary font-monospace" id="del-proy-id-text">--</strong></div>
+                            <div class="col-6"><span class="text-muted">Estado:</span> <span class="badge bg-secondary" id="del-proy-estado">--</span></div>
+                            <div class="col-12"><span class="text-muted">Nombre:</span> <strong class="text-dark fs-6" id="del-proy-nombre">--</strong></div>
+                            <div class="col-12"><span class="text-muted">Responsable:</span> <span class="text-dark" id="del-proy-responsable">--</span></div>
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="del-proy-id-input">
+                    <p class="text-muted small mb-0">¿Está seguro de que desea eliminar permanentemente este proyecto de la base de datos?</p>
+                </div>
+                <div class="modal-footer bg-light p-3">
+                    <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger btn-sm px-4 fw-bold shadow-sm" id="btn-confirmar-eliminar-proy" onclick="ejecutarEliminarProyecto()">
+                        <i class="bi bi-trash3-fill me-1"></i> Confirmar y Eliminar Proyecto
                     </button>
                 </div>
             </div>

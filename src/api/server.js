@@ -149,6 +149,36 @@ function ensureDatabaseSchema() {
             )
         `);
 
+        db.run(`
+            CREATE TABLE IF NOT EXISTS traslados_pendientes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                n_traslado TEXT NOT NULL UNIQUE,
+                fecha_solicitud TEXT NOT NULL,
+                hora_solicitud TEXT NOT NULL,
+                sede_origen TEXT NOT NULL,
+                tipo_inventario_origen TEXT NOT NULL,
+                bodega_origen TEXT NOT NULL DEFAULT 'CDS',
+                sede_destino TEXT NOT NULL,
+                tipo_inventario_destino TEXT NOT NULL,
+                bodega_destino TEXT NOT NULL DEFAULT 'CDS',
+                codigo_item INTEGER NOT NULL,
+                nombre_item TEXT NOT NULL,
+                cantidad REAL NOT NULL,
+                unidad TEXT NOT NULL,
+                responsable_solicita TEXT NOT NULL,
+                responsable_recibe TEXT,
+                documento_referencia TEXT,
+                observaciones TEXT,
+                estado TEXT DEFAULT 'PENDIENTE',
+                fecha_resolucion TEXT,
+                motivo_rechazo TEXT,
+                n_movimiento_salida TEXT,
+                n_movimiento_entrada TEXT,
+                creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (codigo_item) REFERENCES items(codigo)
+            )
+        `);
+
         // Insertar sedes y tipos base si no existen
         const sedesBase = [
             ['SUR', 'Sede Suroriental', 'Sector Suroriental', 'Administrador Regional', 'Activa'],
@@ -1392,6 +1422,414 @@ app.post('/api/proyectos', async (req, res) => {
             `, [nombre.trim(), responsable, estado || 'Activo', observaciones]);
         }
         res.json({ success: true, message: 'Proyecto guardado correctamente.' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ==========================================
+// 6. TRASLADOS ENTRE BODEGAS CENTRALES Y TRASLADOS PENDIENTES
+// ==========================================
+
+// 6.1. Conteo de traslados pendientes para Badges de notificación
+app.get('/api/traslados/pendientes-count', async (req, res) => {
+    try {
+        const counts = await dbAll(`
+            SELECT 
+                sede_destino, 
+                tipo_inventario_destino, 
+                COUNT(*) as total_pendientes
+            FROM traslados_pendientes
+            WHERE estado = 'PENDIENTE'
+            GROUP BY sede_destino, tipo_inventario_destino
+        `);
+
+        res.json({ success: true, data: counts });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 6.2. Listar traslados con filtros de contexto (Entrantes, Salientes, Histórico)
+app.get('/api/traslados', async (req, res) => {
+    try {
+        const { sede, tipo_inventario, filtro, estado, search } = req.query;
+        let query = `SELECT * FROM traslados_pendientes WHERE 1=1`;
+        const params = [];
+
+        if (filtro === 'entrantes') {
+            if (sede && sede !== 'ALL') {
+                query += ` AND sede_destino = ?`;
+                params.push(sede);
+            }
+            if (tipo_inventario && tipo_inventario !== 'ALL') {
+                query += ` AND tipo_inventario_destino = ?`;
+                params.push(tipo_inventario);
+            }
+        } else if (filtro === 'salientes') {
+            if (sede && sede !== 'ALL') {
+                query += ` AND sede_origen = ?`;
+                params.push(sede);
+            }
+            if (tipo_inventario && tipo_inventario !== 'ALL') {
+                query += ` AND tipo_inventario_origen = ?`;
+                params.push(tipo_inventario);
+            }
+        } else {
+            // Todos los traslados relacionados con la sede / inventario activos
+            if (sede && sede !== 'ALL') {
+                query += ` AND (sede_origen = ? OR sede_destino = ?)`;
+                params.push(sede, sede);
+            }
+            if (tipo_inventario && tipo_inventario !== 'ALL') {
+                query += ` AND (tipo_inventario_origen = ? OR tipo_inventario_destino = ?)`;
+                params.push(tipo_inventario, tipo_inventario);
+            }
+        }
+
+        if (estado && estado !== 'ALL') {
+            query += ` AND estado = ?`;
+            params.push(estado);
+        }
+
+        if (search) {
+            query += ` AND (n_traslado LIKE ? OR CAST(codigo_item AS TEXT) LIKE ? OR nombre_item LIKE ? OR responsable_solicita LIKE ? OR documento_referencia LIKE ?)`;
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+        }
+
+        query += ` ORDER BY id DESC`;
+
+        const traslados = await dbAll(query, params);
+        res.json({ success: true, count: traslados.length, data: traslados });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 6.3. Emisión de nuevo Traslado entre Bodegas Centrales (Estado: PENDIENTE)
+app.post('/api/traslados', async (req, res) => {
+    try {
+        const {
+            sede_origen,
+            tipo_inventario_origen,
+            sede_destino,
+            tipo_inventario_destino,
+            codigo_item,
+            cantidad,
+            responsable_solicita,
+            documento_referencia,
+            observaciones
+        } = req.body;
+
+        // Validaciones obligatorias
+        if (!sede_origen || !tipo_inventario_origen || !sede_destino || !tipo_inventario_destino) {
+            return res.status(400).json({ success: false, error: 'Debe especificar sede y tipo de inventario de origen y destino.' });
+        }
+
+        if (sede_origen === sede_destino && tipo_inventario_origen === tipo_inventario_destino) {
+            return res.status(400).json({ success: false, error: 'La bodega central de origen y destino no pueden ser exactamente las mismas.' });
+        }
+
+        if (!codigo_item) {
+            return res.status(400).json({ success: false, error: 'Debe seleccionar un ítem para trasladar.' });
+        }
+
+        const numCantidad = parseFloat(cantidad);
+        if (isNaN(numCantidad) || numCantidad <= 0) {
+            return res.status(400).json({ success: false, error: 'La cantidad a trasladar debe ser mayor a 0.' });
+        }
+
+        if (!responsable_solicita || !responsable_solicita.trim()) {
+            return res.status(400).json({ success: false, error: 'El nombre del responsable solicitante es obligatorio.' });
+        }
+
+        // Obtener ítem del catálogo maestro
+        const item = await dbGet(`SELECT * FROM items WHERE codigo = ?`, [parseInt(codigo_item, 10)]);
+        if (!item) {
+            return res.status(404).json({ success: false, error: `El ítem con código ${codigo_item} no existe en el catálogo.` });
+        }
+
+        // Validar existencia en la Bodega Central de Origen
+        const stockData = await dbGet(`
+            SELECT 
+                COALESCE(SUM(
+                    CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END
+                ), 0) -
+                COALESCE(SUM(
+                    CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END
+                ), 0) AS stock_disponible
+            FROM movimientos
+            WHERE sede = ? AND tipo_inventario = ? AND codigo_item = ?
+        `, [sede_origen, tipo_inventario_origen, item.codigo]);
+
+        const stockDisponible = stockData ? (stockData.stock_disponible || 0) : 0;
+        if (stockDisponible < numCantidad) {
+            return res.status(400).json({ 
+                success: false, 
+                error: `Stock insuficiente en ${sede_origen} [${tipo_inventario_origen}]. Existencias disponibles: ${stockDisponible} ${item.unidad_medida}. Cantidad solicitada: ${numCantidad} ${item.unidad_medida}.` 
+            });
+        }
+
+        // Generar consecutivo TR-000001
+        const countRow = await dbGet(`SELECT MAX(id) as max_id FROM traslados_pendientes`);
+        const nextId = (countRow && countRow.max_id ? countRow.max_id : 0) + 1;
+        const n_traslado = `TR-${String(nextId).padStart(6, '0')}`;
+
+        const now = new Date();
+        const fecha_solicitud = now.toISOString().split('T')[0];
+        const hora_solicitud = now.toTimeString().split(' ')[0].substring(0, 5);
+
+        await dbRun(`
+            INSERT INTO traslados_pendientes (
+                n_traslado, fecha_solicitud, hora_solicitud,
+                sede_origen, tipo_inventario_origen, bodega_origen,
+                sede_destino, tipo_inventario_destino, bodega_destino,
+                codigo_item, nombre_item, cantidad, unidad,
+                responsable_solicita, documento_referencia, observaciones, estado
+            ) VALUES (?, ?, ?, ?, ?, 'CDS', ?, ?, 'CDS', ?, ?, ?, ?, ?, ?, ?, 'PENDIENTE')
+        `, [
+            n_traslado, fecha_solicitud, hora_solicitud,
+            sede_origen, tipo_inventario_origen,
+            sede_destino, tipo_inventario_destino,
+            item.codigo, item.nombre, numCantidad, item.unidad_medida,
+            responsable_solicita.trim(), documento_referencia ? documento_referencia.trim() : 'TRASLADO-MANUAL',
+            observaciones ? observaciones.trim() : null
+        ]);
+
+        res.json({
+            success: true,
+            message: `Solicitud de traslado ${n_traslado} emitida exitosamente. Ha sido enviada a la bandeja de Traslados Pendientes de ${sede_destino} [${tipo_inventario_destino}].`,
+            n_traslado
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 6.4. Aceptar Traslado (Genera Movimiento de Salida en Origen y Entrada en Destino)
+app.post('/api/traslados/:id/aceptar', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { responsable_recibe } = req.body;
+
+        if (!responsable_recibe || !responsable_recibe.trim()) {
+            return res.status(400).json({ success: false, error: 'Debe ingresar el nombre de la persona o responsable que recibe el traslado.' });
+        }
+
+        const traslado = await dbGet(`SELECT * FROM traslados_pendientes WHERE id = ?`, [id]);
+        if (!traslado) {
+            return res.status(404).json({ success: false, error: 'El traslado solicitado no existe.' });
+        }
+
+        if (traslado.estado !== 'PENDIENTE') {
+            return res.status(400).json({ success: false, error: `Este traslado ya se encuentra ${traslado.estado} y no puede ser procesado nuevamente.` });
+        }
+
+        // Revalidar stock en origen
+        const stockData = await dbGet(`
+            SELECT 
+                COALESCE(SUM(
+                    CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END
+                ), 0) -
+                COALESCE(SUM(
+                    CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END
+                ), 0) AS stock_disponible
+            FROM movimientos
+            WHERE sede = ? AND tipo_inventario = ? AND codigo_item = ?
+        `, [traslado.sede_origen, traslado.tipo_inventario_origen, traslado.codigo_item]);
+
+        const stockDisponible = stockData ? (stockData.stock_disponible || 0) : 0;
+        if (stockDisponible < traslado.cantidad) {
+            return res.status(400).json({ 
+                success: false, 
+                error: `No se puede aceptar el traslado: La bodega central de origen (${traslado.sede_origen} [${traslado.tipo_inventario_origen}]) no tiene stock suficiente al momento de la recepción. Stock actual: ${stockDisponible} ${traslado.unidad}.` 
+            });
+        }
+
+        const now = new Date();
+        const fecha_resolucion = `${now.toISOString().split('T')[0]} ${now.toTimeString().split(' ')[0].substring(0, 5)}`;
+        const fecha = now.toISOString().split('T')[0];
+        const hora = now.toTimeString().split(' ')[0].substring(0, 5);
+
+        // 1. Generar Consecutivo de Salida en Origen
+        const maxMovRow = await dbGet(`SELECT MAX(id) as max_id FROM movimientos`);
+        const nextMovId1 = (maxMovRow && maxMovRow.max_id ? maxMovRow.max_id : 0) + 1;
+        const n_mov_salida = `MOV-${String(nextMovId1).padStart(6, '0')}`;
+
+        // 2. Generar Consecutivo de Entrada en Destino
+        const nextMovId2 = nextMovId1 + 1;
+        const n_mov_entrada = `MOV-${String(nextMovId2).padStart(6, '0')}`;
+
+        // Obtener ubicación del ítem
+        const itemInfo = await dbGet(`SELECT ubicacion_cds, aplica_vencimiento FROM items WHERE codigo = ?`, [traslado.codigo_item]);
+        const ubicacion = itemInfo ? itemInfo.ubicacion_cds : 'A1';
+
+        // 3. Registrar Movimiento de Salida (Descuento de la Bodega Central de Origen)
+        await dbRun(`
+            INSERT INTO movimientos (
+                n_movimiento, fecha, hora, tipo_movimiento,
+                codigo_item, nombre_item, cantidad, unidad,
+                bodega_origen, bodega_destino, ubicacion_cds,
+                proyecto_destino, responsable, persona_recibe_devuelve,
+                documento_referencia, observaciones, sede, tipo_inventario
+            ) VALUES (?, ?, ?, 'ENTREGA', ?, ?, ?, ?, 'CDS', 'TRASLADOS', ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            n_mov_salida, fecha, hora,
+            traslado.codigo_item, traslado.nombre_item, traslado.cantidad, traslado.unidad,
+            ubicacion,
+            `Traslado hacia ${traslado.sede_destino} (${traslado.tipo_inventario_destino})`,
+            traslado.responsable_solicita,
+            responsable_recibe.trim(),
+            traslado.n_traslado,
+            `Despacho por Traslado Aceptado ${traslado.n_traslado}. Receptor: ${responsable_recibe.trim()}. ${traslado.observaciones ? 'Obs: ' + traslado.observaciones : ''}`,
+            traslado.sede_origen,
+            traslado.tipo_inventario_origen
+        ]);
+
+        // 4. Registrar Movimiento de Entrada (Ingreso a la Bodega Central de Destino)
+        await dbRun(`
+            INSERT INTO movimientos (
+                n_movimiento, fecha, hora, tipo_movimiento,
+                codigo_item, nombre_item, cantidad, unidad,
+                bodega_origen, bodega_destino, ubicacion_cds,
+                proyecto_destino, responsable, persona_recibe_devuelve,
+                documento_referencia, observaciones, sede, tipo_inventario
+            ) VALUES (?, ?, ?, 'ENTRADA', ?, ?, ?, ?, 'TRASLADOS', 'CDS', ?, NULL, ?, ?, ?, ?, ?, ?)
+        `, [
+            n_mov_entrada, fecha, hora,
+            traslado.codigo_item, traslado.nombre_item, traslado.cantidad, traslado.unidad,
+            ubicacion,
+            responsable_recibe.trim(),
+            traslado.responsable_solicita,
+            traslado.n_traslado,
+            `Recepción de Traslado Aceptado ${traslado.n_traslado} desde ${traslado.sede_origen} (${traslado.tipo_inventario_origen}). Emisor: ${traslado.responsable_solicita}.`,
+            traslado.sede_destino,
+            traslado.tipo_inventario_destino
+        ]);
+
+        // 5. Traspaso de lotes de vencimiento si el ítem aplica
+        if (itemInfo && itemInfo.aplica_vencimiento) {
+            const loteOrigen = await dbGet(`
+                SELECT * FROM control_vencimientos 
+                WHERE codigo_item = ? AND sede = ? AND tipo_inventario = ? AND cant_disponible > 0
+                ORDER BY fecha_vencimiento ASC LIMIT 1
+            `, [traslado.codigo_item, traslado.sede_origen, traslado.tipo_inventario_origen]);
+
+            if (loteOrigen) {
+                const cantATrasladar = Math.min(loteOrigen.cant_disponible, traslado.cantidad);
+                // Reducir lote origen
+                await dbRun(`
+                    UPDATE control_vencimientos 
+                    SET cant_disponible = cant_disponible - ?
+                    WHERE id = ?
+                `, [cantATrasladar, loteOrigen.id]);
+
+                // Crear o sumar lote destino
+                await dbRun(`
+                    INSERT INTO control_vencimientos (
+                        codigo_item, nombre_item, bodega, fecha_ingreso,
+                        fecha_vencimiento, cant_inicial, cant_disponible,
+                        estado, observaciones, n_movimiento_origen, sede, tipo_inventario
+                    ) VALUES (?, ?, 'CDS', ?, ?, ?, ?, 'VIGENTE', ?, ?, ?, ?)
+                `, [
+                    traslado.codigo_item, traslado.nombre_item, fecha,
+                    loteOrigen.fecha_vencimiento, cantATrasladar, cantATrasladar,
+                    `Lote recibido por traslado ${traslado.n_traslado}`,
+                    n_mov_entrada, traslado.sede_destino, traslado.tipo_inventario_destino
+                ]);
+            }
+        }
+
+        // 6. Actualizar Estado del Traslado a ACEPTADO
+        await dbRun(`
+            UPDATE traslados_pendientes
+            SET estado = 'ACEPTADO',
+                fecha_resolucion = ?,
+                responsable_recibe = ?,
+                n_movimiento_salida = ?,
+                n_movimiento_entrada = ?
+            WHERE id = ?
+        `, [fecha_resolucion, responsable_recibe.trim(), n_mov_salida, n_mov_entrada, id]);
+
+        res.json({
+            success: true,
+            message: `Traslado ${traslado.n_traslado} aceptado y completado exitosamente. Se descontaron ${traslado.cantidad} ${traslado.unidad} de ${traslado.sede_origen} (${traslado.tipo_inventario_origen}) y se sumaron a ${traslado.sede_destino} (${traslado.tipo_inventario_destino}).`,
+            n_mov_salida,
+            n_mov_entrada
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 6.5. Rechazar Traslado
+app.post('/api/traslados/:id/rechazar', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { motivo_rechazo, responsable_recibe } = req.body;
+
+        if (!motivo_rechazo || !motivo_rechazo.trim()) {
+            return res.status(400).json({ success: false, error: 'Debe especificar el motivo del rechazo del traslado.' });
+        }
+
+        const traslado = await dbGet(`SELECT * FROM traslados_pendientes WHERE id = ?`, [id]);
+        if (!traslado) {
+            return res.status(404).json({ success: false, error: 'El traslado solicitado no existe.' });
+        }
+
+        if (traslado.estado !== 'PENDIENTE') {
+            return res.status(400).json({ success: false, error: `Este traslado ya se encuentra ${traslado.estado} y no puede ser rechazado.` });
+        }
+
+        const now = new Date();
+        const fecha_resolucion = `${now.toISOString().split('T')[0]} ${now.toTimeString().split(' ')[0].substring(0, 5)}`;
+
+        await dbRun(`
+            UPDATE traslados_pendientes
+            SET estado = 'RECHAZADO',
+                fecha_resolucion = ?,
+                motivo_rechazo = ?,
+                responsable_recibe = ?
+            WHERE id = ?
+        `, [fecha_resolucion, motivo_rechazo.trim(), responsable_recibe ? responsable_recibe.trim() : 'Receptor Destino', id]);
+
+        res.json({
+            success: true,
+            message: `Traslado ${traslado.n_traslado} ha sido RECHAZADO. No se realizó ningún movimiento ni cambio en los inventarios.`
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 6.6. Cancelar Traslado (por parte del emisor)
+app.post('/api/traslados/:id/cancelar', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const traslado = await dbGet(`SELECT * FROM traslados_pendientes WHERE id = ?`, [id]);
+        if (!traslado) {
+            return res.status(404).json({ success: false, error: 'El traslado solicitado no existe.' });
+        }
+
+        if (traslado.estado !== 'PENDIENTE') {
+            return res.status(400).json({ success: false, error: `Solo se pueden cancelar traslados en estado PENDIENTE.` });
+        }
+
+        const now = new Date();
+        const fecha_resolucion = `${now.toISOString().split('T')[0]} ${now.toTimeString().split(' ')[0].substring(0, 5)}`;
+
+        await dbRun(`
+            UPDATE traslados_pendientes
+            SET estado = 'CANCELADO',
+                fecha_resolucion = ?,
+                motivo_rechazo = 'Cancelado por el solicitante en origen'
+            WHERE id = ?
+        `, [fecha_resolucion, id]);
+
+        res.json({
+            success: true,
+            message: `Traslado ${traslado.n_traslado} cancelado exitosamente.`
+        });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

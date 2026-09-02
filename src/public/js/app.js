@@ -196,7 +196,9 @@ async function recargarDatosContexto() {
         loadInventario(),
         loadItems(),
         loadMovimientos(),
-        loadVencimientos()
+        loadVencimientos(),
+        loadTraslados(),
+        actualizarBadgesTraslados()
     ]);
 }
 
@@ -230,8 +232,9 @@ function navigate(viewName) {
         'inicio': `Panel de Control (${invLabel})`,
         'inventario': `Inventario Físico ${invLabel}`,
         'movimientos': `Movimientos ${invLabel}`,
-        'items': `Catálogo Ítems ${invLabel}`,
+        'items': `Catálogo Maestro Ítems`,
         'vencimientos': `Control de Vencimientos ${invLabel}`,
+        'traslados': `Traslados entre Bodegas Centrales (${invLabel})`,
         'bodegas': 'Bodegas y Proyectos',
         'reportes': `Kardex & Reportes ${invLabel}`,
         'database': 'Gestión de Base de Datos y Backups'
@@ -247,6 +250,7 @@ function navigate(viewName) {
     if (viewName === 'movimientos') loadMovimientos();
     if (viewName === 'items') loadItems();
     if (viewName === 'vencimientos') loadVencimientos();
+    if (viewName === 'traslados') loadTraslados();
     if (viewName === 'bodegas') loadBodegasYProyectos();
 }
 
@@ -1241,12 +1245,614 @@ async function ejecutarBajasMasivas() {
         closeModal('modalBajasVencidos');
         showToast(`✅ ${result.message}`, 'success');
 
-        await loadKPIs();
-        await loadInventario();
-        await loadMovimientos();
-        await loadVencimientos();
+        await recargarDatosContexto();
     } catch (err) {
         showToast(`Error al ejecutar bajas: ${err.message}`, 'danger');
+    }
+}
+
+// ==============================================================
+// 7.1. TRASLADOS ENTRE BODEGAS CENTRALES Y TRASLADOS PENDIENTES
+// ==============================================================
+async function loadTraslados() {
+    try {
+        const search = document.getElementById('filter-traslados-search')?.value?.trim() || '';
+        const params = new URLSearchParams();
+        params.append('sede', appState.currentSede);
+        params.append('tipo_inventario', appState.currentInventario);
+        if (search) params.append('search', search);
+
+        const res = await fetch(`${API_BASE}/traslados?${params.toString()}`);
+        const result = await res.json();
+        if (!result.success) return;
+
+        appState.traslados = result.data;
+
+        // Cálculos de KPIs de traslados para el contexto actual
+        const entrantes = result.data.filter(t => t.sede_destino === appState.currentSede && t.tipo_inventario_destino === appState.currentInventario);
+        const entrantesPendientes = entrantes.filter(t => t.estado === 'PENDIENTE');
+
+        const salientes = result.data.filter(t => t.sede_origen === appState.currentSede && t.tipo_inventario_origen === appState.currentInventario);
+        const salientesTransito = salientes.filter(t => t.estado === 'PENDIENTE');
+
+        const aceptados = result.data.filter(t => t.estado === 'ACEPTADO');
+        const rechazados = result.data.filter(t => t.estado === 'RECHAZADO');
+
+        // Actualizar contadores en KPI Cards
+        const kpiEntrantes = document.getElementById('kpi-traslados-entrantes');
+        if (kpiEntrantes) kpiEntrantes.textContent = entrantesPendientes.length;
+
+        const kpiSalientes = document.getElementById('kpi-traslados-salientes');
+        if (kpiSalientes) kpiSalientes.textContent = salientesTransito.length;
+
+        const kpiAceptados = document.getElementById('kpi-traslados-aceptados');
+        if (kpiAceptados) kpiAceptados.textContent = aceptados.length;
+
+        const kpiRechazados = document.getElementById('kpi-traslados-rechazados');
+        if (kpiRechazados) kpiRechazados.textContent = rechazados.length;
+
+        // Badges en las pestañas internas
+        const tabBadgeEntrantes = document.getElementById('tab-badge-entrantes');
+        if (tabBadgeEntrantes) {
+            tabBadgeEntrantes.textContent = entrantesPendientes.length;
+            tabBadgeEntrantes.style.display = entrantesPendientes.length > 0 ? 'inline-block' : 'none';
+        }
+
+        const tabBadgeSalientes = document.getElementById('tab-badge-salientes');
+        if (tabBadgeSalientes) {
+            tabBadgeSalientes.textContent = salientesTransito.length;
+            tabBadgeSalientes.style.display = salientesTransito.length > 0 ? 'inline-block' : 'none';
+        }
+
+        // Renderizar tablas
+        renderTrasladosEntrantesTable(entrantes);
+        renderTrasladosSalientesTable(salientes);
+        renderHistoricoTrasladosTable(result.data);
+    } catch (err) {
+        console.error('Error al cargar traslados:', err);
+    }
+}
+
+function renderTrasladosEntrantesTable(traslados) {
+    const tbody = document.getElementById('table-traslados-entrantes-body');
+    if (!tbody) return;
+
+    if (traslados.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-muted">No hay traslados entrantes registrados para ${appState.currentSede} (${appState.currentInventario}).</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = traslados.map(t => {
+        let badgeEstado = 'bg-warning text-dark';
+        if (t.estado === 'ACEPTADO') badgeEstado = 'bg-success';
+        if (t.estado === 'RECHAZADO') badgeEstado = 'bg-danger';
+        if (t.estado === 'CANCELADO') badgeEstado = 'bg-secondary';
+
+        const esPendiente = t.estado === 'PENDIENTE';
+
+        return `
+            <tr class="${esPendiente ? 'table-warning bg-opacity-25 fw-semibold' : ''}">
+                <td><strong class="text-primary font-monospace">${t.n_traslado}</strong></td>
+                <td>
+                    <div>${t.fecha_solicitud}</div>
+                    <small class="text-muted">${t.hora_solicitud}</small>
+                </td>
+                <td>
+                    <div class="fw-bold text-dark"><i class="bi bi-geo-alt-fill text-danger me-1"></i>${t.sede_origen}</div>
+                    <span class="badge bg-primary bg-opacity-10 text-primary border">${t.tipo_inventario_origen}</span>
+                </td>
+                <td>
+                    <strong class="text-dark">${t.codigo_item}</strong> - ${t.nombre_item}
+                </td>
+                <td class="text-end fw-bold text-primary fs-6">${t.cantidad} ${t.unidad}</td>
+                <td>
+                    <div>${t.responsable_solicita}</div>
+                    <small class="text-muted font-monospace">${t.documento_referencia || '-'}</small>
+                </td>
+                <td class="small text-muted">${t.observaciones || '-'}</td>
+                <td class="text-center">
+                    <span class="badge ${badgeEstado} px-2 py-1">${t.estado}</span>
+                </td>
+                <td class="text-center">
+                    ${esPendiente ? `
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-success btn-sm px-2 py-1 shadow-sm" onclick="abrirModalAceptarTraslado(${t.id})" title="Aceptar y recibir en esta bodega central">
+                                <i class="bi bi-check-lg me-1"></i> Aceptar
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm px-2 py-1" onclick="abrirModalRechazarTraslado(${t.id})" title="Rechazar traslado">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                    ` : `
+                        <small class="text-muted">${t.fecha_resolucion || 'Procesado'}</small>
+                    `}
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function renderTrasladosSalientesTable(traslados) {
+    const tbody = document.getElementById('table-traslados-salientes-body');
+    if (!tbody) return;
+
+    if (traslados.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center py-4 text-muted">No se han emitido traslados salientes desde ${appState.currentSede} (${appState.currentInventario}).</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = traslados.map(t => {
+        let badgeEstado = 'bg-warning text-dark';
+        if (t.estado === 'ACEPTADO') badgeEstado = 'bg-success';
+        if (t.estado === 'RECHAZADO') badgeEstado = 'bg-danger';
+        if (t.estado === 'CANCELADO') badgeEstado = 'bg-secondary';
+
+        const esPendiente = t.estado === 'PENDIENTE';
+
+        return `
+            <tr>
+                <td><strong class="text-primary font-monospace">${t.n_traslado}</strong></td>
+                <td>
+                    <div>${t.fecha_solicitud}</div>
+                    <small class="text-muted">${t.hora_solicitud}</small>
+                </td>
+                <td>
+                    <div class="fw-bold text-dark"><i class="bi bi-geo-alt-fill text-danger me-1"></i>${t.sede_destino}</div>
+                    <span class="badge bg-info bg-opacity-10 text-info border">${t.tipo_inventario_destino}</span>
+                </td>
+                <td>
+                    <strong class="text-dark">${t.codigo_item}</strong> - ${t.nombre_item}
+                </td>
+                <td class="text-end fw-bold text-dark fs-6">${t.cantidad} ${t.unidad}</td>
+                <td>${t.responsable_solicita}</td>
+                <td class="font-monospace small">${t.documento_referencia || '-'}</td>
+                <td class="small text-muted">${t.observaciones || '-'}</td>
+                <td class="text-center">
+                    <span class="badge ${badgeEstado} px-2 py-1">${t.estado}</span>
+                </td>
+                <td class="text-center">
+                    ${esPendiente ? `
+                        <button class="btn btn-outline-secondary btn-sm px-2 py-0" onclick="cancelarTraslado(${t.id})" title="Cancelar solicitud de traslado">
+                            <i class="bi bi-slash-circle me-1"></i> Cancelar
+                        </button>
+                    ` : `
+                        <small class="text-muted">${t.responsable_recibe ? 'Recibido por ' + t.responsable_recibe : '-'}</small>
+                    `}
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function renderHistoricoTrasladosTable(traslados) {
+    const tbody = document.getElementById('table-traslados-historico-body');
+    if (!tbody) return;
+
+    if (traslados.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-muted">No existen registros en el historial de traslados.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = traslados.map(t => {
+        let badgeEstado = 'bg-warning text-dark';
+        if (t.estado === 'ACEPTADO') badgeEstado = 'bg-success';
+        if (t.estado === 'RECHAZADO') badgeEstado = 'bg-danger';
+        if (t.estado === 'CANCELADO') badgeEstado = 'bg-secondary';
+
+        return `
+            <tr>
+                <td><strong class="text-primary font-monospace">${t.n_traslado}</strong></td>
+                <td>
+                    <div>${t.fecha_solicitud}</div>
+                    <small class="text-muted">${t.hora_solicitud}</small>
+                </td>
+                <td>
+                    <div class="small">
+                        <strong class="text-primary">${t.sede_origen} [${t.tipo_inventario_origen}]</strong>
+                        <i class="bi bi-arrow-right mx-1 text-muted"></i>
+                        <strong class="text-success">${t.sede_destino} [${t.tipo_inventario_destino}]</strong>
+                    </div>
+                </td>
+                <td><strong>${t.codigo_item}</strong> - ${t.nombre_item}</td>
+                <td class="text-end fw-bold">${t.cantidad} ${t.unidad}</td>
+                <td>
+                    <div class="small"><span class="text-muted">Emisor:</span> ${t.responsable_solicita}</div>
+                    ${t.responsable_recibe ? `<div class="small"><span class="text-muted">Receptor:</span> ${t.responsable_recibe}</div>` : ''}
+                </td>
+                <td class="text-center">
+                    <span class="badge ${badgeEstado} px-2 py-1">${t.estado}</span>
+                </td>
+                <td class="small">
+                    <div>${t.fecha_resolucion || 'Pendiente'}</div>
+                    ${t.motivo_rechazo ? `<small class="text-danger">${t.motivo_rechazo}</small>` : ''}
+                </td>
+                <td class="small font-monospace">
+                    ${t.n_movimiento_salida ? `<div><span class="text-danger">Salida:</span> ${t.n_movimiento_salida}</div>` : ''}
+                    ${t.n_movimiento_entrada ? `<div><span class="text-success">Entrada:</span> ${t.n_movimiento_entrada}</div>` : ''}
+                    ${!t.n_movimiento_salida && !t.n_movimiento_entrada ? '<span class="text-muted">-</span>' : ''}
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function actualizarBadgesTraslados() {
+    try {
+        const res = await fetch(`${API_BASE}/traslados/pendientes-count`);
+        const result = await res.json();
+        if (!result.success || !result.data) return;
+
+        let totalCds = 0;
+        let totalMovilidad = 0;
+
+        result.data.forEach(c => {
+            if (c.sede_destino === appState.currentSede) {
+                if (c.tipo_inventario_destino === 'CDS') totalCds += c.total_pendientes;
+                if (c.tipo_inventario_destino === 'MOVILIDAD') totalMovilidad += c.total_pendientes;
+            }
+        });
+
+        const badgeCds = document.getElementById('sidebar-badge-traslados-cds');
+        if (badgeCds) {
+            badgeCds.textContent = totalCds;
+            badgeCds.style.display = totalCds > 0 ? 'inline-block' : 'none';
+        }
+
+        const badgeMov = document.getElementById('sidebar-badge-traslados-movilidad');
+        if (badgeMov) {
+            badgeMov.textContent = totalMovilidad;
+            badgeMov.style.display = totalMovilidad > 0 ? 'inline-block' : 'none';
+        }
+    } catch (err) {
+        console.warn('Error al actualizar badges de traslados:', err);
+    }
+}
+
+function openModalNuevoTraslado() {
+    const form = document.getElementById('form-nuevo-traslado');
+    if (form) form.reset();
+
+    // 1. Origen configurado con la sede e inventario activos
+    document.getElementById('tras-origen-sede-label').textContent = appState.currentSede;
+    document.getElementById('tras-origen-sede').value = appState.currentSede;
+
+    const invNombre = appState.currentInventario === 'MOVILIDAD' ? 'Inventario Movilidad' : 'Inventario CDS';
+    document.getElementById('tras-origen-inv-label').textContent = invNombre;
+    document.getElementById('tras-origen-tipo-inv').value = appState.currentInventario;
+
+    // 2. Destino: todas las bodegas centrales posibles excepto el origen exacto
+    const destinoSelect = document.getElementById('tras-destino-select');
+    if (destinoSelect) {
+        let html = '<option value="">-- Seleccionar Bodega Central Destino --</option>';
+        (appState.sedes || []).forEach(s => {
+            (appState.tipos_inventario || []).forEach(t => {
+                const esMismoOrigen = s.nombre === appState.currentSede && t.codigo === appState.currentInventario;
+                if (!esMismoOrigen) {
+                    html += `<option value="${s.nombre}|${t.codigo}">${s.nombre} • ${t.nombre}</option>`;
+                }
+            });
+        });
+        destinoSelect.innerHTML = html;
+    }
+
+    // 3. Llenar ítems del catálogo maestro
+    const itemSelect = document.getElementById('tras-item-select');
+    if (itemSelect) {
+        let html = '<option value="">-- Seleccionar Ítem del Catálogo Maestro --</option>';
+        appState.items.filter(i => i.estado === 'Activo').forEach(item => {
+            html += `<option value="${item.codigo}">${item.codigo} - ${item.nombre}</option>`;
+        });
+        itemSelect.innerHTML = html;
+    }
+
+    // 4. Ocultar info de ítem y resetear botón
+    const infoDiv = document.getElementById('tras-item-info');
+    if (infoDiv) infoDiv.style.display = 'none';
+
+    const btnSubmit = document.getElementById('btn-submit-traslado');
+    if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = '<i class="bi bi-send-fill me-1"></i> Emitir Traslado Pendiente';
+    }
+
+    const modalEl = document.getElementById('modalNuevoTraslado');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+function handleItemSelectInTraslado(codigo) {
+    const item = appState.items.find(i => String(i.codigo) === String(codigo));
+    const infoDiv = document.getElementById('tras-item-info');
+    const unidadLabel = document.getElementById('tras-unidad-label');
+
+    if (!item) {
+        if (infoDiv) infoDiv.style.display = 'none';
+        return;
+    }
+
+    document.getElementById('tras-preview-nombre').textContent = item.nombre;
+    document.getElementById('tras-preview-ubicacion').textContent = item.ubicacion_cds || 'A1';
+    if (unidadLabel) unidadLabel.textContent = item.unidad_medida;
+
+    infoDiv.style.display = 'block';
+    actualizarStockPreviewEnTraslado();
+}
+
+async function actualizarStockPreviewEnTraslado() {
+    const selectedCode = document.getElementById('tras-item-select')?.value;
+    if (!selectedCode) return;
+
+    const item = appState.items.find(i => String(i.codigo) === String(selectedCode));
+    if (!item) return;
+
+    const badgeEl = document.getElementById('tras-preview-stock');
+    const labelEl = document.getElementById('tras-preview-stock-label');
+
+    try {
+        const res = await fetch(`${API_BASE}/inventario/stock-bodega?codigo_item=${selectedCode}&bodega=CDS&sede=${encodeURIComponent(appState.currentSede)}&tipo_inventario=${encodeURIComponent(appState.currentInventario)}`);
+        const result = await res.json();
+        const stockActual = result.success ? result.stock : 0;
+
+        if (labelEl) {
+            labelEl.textContent = `Stock en ${appState.currentSede} [${appState.currentInventario}]:`;
+        }
+
+        if (badgeEl) {
+            if (stockActual <= 0) {
+                badgeEl.className = 'badge bg-danger fs-6';
+                badgeEl.textContent = `0 ${item.unidad_medida} (Sin existencias)`;
+            } else {
+                badgeEl.className = 'badge bg-success fs-6';
+                badgeEl.textContent = `${stockActual} ${item.unidad_medida}`;
+            }
+        }
+
+        validarCantidadTraslado(stockActual);
+    } catch (err) {
+        console.warn('Error al consultar stock de origen:', err);
+    }
+}
+
+function validarCantidadTraslado(stockVal = null) {
+    const cantInput = document.getElementById('tras-cantidad');
+    const badgeEl = document.getElementById('tras-preview-stock');
+    if (!cantInput || !badgeEl) return;
+
+    const stockText = badgeEl.textContent;
+    const stockAvailable = stockVal !== null ? stockVal : parseFloat(stockText);
+    const cant = parseFloat(cantInput.value) || 0;
+
+    if (!isNaN(stockAvailable) && cant > stockAvailable) {
+        cantInput.classList.add('is-invalid');
+    } else {
+        cantInput.classList.remove('is-invalid');
+    }
+}
+
+async function submitNuevoTraslado(e) {
+    e.preventDefault();
+
+    const destinoRaw = document.getElementById('tras-destino-select').value;
+    if (!destinoRaw || !destinoRaw.includes('|')) {
+        showToast('⚠️ Debe seleccionar una bodega central de destino válida.', 'warning');
+        return;
+    }
+
+    const [sede_destino, tipo_inventario_destino] = destinoRaw.split('|');
+    const codigo_item = parseInt(document.getElementById('tras-item-select').value, 10);
+    const cantidad = parseFloat(document.getElementById('tras-cantidad').value);
+    const responsable_solicita = document.getElementById('tras-solicitante').value.trim();
+    const documento_referencia = document.getElementById('tras-doc-ref').value.trim();
+    const observaciones = document.getElementById('tras-observaciones').value.trim();
+
+    const payload = {
+        sede_origen: appState.currentSede,
+        tipo_inventario_origen: appState.currentInventario,
+        sede_destino,
+        tipo_inventario_destino,
+        codigo_item,
+        cantidad,
+        responsable_solicita,
+        documento_referencia,
+        observaciones
+    };
+
+    const submitBtn = document.getElementById('btn-submit-traslado');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Emitiendo...';
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/traslados`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await res.json();
+        if (!result.success) {
+            showToast(`⚠️ ${result.error}`, 'danger');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="bi bi-send-fill me-1"></i> Emitir Traslado Pendiente';
+            }
+            return;
+        }
+
+        closeModal('modalNuevoTraslado');
+        showToast(`✅ ${result.message}`, 'success');
+
+        await recargarDatosContexto();
+    } catch (err) {
+        showToast(`Error al emitir traslado: ${err.message}`, 'danger');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="bi bi-send-fill me-1"></i> Emitir Traslado Pendiente';
+        }
+    }
+}
+
+function abrirModalAceptarTraslado(id) {
+    const traslado = appState.traslados.find(t => t.id === id);
+    if (!traslado) return;
+
+    document.getElementById('aceptar-tras-id').value = traslado.id;
+    document.getElementById('aceptar-tras-n').textContent = traslado.n_traslado;
+    document.getElementById('aceptar-tras-fecha').textContent = `${traslado.fecha_solicitud} ${traslado.hora_solicitud}`;
+    document.getElementById('aceptar-tras-origen').textContent = `${traslado.sede_origen} [${traslado.tipo_inventario_origen}]`;
+    document.getElementById('aceptar-tras-destino').textContent = `${traslado.sede_destino} [${traslado.tipo_inventario_destino}]`;
+    document.getElementById('aceptar-tras-item').textContent = `${traslado.codigo_item} - ${traslado.nombre_item}`;
+    document.getElementById('aceptar-tras-cantidad').textContent = `${traslado.cantidad} ${traslado.unidad}`;
+    document.getElementById('aceptar-tras-emisor').textContent = traslado.responsable_solicita;
+
+    const respInput = document.getElementById('aceptar-tras-responsable');
+    if (respInput) respInput.value = '';
+
+    const modalEl = document.getElementById('modalAceptarTraslado');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+async function ejecutarAceptarTraslado(e) {
+    e.preventDefault();
+
+    const id = document.getElementById('aceptar-tras-id').value;
+    const responsable_recibe = document.getElementById('aceptar-tras-responsable').value.trim();
+
+    if (!responsable_recibe) {
+        showToast('⚠️ Ingrese el nombre del responsable que recibe el material.', 'warning');
+        return;
+    }
+
+    const submitBtn = document.getElementById('btn-confirmar-aceptar-tras');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Procesando...';
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/traslados/${id}/aceptar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ responsable_recibe })
+        });
+
+        const result = await res.json();
+        if (!result.success) {
+            showToast(`⚠️ ${result.error}`, 'danger');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Confirmar y Aceptar Traslado';
+            }
+            return;
+        }
+
+        closeModal('modalAceptarTraslado');
+        showToast(`✅ ${result.message}`, 'success');
+
+        await recargarDatosContexto();
+    } catch (err) {
+        showToast(`Error al aceptar traslado: ${err.message}`, 'danger');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Confirmar y Aceptar Traslado';
+        }
+    }
+}
+
+function abrirModalRechazarTraslado(id) {
+    const traslado = appState.traslados.find(t => t.id === id);
+    if (!traslado) return;
+
+    document.getElementById('rechazar-tras-id').value = traslado.id;
+    document.getElementById('rechazar-tras-n').textContent = traslado.n_traslado;
+    document.getElementById('rechazar-tras-item').textContent = `${traslado.codigo_item} - ${traslado.nombre_item}`;
+    document.getElementById('rechazar-tras-ruta').textContent = `${traslado.sede_origen} [${traslado.tipo_inventario_origen}] ➔ ${traslado.sede_destino} [${traslado.tipo_inventario_destino}]`;
+    document.getElementById('rechazar-tras-cantidad').textContent = `${traslado.cantidad} ${traslado.unidad}`;
+
+    const motivoInput = document.getElementById('rechazar-tras-motivo');
+    if (motivoInput) motivoInput.value = '';
+
+    const modalEl = document.getElementById('modalRechazarTraslado');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+async function ejecutarRechazarTraslado(e) {
+    e.preventDefault();
+
+    const id = document.getElementById('rechazar-tras-id').value;
+    const motivo_rechazo = document.getElementById('rechazar-tras-motivo').value.trim();
+    const responsable_recibe = document.getElementById('rechazar-tras-responsable').value.trim();
+
+    if (!motivo_rechazo) {
+        showToast('⚠️ Debe indicar el motivo del rechazo del traslado.', 'warning');
+        return;
+    }
+
+    const submitBtn = document.getElementById('btn-confirmar-rechazar-tras');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Rechazando...';
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/traslados/${id}/rechazar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ motivo_rechazo, responsable_recibe })
+        });
+
+        const result = await res.json();
+        if (!result.success) {
+            showToast(`⚠️ ${result.error}`, 'danger');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="bi bi-x-octagon-fill me-1"></i> Confirmar Rechazo';
+            }
+            return;
+        }
+
+        closeModal('modalRechazarTraslado');
+        showToast(`ℹ️ ${result.message}`, 'warning');
+
+        await recargarDatosContexto();
+    } catch (err) {
+        showToast(`Error al rechazar traslado: ${err.message}`, 'danger');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="bi bi-x-octagon-fill me-1"></i> Confirmar Rechazo';
+        }
+    }
+}
+
+async function cancelarTraslado(id) {
+    const traslado = appState.traslados.find(t => t.id === id);
+    if (!traslado) return;
+
+    if (!confirm(`¿Está seguro de que desea cancelar la solicitud de traslado ${traslado.n_traslado}?`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/traslados/${id}/cancelar`, {
+            method: 'POST'
+        });
+
+        const result = await res.json();
+        if (!result.success) {
+            showToast(`⚠️ ${result.error}`, 'danger');
+            return;
+        }
+
+        showToast(`✅ ${result.message}`, 'info');
+        await recargarDatosContexto();
+    } catch (err) {
+        showToast(`Error al cancelar traslado: ${err.message}`, 'danger');
     }
 }
 

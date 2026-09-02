@@ -66,6 +66,11 @@
                     <span>Vencimientos CDS</span>
                     <span class="badge bg-danger ms-auto" id="sidebar-badge-vencidos-cds" style="display:none;">0</span>
                 </a>
+                <a href="#traslados" class="nav-link-custom" data-view="traslados" data-inv="CDS" onclick="seleccionarInventario('CDS', 'traslados')">
+                    <i class="bi bi-arrow-left-right"></i>
+                    <span>Traslados Pendientes</span>
+                    <span class="badge bg-danger ms-auto" id="sidebar-badge-traslados-cds" style="display:none;">0</span>
+                </a>
                 <a href="#reportes" class="nav-link-custom" data-view="reportes" data-inv="CDS" onclick="seleccionarInventario('CDS', 'reportes')">
                     <i class="bi bi-file-earmark-bar-graph"></i>
                     <span>Kardex CDS</span>
@@ -97,6 +102,11 @@
                     <i class="bi bi-calendar-event"></i>
                     <span>Vencimientos Mov.</span>
                     <span class="badge bg-danger ms-auto" id="sidebar-badge-vencidos-movilidad" style="display:none;">0</span>
+                </a>
+                <a href="#traslados" class="nav-link-custom" data-view="traslados" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'traslados')">
+                    <i class="bi bi-arrow-left-right"></i>
+                    <span>Traslados Pendientes</span>
+                    <span class="badge bg-danger ms-auto" id="sidebar-badge-traslados-movilidad" style="display:none;">0</span>
                 </a>
                 <a href="#reportes" class="nav-link-custom" data-view="reportes" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'reportes')">
                     <i class="bi bi-file-earmark-bar-graph"></i>
@@ -784,6 +794,197 @@
                     </div>
                 </section>
 
+                <!-- 7. VISTA TRASLADOS ENTRE BODEGAS CENTRALES (BANDEJA DE PENDIENTES) -->
+                <section id="view-traslados" class="app-view" style="display: none;">
+                    <!-- KPI SUMMARY TRASLADOS -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="card-kpi p-3 h-100 border-start border-danger border-4">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="kpi-label">Pendientes por Recibir</span>
+                                    <div class="kpi-icon bg-danger bg-opacity-10 text-danger">
+                                        <i class="bi bi-box-arrow-in-down"></i>
+                                    </div>
+                                </div>
+                                <div class="kpi-value text-danger" id="kpi-traslados-entrantes">0</div>
+                                <small class="text-muted" style="font-size: 0.75rem;">Requieren Aceptación / Recepción</small>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="card-kpi p-3 h-100 border-start border-warning border-4">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="kpi-label">Enviados en Tránsito</span>
+                                    <div class="kpi-icon bg-warning bg-opacity-10 text-warning">
+                                        <i class="bi bi-truck"></i>
+                                    </div>
+                                </div>
+                                <div class="kpi-value text-warning" id="kpi-traslados-salientes">0</div>
+                                <small class="text-muted" style="font-size: 0.75rem;">Esperando Aceptación en Destino</small>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="card-kpi p-3 h-100 border-start border-success border-4">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="kpi-label">Traslados Aceptados</span>
+                                    <div class="kpi-icon bg-success bg-opacity-10 text-success">
+                                        <i class="bi bi-check2-all"></i>
+                                    </div>
+                                </div>
+                                <div class="kpi-value text-success" id="kpi-traslados-aceptados">0</div>
+                                <small class="text-muted" style="font-size: 0.75rem;">Stock Transferido Exitosamente</small>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <div class="card-kpi p-3 h-100 border-start border-secondary border-4">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="kpi-label">Traslados Rechazados</span>
+                                    <div class="kpi-icon bg-secondary bg-opacity-10 text-secondary">
+                                        <i class="bi bi-x-circle"></i>
+                                    </div>
+                                </div>
+                                <div class="kpi-value text-secondary" id="kpi-traslados-rechazados">0</div>
+                                <small class="text-muted" style="font-size: 0.75rem;">Sin Movimiento de Stock</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CARD PRINCIPAL DE TRASLADOS -->
+                    <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+                            <div>
+                                <h5 class="fw-bold mb-1 text-dark">
+                                    <i class="bi bi-arrow-left-right text-primary me-2"></i>Traslados entre Bodegas Centrales
+                                </h5>
+                                <p class="text-muted mb-0 small">
+                                    Módulo de emisión, recepción y control de transferencias entre sedes y tipos de inventario.
+                                </p>
+                            </div>
+                            <div class="d-flex align-items-center flex-wrap gap-2">
+                                <button class="btn btn-primary btn-sm px-3 shadow-sm d-flex align-items-center fw-semibold" onclick="openModalNuevoTraslado()">
+                                    <i class="bi bi-plus-circle-fill me-2"></i>
+                                    <span>Emitir Nuevo Traslado</span>
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm px-3" onclick="loadTraslados()">
+                                    <i class="bi bi-arrow-clockwise me-1"></i> Actualizar
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- BUSCADOR Y PESTAÑAS -->
+                        <div class="row g-3 align-items-center mb-3">
+                            <div class="col-12 col-md-6">
+                                <ul class="nav nav-pills custom-pills" id="trasladosTabs" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link active fw-semibold small d-flex align-items-center gap-2" id="tab-traslados-entrantes" data-bs-toggle="pill" data-bs-target="#pane-traslados-entrantes" type="button" role="tab">
+                                            <i class="bi bi-box-arrow-in-down"></i>
+                                            <span>Entrantes (Por Recibir)</span>
+                                            <span class="badge bg-danger rounded-pill" id="tab-badge-entrantes" style="display:none;">0</span>
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link fw-semibold small d-flex align-items-center gap-2" id="tab-traslados-salientes" data-bs-toggle="pill" data-bs-target="#pane-traslados-salientes" type="button" role="tab">
+                                            <i class="bi bi-box-arrow-up-right"></i>
+                                            <span>Salientes (Enviados)</span>
+                                            <span class="badge bg-warning text-dark rounded-pill" id="tab-badge-salientes" style="display:none;">0</span>
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link fw-semibold small d-flex align-items-center gap-2" id="tab-traslados-historico" data-bs-toggle="pill" data-bs-target="#pane-traslados-historico" type="button" role="tab">
+                                            <i class="bi bi-clock-history"></i>
+                                            <span>Historial General</span>
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="col-12 col-md-6 text-md-end">
+                                <div class="input-group input-group-sm ms-auto" style="max-width: 320px;">
+                                    <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+                                    <input type="text" class="form-control" id="filter-traslados-search" placeholder="Buscar traslado, ítem, guía..." oninput="loadTraslados()">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB CONTENT -->
+                        <div class="tab-content" id="trasladosTabsContent">
+                            <!-- PESTAÑA 1: TRASLADOS ENTRANTES -->
+                            <div class="tab-pane fade show active" id="pane-traslados-entrantes" role="tabpanel">
+                                <div class="alert alert-info border-info border-opacity-25 bg-info bg-opacity-10 small py-2 px-3 mb-3 d-flex align-items-center gap-2">
+                                    <i class="bi bi-info-circle-fill text-info fs-5"></i>
+                                    <span>
+                                        <strong>Bandeja de Recepción:</strong> Traslados despachados por otras bodegas centrales hacia esta sede. Al <strong>Aceptar</strong>, el stock se descontará en origen y se cargará automáticamente en esta bodega.
+                                    </span>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle table-custom mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>N° Traslado</th>
+                                                <th>Fecha Solicitud</th>
+                                                <th>Bodega Origen</th>
+                                                <th>Ítem a Recibir</th>
+                                                <th class="text-end">Cantidad</th>
+                                                <th>Solicitante / Guía</th>
+                                                <th>Observaciones</th>
+                                                <th class="text-center">Estado</th>
+                                                <th class="text-center" style="min-width: 140px;">Acción</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="table-traslados-entrantes-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- PESTAÑA 2: TRASLADOS SALIENTES -->
+                            <div class="tab-pane fade" id="pane-traslados-salientes" role="tabpanel">
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle table-custom mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>N° Traslado</th>
+                                                <th>Fecha Solicitud</th>
+                                                <th>Bodega Destino</th>
+                                                <th>Ítem Enviado</th>
+                                                <th class="text-end">Cantidad</th>
+                                                <th>Solicitante</th>
+                                                <th>Guía / Ref.</th>
+                                                <th>Observaciones</th>
+                                                <th class="text-center">Estado</th>
+                                                <th class="text-center">Acción</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="table-traslados-salientes-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- PESTAÑA 3: HISTORIAL GENERAL -->
+                            <div class="tab-pane fade" id="pane-traslados-historico" role="tabpanel">
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle table-custom mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>N° Traslado</th>
+                                                <th>Fecha</th>
+                                                <th>Ruta (Origen ➔ Destino)</th>
+                                                <th>Ítem</th>
+                                                <th class="text-end">Cantidad</th>
+                                                <th>Solicita / Recibe</th>
+                                                <th class="text-center">Estado</th>
+                                                <th>Resolución / Motivo</th>
+                                                <th>Movs. Generados</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="table-traslados-historico-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- 8. VISTA BASE DE DATOS Y BACKUPS -->
                 <section id="view-database" class="app-view" style="display: none;">
                     <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
@@ -1399,6 +1600,218 @@
                         <i class="bi bi-trash3-fill me-1"></i> Eliminar y Revertir Stock
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Nuevo Traslado entre Bodegas Centrales -->
+    <div class="modal fade" id="modalNuevoTraslado" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+                <div class="modal-header modal-header-custom p-3">
+                    <h6 class="modal-title fw-bold text-white">
+                        <i class="bi bi-arrow-left-right text-warning me-2"></i>Emitir Solicitud de Traslado entre Bodegas Centrales
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="form-nuevo-traslado" onsubmit="submitNuevoTraslado(event)">
+                    <div class="modal-body p-4">
+                        <!-- ALERTA DE REGLA DE NEGOCIO -->
+                        <div class="alert alert-primary bg-primary bg-opacity-10 border-primary border-opacity-25 small py-2 px-3 mb-3 d-flex align-items-center gap-2">
+                            <i class="bi bi-info-circle-fill text-primary fs-5"></i>
+                            <span>
+                                <strong>Regla Operativa:</strong> Los traslados se realizan exclusivamente entre Bodegas Centrales. El stock <strong>no se descontará</strong> hasta que la bodega destino reciba y acepte este traslado.
+                            </span>
+                        </div>
+
+                        <div class="row g-3">
+                            <!-- ORIGEN -->
+                            <div class="col-12 col-md-6">
+                                <div class="card border rounded-3 p-3 bg-light h-100">
+                                    <label class="form-label fw-bold small text-primary mb-2">
+                                        <i class="bi bi-box-arrow-up-right me-1"></i>1. Bodega Central de Origen (Emisor)
+                                    </label>
+                                    <div class="mb-2">
+                                        <small class="text-muted d-block">Sede Emisora:</small>
+                                        <strong class="text-dark" id="tras-origen-sede-label">Sede Suroriental</strong>
+                                        <input type="hidden" id="tras-origen-sede">
+                                    </div>
+                                    <div>
+                                        <small class="text-muted d-block">Inventario / Bodega Central:</small>
+                                        <span class="badge bg-primary fs-6" id="tras-origen-inv-label">Inventario CDS</span>
+                                        <input type="hidden" id="tras-origen-tipo-inv">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- DESTINO -->
+                            <div class="col-12 col-md-6">
+                                <div class="card border border-primary border-opacity-25 rounded-3 p-3 bg-white h-100 shadow-sm">
+                                    <label class="form-label fw-bold small text-success mb-2">
+                                        <i class="bi bi-box-arrow-in-down me-1"></i>2. Bodega Central de Destino (Receptor) <span class="text-danger">*</span>
+                                    </label>
+                                    <select class="form-select bg-light fw-bold text-dark mb-2" id="tras-destino-select" required onchange="actualizarStockPreviewEnTraslado()">
+                                        <option value="">-- Seleccionar Bodega Central Destino --</option>
+                                    </select>
+                                    <small class="text-muted" style="font-size: 0.75rem;">
+                                        Selecciona la sede y tipo de inventario central receptor.
+                                    </small>
+                                </div>
+                            </div>
+
+                            <!-- ITEM -->
+                            <div class="col-12 col-md-8">
+                                <label class="form-label fw-bold small">Seleccionar Ítem a Trasladar <span class="text-danger">*</span></label>
+                                <select class="form-select" id="tras-item-select" required onchange="handleItemSelectInTraslado(this.value)">
+                                    <option value="">-- Seleccionar Ítem del Catálogo Maestro --</option>
+                                </select>
+                            </div>
+
+                            <!-- CANTIDAD -->
+                            <div class="col-12 col-md-4">
+                                <label class="form-label fw-bold small">Cantidad a Trasladar <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <input type="number" step="0.01" min="0.01" class="form-control font-monospace fw-bold text-end" id="tras-cantidad" required placeholder="0.00" oninput="validarCantidadTraslado()">
+                                    <span class="input-group-text bg-light text-muted small" id="tras-unidad-label">Und</span>
+                                </div>
+                            </div>
+
+                            <!-- STOCK PREVIEW -->
+                            <div class="col-12" id="tras-item-info" style="display: none;">
+                                <div class="alert alert-light border d-flex align-items-center justify-content-between p-2 mb-0">
+                                    <div class="small">
+                                        <strong id="tras-preview-nombre" class="text-dark">Nombre Ítem</strong> |
+                                        <span>Ubicación Origen: <strong id="tras-preview-ubicacion">A1</strong></span>
+                                    </div>
+                                    <div class="small">
+                                        <span class="text-muted me-1" id="tras-preview-stock-label">Stock Disponible en Origen:</span>
+                                        <span class="badge bg-success fs-6" id="tras-preview-stock">0 Und</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- SOLICITANTE -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-bold small">Responsable Emisor / Despachador <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="tras-solicitante" required placeholder="Nombre del responsable que despacha">
+                            </div>
+
+                            <!-- DOCUMENTO / GUÍA -->
+                            <div class="col-12 col-md-6">
+                                <label class="form-label fw-bold small">N° Guía / Remisión de Despacho</label>
+                                <input type="text" class="form-control" id="tras-doc-ref" placeholder="Ej. REM-2026-045 (Opcional)">
+                            </div>
+
+                            <!-- OBSERVACIONES -->
+                            <div class="col-12">
+                                <label class="form-label fw-bold small">Observaciones / Motivo del Traslado</label>
+                                <textarea class="form-control" id="tras-observaciones" rows="2" placeholder="Motivo del traslado, transporte o detalles específicos..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light p-3">
+                        <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold shadow-sm" id="btn-submit-traslado">
+                            <i class="bi bi-send-fill me-1"></i> Emitir Traslado Pendiente
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Aceptar Traslado Entrante -->
+    <div class="modal fade" id="modalAceptarTraslado" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+                <div class="modal-header bg-success text-white p-3">
+                    <h6 class="modal-title fw-bold text-white">
+                        <i class="bi bi-box-arrow-in-down text-warning me-2"></i>Aceptar y Recibir Traslado en Bodega Central
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="form-aceptar-traslado" onsubmit="ejecutarAceptarTraslado(event)">
+                    <div class="modal-body p-4">
+                        <div class="alert alert-success bg-success bg-opacity-10 border-success border-opacity-25 small py-2 px-3 mb-3">
+                            <i class="bi bi-check-circle-fill text-success me-1"></i>
+                            Al confirmar, el sistema <strong>descontará automáticamente el stock de la bodega origen</strong> y lo <strong>cargará en esta bodega central</strong>.
+                        </div>
+
+                        <div class="card border rounded-3 p-3 bg-light mb-3">
+                            <div class="row g-2 small">
+                                <div class="col-6"><span class="text-muted">N° Traslado:</span> <strong class="text-primary" id="aceptar-tras-n">--</strong></div>
+                                <div class="col-6"><span class="text-muted">Fecha:</span> <span class="text-dark" id="aceptar-tras-fecha">--</span></div>
+                                <div class="col-12"><span class="text-muted">Origen:</span> <strong class="text-dark" id="aceptar-tras-origen">--</strong></div>
+                                <div class="col-12"><span class="text-muted">Destino:</span> <strong class="text-success" id="aceptar-tras-destino">--</strong></div>
+                                <div class="col-12"><span class="text-muted">Ítem:</span> <strong class="text-dark" id="aceptar-tras-item">--</strong></div>
+                                <div class="col-6"><span class="text-muted">Cantidad a Recibir:</span> <strong class="text-primary fs-6" id="aceptar-tras-cantidad">--</strong></div>
+                                <div class="col-6"><span class="text-muted">Despachado por:</span> <span class="text-dark" id="aceptar-tras-emisor">--</span></div>
+                            </div>
+                        </div>
+
+                        <input type="hidden" id="aceptar-tras-id">
+
+                        <div class="mb-2">
+                            <label class="form-label fw-bold small">Nombre del Responsable que Recibe en Bodega <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="aceptar-tras-responsable" required placeholder="Nombre de quien recibe y verifica el material">
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light p-3">
+                        <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success btn-sm px-4 fw-bold shadow-sm" id="btn-confirmar-aceptar-tras">
+                            <i class="bi bi-check2-circle me-1"></i> Confirmar y Aceptar Traslado
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Rechazar Traslado -->
+    <div class="modal fade" id="modalRechazarTraslado" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+                <div class="modal-header bg-danger text-white p-3">
+                    <h6 class="modal-title fw-bold text-white">
+                        <i class="bi bi-x-circle-fill text-warning me-2"></i>Rechazar Solicitud de Traslado
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="form-rechazar-traslado" onsubmit="ejecutarRechazarTraslado(event)">
+                    <div class="modal-body p-4">
+                        <div class="alert alert-warning border-warning small py-2 px-3 mb-3">
+                            <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+                            El traslado será marcado como <strong>RECHAZADO</strong> y <strong>no se alterará el stock</strong> de ninguna de las bodegas.
+                        </div>
+
+                        <div class="card border rounded-3 p-3 bg-light mb-3">
+                            <div class="row g-2 small">
+                                <div class="col-6"><span class="text-muted">N° Traslado:</span> <strong class="text-danger" id="rechazar-tras-n">--</strong></div>
+                                <div class="col-6"><span class="text-muted">Ítem:</span> <strong class="text-dark" id="rechazar-tras-item">--</strong></div>
+                                <div class="col-12"><span class="text-muted">Ruta:</span> <span class="text-dark" id="rechazar-tras-ruta">--</span></div>
+                                <div class="col-12"><span class="text-muted">Cantidad:</span> <strong class="text-dark" id="rechazar-tras-cantidad">--</strong></div>
+                            </div>
+                        </div>
+
+                        <input type="hidden" id="rechazar-tras-id">
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Responsable que Rechaza</label>
+                            <input type="text" class="form-control form-control-sm" id="rechazar-tras-responsable" placeholder="Nombre de quien revisó">
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label fw-bold small">Motivo del Rechazo <span class="text-danger">*</span></label>
+                            <textarea class="form-control" id="rechazar-tras-motivo" rows="3" required placeholder="Ej. Material no recibido físicamente, cantidades no coinciden con la guía, ítem averiado en tránsito..."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light p-3">
+                        <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-danger btn-sm px-4 fw-bold shadow-sm" id="btn-confirmar-rechazar-tras">
+                            <i class="bi bi-x-octagon-fill me-1"></i> Confirmar Rechazo
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

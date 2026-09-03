@@ -159,15 +159,83 @@ function asegurarSubmenuAbierto(invId) {
 }
 
 // ==============================================================
-// 1.1. AUTENTICACIÓN, SESIONES Y ROLES
+// 1.1. AUTENTICACIÓN, SESIONES, ROLES Y CONTROL DE INACTIVIDAD
 // ==============================================================
+const INACTIVITY_LIMIT_MS = 30 * 60 * 1000; // 30 minutos de inactividad
+let lastActivityThrottle = 0;
+
+function registrarActividadUsuario() {
+    const now = Date.now();
+    // Throttle para no saturar localStorage en cada milisegundo de movimiento de mouse
+    if (now - lastActivityThrottle > 2000) {
+        lastActivityThrottle = now;
+        localStorage.setItem('inventario_last_activity', now.toString());
+    }
+}
+
+function iniciarDetectorInactividad() {
+    // Registrar actividad inicial
+    if (!localStorage.getItem('inventario_last_activity')) {
+        localStorage.setItem('inventario_last_activity', Date.now().toString());
+    }
+
+    // Escuchar eventos de interacción del usuario
+    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'].forEach(eventType => {
+        window.addEventListener(eventType, registrarActividadUsuario, { passive: true });
+    });
+
+    // Verificación periódica cada 10 segundos
+    setInterval(() => {
+        if (!appState.currentUser) return;
+
+        const lastActivityStr = localStorage.getItem('inventario_last_activity');
+        const lastActivity = lastActivityStr ? parseInt(lastActivityStr, 10) : Date.now();
+        const diff = Date.now() - lastActivity;
+
+        if (diff >= INACTIVITY_LIMIT_MS) {
+            cerrarSesionPorInactividad();
+        }
+    }, 10000);
+}
+
+function cerrarSesionPorInactividad() {
+    appState.currentUser = null;
+    localStorage.removeItem('inventario_user');
+    localStorage.removeItem('inventario_last_activity');
+
+    const loginScreen = document.getElementById('login-screen');
+    if (loginScreen) loginScreen.style.display = 'flex';
+
+    const alertBox = document.getElementById('login-alert');
+    if (alertBox) {
+        alertBox.className = 'alert alert-warning py-2 small fw-semibold text-dark';
+        alertBox.innerHTML = '<i class="bi bi-clock-history me-2 fs-6"></i>Su sesión ha expirado por inactividad (30 minutos sin movimiento). Por favor, inicie sesión nuevamente.';
+        alertBox.style.display = 'block';
+    }
+
+    showToast('⚠️ Sesión cerrada por inactividad (30 min).', 'warning');
+}
+
 function checkAuth() {
+    iniciarDetectorInactividad();
     const user = appState.currentUser;
     const loginScreen = document.getElementById('login-screen');
     if (!user) {
         if (loginScreen) loginScreen.style.display = 'flex';
         return false;
     }
+
+    // Comprobar si ya excedió el tiempo al cargar
+    const lastActivityStr = localStorage.getItem('inventario_last_activity');
+    if (lastActivityStr) {
+        const lastActivity = parseInt(lastActivityStr, 10);
+        if (Date.now() - lastActivity >= INACTIVITY_LIMIT_MS) {
+            cerrarSesionPorInactividad();
+            return false;
+        }
+    }
+
+    localStorage.setItem('inventario_last_activity', Date.now().toString());
     if (loginScreen) loginScreen.style.display = 'none';
     actualizarWidgetUsuario(user);
     return true;
@@ -200,6 +268,7 @@ async function ejecutarLogin(e) {
 
     if (!username || !password) {
         if (alertBox) {
+            alertBox.className = 'alert alert-danger py-2 small';
             alertBox.textContent = 'Ingrese su usuario y contraseña.';
             alertBox.style.display = 'block';
         }
@@ -222,7 +291,12 @@ async function ejecutarLogin(e) {
         if (result.success && result.user) {
             appState.currentUser = result.user;
             localStorage.setItem('inventario_user', JSON.stringify(result.user));
-            if (alertBox) alertBox.style.display = 'none';
+            localStorage.setItem('inventario_last_activity', Date.now().toString());
+            
+            if (alertBox) {
+                alertBox.style.display = 'none';
+                alertBox.className = 'alert alert-danger py-2 small';
+            }
             
             const loginScreen = document.getElementById('login-screen');
             if (loginScreen) loginScreen.style.display = 'none';
@@ -231,12 +305,14 @@ async function ejecutarLogin(e) {
             showToast(`👋 ¡Bienvenido de nuevo, ${result.user.nombre}!`, 'success');
         } else {
             if (alertBox) {
+                alertBox.className = 'alert alert-danger py-2 small';
                 alertBox.textContent = result.error || 'Credenciales no válidas.';
                 alertBox.style.display = 'block';
             }
         }
     } catch (err) {
         if (alertBox) {
+            alertBox.className = 'alert alert-danger py-2 small';
             alertBox.textContent = 'No fue posible conectar con el servidor.';
             alertBox.style.display = 'block';
         }
@@ -251,8 +327,15 @@ async function ejecutarLogin(e) {
 function cerrarSesion() {
     appState.currentUser = null;
     localStorage.removeItem('inventario_user');
+    localStorage.removeItem('inventario_last_activity');
     const loginScreen = document.getElementById('login-screen');
     if (loginScreen) loginScreen.style.display = 'flex';
+    
+    const alertBox = document.getElementById('login-alert');
+    if (alertBox) {
+        alertBox.style.display = 'none';
+        alertBox.className = 'alert alert-danger py-2 small';
+    }
     showToast('🔒 Sesión cerrada exitosamente.', 'info');
 }
 

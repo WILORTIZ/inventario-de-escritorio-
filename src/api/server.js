@@ -4,6 +4,7 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 const XLSX = require('xlsx');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -349,27 +350,129 @@ const dbRun = (sql, params = []) => new Promise((resolve, reject) => {
 });
 
 // ==========================================
-// 0. AUTENTICACIÓN, USUARIOS Y PERMISOS
+// 0. AUTENTICACIÓN SEGURA, USUARIOS Y ROLES (PROTECCIÓN ANTI-INYECCIÓN Y BRUTE FORCE)
 // ==========================================
+
+// Control de intentos fallidos (Protección Anti-Fuerza Bruta)
+const loginRateLimit = new Map();
+
+function checkLoginRateLimit(key) {
+    const now = Date.now();
+    const entry = loginRateLimit.get(key);
+    if (!entry) return { allowed: true };
+
+    const lockDuration = 5 * 60 * 1000; // 5 minutos de bloqueo
+    if (entry.attempts >= 5) {
+        const timePassed = now - entry.lastAttempt;
+        if (timePassed < lockDuration) {
+            const minutesLeft = Math.ceil((lockDuration - timePassed) / 60000);
+            return { allowed: false, error: `Demasiados intentos fallidos. Por seguridad, la cuenta está bloqueada temporalmente. Intente nuevamente en ${minutesLeft} minuto(s).` };
+        } else {
+            loginRateLimit.delete(key);
+            return { allowed: true };
+        }
+    }
+    return { allowed: true };
+}
+
+function registerFailedLogin(key) {
+    const now = Date.now();
+    const entry = loginRateLimit.get(key) || { attempts: 0, lastAttempt: now };
+    entry.attempts += 1;
+    entry.lastAttempt = now;
+    loginRateLimit.set(key, entry);
+}
+
+function clearFailedLogin(key) {
+    loginRateLimit.delete(key);
+}
+
+// Helpers de Seguridad Criptográfica (PBKDF2 + Timing-Safe Equal)
+function createPasswordHash(password) {
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+    return `${salt}$${hash}`;
+}
+
+function verifyPassword(inputPassword, storedPassword) {
+    if (typeof inputPassword !== 'string' || typeof storedPassword !== 'string') return false;
+    if (!inputPassword || !storedPassword) return false;
+
+    // Compatibilidad transparente con contraseñas en texto plano (ej. usuario inicial)
+    if (!storedPassword.includes('$')) {
+        return inputPassword === storedPassword;
+    }
+
+    try {
+        const [salt, hash] = storedPassword.split('$');
+        if (!salt || !hash) return false;
+        const computed = crypto.pbkdf2Sync(inputPassword, salt, 10000, 64, 'sha512').toString('hex');
+        const computedBuf = Buffer.from(computed);
+        const hashBuf = Buffer.from(hash);
+        if (computedBuf.length !== hashBuf.length) return false;
+        return crypto.timingSafeEqual(computedBuf, hashBuf);
+    } catch (e) {
+        return false;
+    }
+}
+
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-        if (!username || !password) {
-            return res.status(400).json({ success: false, error: 'Debe ingresar usuario y contraseña.' });
+
+        // 1. Validación estricta de tipos de datos (Previene Type Confusion, Inyecciones de Objetos / NoSQL)
+        if (typeof username !== 'string' || typeof password !== 'string') {
+            return res.status(400).json({ success: false, error: 'Parámetros de autenticación inválidos.' });
         }
 
-        const user = await dbGet(`SELECT id, username, password, nombre, rol, estado, permisos FROM usuarios WHERE LOWER(username) = LOWER(?)`, [username.trim()]);
+        const cleanUsername = username.trim();
+        const clientIp = req.ip || req.connection.remoteAddress || 'local';
+        const rateLimitKey = `${clientIp}_${cleanUsername.toLowerCase()}`;
+
+        // 2. Control de Fuerza Bruta / Rate Limiting
+        const rateCheck = checkLoginRateLimit(rateLimitKey);
+        if (!rateCheck.allowed) {
+            return res.status(429).json({ success: false, error: rateCheck.error });
+        }
+
+        // 3. Sanitización de caracteres permitidos en el usuario (Solo alfanuméricos, guiones, puntos y @)
+        const usernameRegex = /^[a-zA-Z0-9_.\-@]{3,50}$/;
+        if (!usernameRegex.test(cleanUsername)) {
+            registerFailedLogin(rateLimitKey);
+            return res.status(401).json({ success: false, error: 'Usuario o contraseña incorrectos.' });
+        }
+
+        if (password.length > 128) {
+            registerFailedLogin(rateLimitKey);
+            return res.status(401).json({ success: false, error: 'Usuario o contraseña incorrectos.' });
+        }
+
+        // 4. Consulta SQL 100% parametrizada (Inmune a SQL Injection estándar e invertida)
+        const user = await dbGet(`SELECT id, username, password, nombre, rol, estado, permisos FROM usuarios WHERE LOWER(username) = LOWER(?)`, [cleanUsername]);
         if (!user) {
-            return res.status(401).json({ success: false, error: 'Usuario no encontrado en el sistema.' });
+            registerFailedLogin(rateLimitKey);
+            return res.status(401).json({ success: false, error: 'Usuario o contraseña incorrectos.' });
         }
 
         if (user.estado !== 'Activo') {
-            return res.status(403).json({ success: false, error: 'El usuario se encuentra inactivo. Contacte al administrador.' });
+            return res.status(403).json({ success: false, error: 'El usuario se encuentra inactivo. Contacte al administrador del sistema.' });
         }
 
-        if (user.password !== password) {
-            return res.status(401).json({ success: false, error: 'Contraseña incorrecta.' });
+        // 5. Verificación segura de clave con tiempo constante
+        const isPasswordValid = verifyPassword(password, user.password);
+        if (!isPasswordValid) {
+            registerFailedLogin(rateLimitKey);
+            return res.status(401).json({ success: false, error: 'Usuario o contraseña incorrectos.' });
         }
+
+        // Si la contraseña aún estaba en texto plano, actualizarla a hash PBKDF2 de forma transparente
+        if (!user.password.includes('$')) {
+            const secureHash = createPasswordHash(password);
+            await dbRun(`UPDATE usuarios SET password = ? WHERE id = ?`, [secureHash, user.id]);
+        }
+
+        // Limpiar registro de intentos fallidos al tener éxito
+        clearFailedLogin(rateLimitKey);
 
         const { password: _, ...userSafe } = user;
         res.json({
@@ -378,7 +481,7 @@ app.post('/api/auth/login', async (req, res) => {
             user: userSafe
         });
     } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
+        res.status(500).json({ success: false, error: 'Error interno en el servicio de autenticación.' });
     }
 });
 

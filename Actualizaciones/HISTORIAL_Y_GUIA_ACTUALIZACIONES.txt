@@ -7,7 +7,13 @@ para actualizar instalaciones existentes sin perder la base de datos de movimien
 
 HISTORIAL DE VERSIONES Y CAMBIOS:
 ----------------------------------------------------------------------
-[Versión 1.1.3] (Última versión estable oficial)
+[Versión 1.1.4] (Última versión estable oficial)
+- Cierre de sesión automático por inactividad tras 30 minutos sin movimiento (con detector de interacción unificado y aviso en pantalla de Login).
+- Blindaje total contra Inyección SQL, Inyección Invertida, Type Confusion y manipulación de parámetros en el inicio de sesión.
+- Cifrado seguro de contraseñas con algoritmo PBKDF2 (SHA-512 + Salt criptográfico) y comparación segura en tiempo constante (Timing-Safe).
+- Protección anti-fuerza bruta / Rate Limiting en intentos fallidos de autenticación.
+
+[Versión 1.1.3]
 - Menú lateral desplegable tipo acordeón con animaciones y flechas indicadoras (chevron) por inventario (CDS, Movilidad, Administración).
 - Módulo de Autenticación, Usuarios, Roles y Permisos (Fase 1).
 - Usuario inicial 'administrador' (Rol: Administrador del Sistema, Clave: 123456, Permisos: Acceso Total).

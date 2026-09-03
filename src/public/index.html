@@ -23,10 +23,10 @@
                 <div id="login-alert" class="alert alert-danger py-2 small" style="display: none;"></div>
                 
                 <div class="mb-3">
-                    <label class="form-label text-white-50 small fw-semibold">Usuario</label>
+                    <label class="form-label text-white-50 small fw-semibold">Número de Cédula</label>
                     <div class="input-group">
-                        <span class="input-group-text bg-dark border-secondary text-white-50"><i class="bi bi-person-fill"></i></span>
-                        <input type="text" class="form-control bg-dark text-white border-secondary" id="login-username" placeholder="Ingrese su usuario" required autocomplete="username" value="administrador">
+                        <span class="input-group-text bg-dark border-secondary text-white-50"><i class="bi bi-person-vcard-fill"></i></span>
+                        <input type="text" class="form-control bg-dark text-white border-secondary" id="login-username" placeholder="Ingrese su número de cédula" required autocomplete="username" value="1130683079">
                     </div>
                 </div>
 
@@ -34,7 +34,7 @@
                     <label class="form-label text-white-50 small fw-semibold">Contraseña</label>
                     <div class="input-group">
                         <span class="input-group-text bg-dark border-secondary text-white-50"><i class="bi bi-key-fill"></i></span>
-                        <input type="password" class="form-control bg-dark text-white border-secondary" id="login-password" placeholder="Ingrese su clave" required autocomplete="current-password" value="123456">
+                        <input type="password" class="form-control bg-dark text-white border-secondary" id="login-password" placeholder="Ingrese su clave" required autocomplete="current-password" value="8080809">
                     </div>
                 </div>
 
@@ -46,7 +46,7 @@
 
             <div class="text-center mt-4 pt-3 border-top border-white border-opacity-10">
                 <small class="text-white-50" style="font-size: 0.72rem;">
-                    <i class="bi bi-shield-check text-success me-1"></i> Acceso Seguro • Rol Administrador
+                    <i class="bi bi-shield-check text-success me-1"></i> Acceso Seguro Multi-Sede • Sistema de Usuarios
                 </small>
             </div>
         </div>
@@ -70,7 +70,7 @@
                 </div>
             </div>
 
-            <!-- SELECTOR DE SEDE OPERATIVA -->
+            <!-- SELECTOR DE SEDE OPERATIVA (MEDELLÍN OCULTA TEMPORALMENTE) -->
             <div class="px-3 py-2 border-bottom border-white border-opacity-10 bg-black bg-opacity-20">
                 <label class="form-label text-white-50 small mb-1 fw-bold text-uppercase d-flex align-items-center justify-content-between" style="font-size: 0.68rem; letter-spacing: 0.5px;">
                     <span><i class="bi bi-geo-alt-fill text-danger me-1"></i>Sede Activa</span>
@@ -78,7 +78,6 @@
                 </label>
                 <select class="form-select form-select-sm bg-dark text-white border-secondary fw-semibold shadow-sm" id="global-sede-select" onchange="cambiarSede(this.value)">
                     <option value="Sede Suroriental">🏢 Sede Suroriental</option>
-                    <option value="Sede Medellín">🏢 Sede Medellín</option>
                 </select>
             </div>
 
@@ -183,6 +182,10 @@
                     <a href="#database" class="nav-link-custom" data-view="database" onclick="seleccionarAdmin('database')">
                         <i class="bi bi-database-fill-gear"></i>
                         <span>Base de Datos & Backup</span>
+                    </a>
+                    <a href="#usuarios" class="nav-link-custom" data-view="usuarios" id="sidebar-nav-usuarios" style="display: none;" onclick="seleccionarAdmin('usuarios')">
+                        <i class="bi bi-people-fill"></i>
+                        <span>Usuarios y Permisos</span>
                     </a>
                 </div>
             </div>
@@ -1222,6 +1225,153 @@
                     </div>
                 </section>
 
+                <!-- 9. VISTA ADMINISTRADOR: GESTIÓN DE USUARIOS Y PERMISOS (PANEL OCULTO) -->
+                <section id="view-usuarios" class="app-view">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
+                        <div>
+                            <h4 class="fw-bold mb-1 text-dark d-flex align-items-center">
+                                <i class="bi bi-shield-lock-fill text-primary me-2"></i>Panel de Administración: Usuarios y Permisos
+                            </h4>
+                            <p class="text-muted small mb-0">Gestión centralizada de cuentas de usuario por Cédula y asignación de permisos especiales.</p>
+                        </div>
+                        <button class="btn btn-primary btn-sm px-3 shadow-sm d-flex align-items-center gap-2" onclick="abrirModalNuevoUsuario()">
+                            <i class="bi bi-person-plus-fill"></i>
+                            <span>Nuevo Usuario</span>
+                        </button>
+                    </div>
+
+                    <!-- PESTAÑAS DEL PANEL DE CONTROL -->
+                    <ul class="nav nav-pills mb-4 gap-2 bg-light p-2 rounded-3 border" id="adminTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active fw-semibold d-flex align-items-center gap-2" id="tab-btn-usuarios" data-bs-toggle="pill" data-bs-target="#tab-content-usuarios" type="button" role="tab">
+                                <i class="bi bi-people-fill"></i>
+                                <span>1. Gestión de Usuarios</span>
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link fw-semibold d-flex align-items-center gap-2" id="tab-btn-permisos" data-bs-toggle="pill" data-bs-target="#tab-content-permisos" type="button" role="tab">
+                                <i class="bi bi-key-fill"></i>
+                                <span>2. Permisos Adicionales</span>
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="adminTabsContent">
+                        <!-- PESTAÑA 1: GESTIÓN DE USUARIOS -->
+                        <div class="tab-pane fade show active" id="tab-content-usuarios" role="tabpanel">
+                            <div class="card card-custom border-0 shadow-sm rounded-4 overflow-hidden">
+                                <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2">
+                                    <span class="fw-bold text-dark"><i class="bi bi-person-lines-fill me-2 text-primary"></i>Usuarios Registrados en el Sistema</span>
+                                    <div class="input-group input-group-sm" style="max-width: 320px;">
+                                        <span class="input-group-text bg-light border-end-0"><i class="bi bi-search"></i></span>
+                                        <input type="text" class="form-control bg-light border-start-0" id="filtro-usuarios" placeholder="Buscar por cédula o nombre..." oninput="filtrarListaUsuarios(this.value)">
+                                    </div>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0" style="font-size: 0.88rem;">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Cédula (Login)</th>
+                                                <th>Nombre Completo</th>
+                                                <th>Correo Electrónico</th>
+                                                <th>Sede Asignada</th>
+                                                <th>Rol</th>
+                                                <th>Estado</th>
+                                                <th class="text-center">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tabla-usuarios-body">
+                                            <!-- Dinámico -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- PESTAÑA 2: PERMISOS ADICIONALES -->
+                        <div class="tab-pane fade" id="tab-content-permisos" role="tabpanel">
+                            <div class="row g-4">
+                                <div class="col-12 col-lg-4">
+                                    <div class="card card-custom border-0 shadow-sm rounded-4 p-4">
+                                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-person-check-fill text-primary me-2"></i>Seleccionar Usuario</h6>
+                                        <p class="text-muted small mb-3">Seleccione un usuario para visualizar y configurar sus permisos especiales adicionales a los de su rol.</p>
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold">Usuario / Cédula</label>
+                                            <select class="form-select" id="permisos-select-usuario" onchange="cargarPermisosUsuarioSeleccionado(this.value)">
+                                                <option value="">-- Seleccionar Usuario --</option>
+                                            </select>
+                                        </div>
+                                        <div class="p-3 bg-light rounded-3 border" id="permisos-user-summary" style="display: none;">
+                                            <div class="small fw-bold text-dark" id="perm-user-nombre">--</div>
+                                            <div class="text-muted small" id="perm-user-rol">Rol: --</div>
+                                            <div class="text-muted small" id="perm-user-sede">Sede: --</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-lg-8">
+                                    <div class="card card-custom border-0 shadow-sm rounded-4 p-4">
+                                        <div class="d-flex align-items-center justify-content-between mb-3">
+                                            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-shield-check text-success me-2"></i>Matriz de Permisos Adicionales</h6>
+                                            <button class="btn btn-success btn-sm px-4 fw-bold shadow-sm" id="btn-guardar-permisos-extra" onclick="guardarPermisosAdicionales()" disabled>
+                                                <i class="bi bi-save me-1"></i> Guardar Permisos
+                                            </button>
+                                        </div>
+                                        <p class="text-muted small mb-4">Marque las autorizaciones adicionales que desea habilitar para este usuario:</p>
+
+                                        <div class="row g-3">
+                                            <div class="col-12 col-md-6">
+                                                <div class="p-3 border rounded-3 bg-light h-100">
+                                                    <div class="form-check form-switch mb-2">
+                                                        <input class="form-check-input check-perm-extra" type="checkbox" id="perm-extra-crear-items" value="CREAR_ITEMS">
+                                                        <label class="form-check-label fw-bold text-dark" for="perm-extra-crear-items">Creación de Ítems</label>
+                                                    </div>
+                                                    <small class="text-muted d-block">Permite registrar nuevos códigos y productos en el catálogo maestro.</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <div class="p-3 border rounded-3 bg-light h-100">
+                                                    <div class="form-check form-switch mb-2">
+                                                        <input class="form-check-input check-perm-extra" type="checkbox" id="perm-extra-traslados" value="GESTIONAR_TRASLADOS">
+                                                        <label class="form-check-label fw-bold text-dark" for="perm-extra-traslados">Aprobación de Traslados</label>
+                                                    </div>
+                                                    <small class="text-muted d-block">Permite aceptar o rechazar traslados entre bodegas centrales.</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <div class="p-3 border rounded-3 bg-light h-100">
+                                                    <div class="form-check form-switch mb-2">
+                                                        <input class="form-check-input check-perm-extra" type="checkbox" id="perm-extra-eliminar-mov" value="ELIMINAR_MOVIMIENTOS">
+                                                        <label class="form-check-label fw-bold text-dark" for="perm-extra-eliminar-mov">Eliminar / Deshacer Movimientos</label>
+                                                    </div>
+                                                    <small class="text-muted d-block">Permite anular o revertir transacciones en el Libro Diario.</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <div class="p-3 border rounded-3 bg-light h-100">
+                                                    <div class="form-check form-switch mb-2">
+                                                        <input class="form-check-input check-perm-extra" type="checkbox" id="perm-extra-backups" value="EXPORTAR_BACKUPS">
+                                                        <label class="form-check-label fw-bold text-dark" for="perm-extra-backups">Copias de Seguridad (Backups)</label>
+                                                    </div>
+                                                    <small class="text-muted d-block">Permite exportar y restaurar la base de datos SQLite (.db) y JSON.</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-12">
+                                                <div class="p-3 border rounded-3 bg-light">
+                                                    <div class="form-check form-switch mb-2">
+                                                        <input class="form-check-input check-perm-extra" type="checkbox" id="perm-extra-bodegas" value="ADMINISTRAR_BODEGAS">
+                                                        <label class="form-check-label fw-bold text-dark" for="perm-extra-bodegas">Configurar Bodegas y Proyectos</label>
+                                                    </div>
+                                                    <small class="text-muted d-block">Permite crear y modificar bodegas satélites y frentes de obra.</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
             </main>
         </div>
     </div>
@@ -1999,6 +2149,83 @@
                         <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancelar</button>
                         <button type="submit" class="btn btn-danger btn-sm px-4 fw-bold shadow-sm" id="btn-confirmar-rechazar-tras">
                             <i class="bi bi-x-octagon-fill me-1"></i> Confirmar Rechazo
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Crear / Editar Usuario -->
+    <div class="modal fade" id="modalUsuario" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+                <div class="modal-header modal-header-custom p-3">
+                    <h6 class="modal-title fw-bold text-white" id="modalUsuarioTitle">
+                        <i class="bi bi-person-plus-fill text-info me-2"></i>Registrar Nuevo Usuario
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="form-usuario" onsubmit="submitFormUsuario(event)">
+                    <div class="modal-body p-4">
+                        <input type="hidden" id="usr-id">
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Número de Cédula <span class="text-danger">*</span> (Identificador de Login)</label>
+                            <input type="text" class="form-control" id="usr-cedula" required placeholder="Ej: 1130683079">
+                            <small class="text-muted" id="usr-cedula-help">La cédula será el usuario para iniciar sesión y no podrá modificarse una vez creada.</small>
+                        </div>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label fw-bold small">Nombre <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="usr-nombre" required placeholder="Ej: Giobani">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-bold small">Apellido</label>
+                                <input type="text" class="form-control" id="usr-apellido" placeholder="Ej: Lopez">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Correo Electrónico</label>
+                            <input type="email" class="form-control" id="usr-correo" placeholder="ejemplo@correo.com">
+                        </div>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label fw-bold small"><i class="bi bi-geo-alt-fill text-danger me-1"></i>Sede Asignada <span class="text-danger">*</span></label>
+                                <select class="form-select bg-light fw-semibold" id="usr-sede" required>
+                                    <option value="Sede Suroriental">Sede Suroriental</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-bold small">Rol del Sistema <span class="text-danger">*</span></label>
+                                <select class="form-select bg-light fw-semibold" id="usr-rol" required>
+                                    <option value="ADMINISTRADOR DE SEDE">ADMINISTRADOR DE SEDE</option>
+                                    <option value="ADMINISTRADOR">ADMINISTRADOR (General)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label fw-bold small">Estado</label>
+                                <select class="form-select" id="usr-estado">
+                                    <option value="Activo">Activo</option>
+                                    <option value="Inactivo">Inactivo</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-bold small" id="usr-password-label">Contraseña <span class="text-danger">*</span></label>
+                                <input type="password" class="form-control" id="usr-password" placeholder="Contraseña de acceso">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light p-3">
+                        <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold shadow-sm" id="btn-guardar-usuario">
+                            <i class="bi bi-check2-circle me-1"></i> Guardar Usuario
                         </button>
                     </div>
                 </form>

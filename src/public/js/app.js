@@ -104,6 +104,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     actualizarBadgesContexto();
     await recargarDatosContexto();
     await loadBodegasYProyectos();
+    await loadUsuarios();
 });
 
 // ==============================================================
@@ -235,6 +236,19 @@ function checkAuth() {
         }
     }
 
+    // Regla de Rol: Administrador de Sede fijado a su sede asignada
+    if (user.rol === 'ADMINISTRADOR DE SEDE' && user.sede) {
+        appState.currentSede = user.sede;
+        const globalSedeSelect = document.getElementById('global-sede-select');
+        if (globalSedeSelect) {
+            globalSedeSelect.value = user.sede;
+            globalSedeSelect.disabled = true; // Fijado exclusivamente a su sede
+        }
+    } else {
+        const globalSedeSelect = document.getElementById('global-sede-select');
+        if (globalSedeSelect) globalSedeSelect.disabled = false;
+    }
+
     localStorage.setItem('inventario_last_activity', Date.now().toString());
     if (loginScreen) loginScreen.style.display = 'none';
     actualizarWidgetUsuario(user);
@@ -249,11 +263,14 @@ function actualizarWidgetUsuario(user) {
     const username = document.getElementById('dropdown-user-username');
 
     const initial = user.nombre ? user.nombre.charAt(0).toUpperCase() : 'A';
+    const nombreCompleto = `${user.nombre} ${user.apellido || ''}`.trim();
+    const rolLabel = user.rol === 'ADMINISTRADOR' ? 'Administrador del Sistema' : 'Administrador de Sede';
+
     if (avatar) avatar.textContent = initial;
-    if (name) name.textContent = user.nombre || user.username;
-    if (rol) rol.textContent = user.rol === 'ADMINISTRADOR' ? 'Administrador del Sistema' : user.rol;
-    if (fullname) fullname.textContent = user.nombre || user.username;
-    if (username) username.textContent = `@${user.username}`;
+    if (name) name.textContent = nombreCompleto;
+    if (rol) rol.textContent = rolLabel;
+    if (fullname) fullname.textContent = nombreCompleto;
+    if (username) username.textContent = user.cedula ? `C.C. ${user.cedula}` : `@${user.username}`;
 }
 
 async function ejecutarLogin(e) {
@@ -269,7 +286,7 @@ async function ejecutarLogin(e) {
     if (!username || !password) {
         if (alertBox) {
             alertBox.className = 'alert alert-danger py-2 small';
-            alertBox.textContent = 'Ingrese su usuario y contraseña.';
+            alertBox.textContent = 'Ingrese su número de cédula y contraseña.';
             alertBox.style.display = 'block';
         }
         return;
@@ -292,6 +309,16 @@ async function ejecutarLogin(e) {
             appState.currentUser = result.user;
             localStorage.setItem('inventario_user', JSON.stringify(result.user));
             localStorage.setItem('inventario_last_activity', Date.now().toString());
+
+            // Si es administrador de sede, aplicar su sede asignada
+            if (result.user.rol === 'ADMINISTRADOR DE SEDE' && result.user.sede) {
+                appState.currentSede = result.user.sede;
+                const globalSedeSelect = document.getElementById('global-sede-select');
+                if (globalSedeSelect) {
+                    globalSedeSelect.value = result.user.sede;
+                    globalSedeSelect.disabled = true;
+                }
+            }
             
             if (alertBox) {
                 alertBox.style.display = 'none';
@@ -302,6 +329,8 @@ async function ejecutarLogin(e) {
             if (loginScreen) loginScreen.style.display = 'none';
 
             actualizarWidgetUsuario(result.user);
+            actualizarBadgesContexto();
+            await recargarDatosContexto();
             showToast(`👋 ¡Bienvenido de nuevo, ${result.user.nombre}!`, 'success');
         } else {
             if (alertBox) {
@@ -337,6 +366,288 @@ function cerrarSesion() {
         alertBox.className = 'alert alert-danger py-2 small';
     }
     showToast('🔒 Sesión cerrada exitosamente.', 'info');
+}
+
+// ==============================================================
+// 1.2. ADMINISTRACIÓN DE USUARIOS Y PERMISOS (PANEL DE CONTROL)
+// ==============================================================
+let listaUsuariosCache = [];
+
+async function loadUsuarios() {
+    try {
+        const res = await fetch(`${API_BASE}/usuarios`);
+        const result = await res.json();
+        if (result.success && Array.isArray(result.data)) {
+            listaUsuariosCache = result.data;
+            renderTablaUsuarios(listaUsuariosCache);
+            renderSelectorUsuariosPermisos(listaUsuariosCache);
+        }
+    } catch (e) {
+        console.error('Error cargando usuarios:', e);
+    }
+}
+
+function renderTablaUsuarios(usuarios) {
+    const tbody = document.getElementById('tabla-usuarios-body');
+    if (!tbody) return;
+
+    if (!usuarios || usuarios.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted">No hay usuarios registrados.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = usuarios.map(u => {
+        const rolBadge = u.rol === 'ADMINISTRADOR'
+            ? `<span class="badge bg-primary px-2 py-1"><i class="bi bi-shield-lock-fill me-1"></i>Administrador General</span>`
+            : `<span class="badge bg-info text-dark px-2 py-1"><i class="bi bi-building me-1"></i>Admin. Sede</span>`;
+        
+        const estadoBadge = u.estado === 'Activo'
+            ? `<span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">Activo</span>`
+            : `<span class="badge bg-secondary px-2 py-1">Inactivo</span>`;
+
+        const nombreCompleto = `${u.nombre} ${u.apellido || ''}`.trim();
+        const cedulaStr = u.cedula || u.username;
+
+        return `
+            <tr>
+                <td><strong class="text-dark"><i class="bi bi-person-vcard me-1 text-primary"></i>${cedulaStr}</strong></td>
+                <td class="fw-semibold">${nombreCompleto}</td>
+                <td class="text-muted small">${u.correo || '<em>Sin correo</em>'}</td>
+                <td><span class="badge bg-light text-dark border"><i class="bi bi-geo-alt-fill text-danger me-1"></i>${u.sede || 'Sede Suroriental'}</span></td>
+                <td>${rolBadge}</td>
+                <td>${estadoBadge}</td>
+                <td class="text-center">
+                    <button class="btn btn-outline-primary btn-sm px-2 py-1 me-1 shadow-sm" title="Editar Usuario" onclick="abrirModalEditarUsuario(${u.id})">
+                        <i class="bi bi-pencil-square"></i>
+                    </button>
+                    <button class="btn btn-outline-success btn-sm px-2 py-1 shadow-sm" title="Configurar Permisos" onclick="irAPestañaPermisosUsuario(${u.id})">
+                        <i class="bi bi-key-fill"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function filtrarListaUsuarios(query) {
+    const q = (query || '').toLowerCase().trim();
+    if (!q) {
+        renderTablaUsuarios(listaUsuariosCache);
+        return;
+    }
+    const filtrados = listaUsuariosCache.filter(u => 
+        (u.cedula && u.cedula.toLowerCase().includes(q)) ||
+        (u.nombre && u.nombre.toLowerCase().includes(q)) ||
+        (u.apellido && u.apellido.toLowerCase().includes(q)) ||
+        (u.correo && u.correo.toLowerCase().includes(q)) ||
+        (u.sede && u.sede.toLowerCase().includes(q)) ||
+        (u.rol && u.rol.toLowerCase().includes(q))
+    );
+    renderTablaUsuarios(filtrados);
+}
+
+function abrirModalNuevoUsuario() {
+    const form = document.getElementById('form-usuario');
+    if (form) form.reset();
+    document.getElementById('usr-id').value = '';
+    
+    const cedulaInput = document.getElementById('usr-cedula');
+    if (cedulaInput) {
+        cedulaInput.removeAttribute('readonly');
+        cedulaInput.disabled = false;
+    }
+    
+    document.getElementById('modalUsuarioTitle').innerHTML = '<i class="bi bi-person-plus-fill text-info me-2"></i>Registrar Nuevo Usuario';
+    document.getElementById('usr-password-label').innerHTML = 'Contraseña <span class="text-danger">*</span>';
+    document.getElementById('usr-password').required = true;
+    document.getElementById('usr-cedula-help').textContent = 'La cédula será el usuario para iniciar sesión y no podrá modificarse una vez creada.';
+
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalUsuario'));
+    modal.show();
+}
+
+function abrirModalEditarUsuario(id) {
+    const user = listaUsuariosCache.find(u => u.id === id);
+    if (!user) return;
+
+    document.getElementById('usr-id').value = user.id;
+    
+    const cedulaInput = document.getElementById('usr-cedula');
+    if (cedulaInput) {
+        cedulaInput.value = user.cedula || user.username;
+        cedulaInput.setAttribute('readonly', 'true');
+        cedulaInput.disabled = false;
+    }
+
+    document.getElementById('usr-nombre').value = user.nombre || '';
+    document.getElementById('usr-apellido').value = user.apellido || '';
+    document.getElementById('usr-correo').value = user.correo || '';
+    document.getElementById('usr-sede').value = user.sede || 'Sede Suroriental';
+    document.getElementById('usr-rol').value = user.rol || 'ADMINISTRADOR DE SEDE';
+    document.getElementById('usr-estado').value = user.estado || 'Activo';
+    
+    document.getElementById('usr-password').value = '';
+    document.getElementById('usr-password').required = false;
+    document.getElementById('usr-password-label').innerHTML = 'Nueva Contraseña (Opcional)';
+    document.getElementById('usr-cedula-help').textContent = '🔒 El número de cédula es inmutable.';
+    document.getElementById('modalUsuarioTitle').innerHTML = `<i class="bi bi-person-gear text-warning me-2"></i>Editar Usuario: ${user.nombre} (${user.cedula})`;
+
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalUsuario'));
+    modal.show();
+}
+
+async function submitFormUsuario(e) {
+    e.preventDefault();
+    const id = document.getElementById('usr-id').value;
+    const cedula = document.getElementById('usr-cedula').value.trim();
+    const nombre = document.getElementById('usr-nombre').value.trim();
+    const apellido = document.getElementById('usr-apellido').value.trim();
+    const correo = document.getElementById('usr-correo').value.trim();
+    const sede = document.getElementById('usr-sede').value;
+    const rol = document.getElementById('usr-rol').value;
+    const estado = document.getElementById('usr-estado').value;
+    const password = document.getElementById('usr-password').value;
+
+    const btn = document.getElementById('btn-guardar-usuario');
+    if (btn) btn.disabled = true;
+
+    try {
+        if (id) {
+            // Edición
+            const payload = { nombre, apellido, correo, sede, rol, estado };
+            if (password && password.trim().length > 0) payload.password = password;
+
+            const res = await fetch(`${API_BASE}/usuarios/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await res.json();
+            if (result.success) {
+                showToast(`✅ Usuario '${nombre}' actualizado correctamente.`);
+                closeModal('modalUsuario');
+                await loadUsuarios();
+            } else {
+                showToast(result.error || 'Error actualizando usuario.', 'danger');
+            }
+        } else {
+            // Creación
+            if (!password) {
+                showToast('Debe asignar una contraseña al nuevo usuario.', 'warning');
+                return;
+            }
+
+            const payload = { cedula, nombre, apellido, correo, sede, rol, password, permisos_adicionales: [] };
+            const res = await fetch(`${API_BASE}/usuarios`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await res.json();
+            if (result.success) {
+                showToast(`🎉 Usuario '${nombre}' con cédula ${cedula} creado exitosamente.`);
+                closeModal('modalUsuario');
+                await loadUsuarios();
+            } else {
+                showToast(result.error || 'Error creando usuario.', 'danger');
+            }
+        }
+    } catch (err) {
+        showToast('Error de conexión con el servidor.', 'danger');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+function renderSelectorUsuariosPermisos(usuarios) {
+    const select = document.getElementById('permisos-select-usuario');
+    if (!select) return;
+
+    const currentVal = select.value;
+    select.innerHTML = '<option value="">-- Seleccionar Usuario --</option>' + usuarios.map(u => 
+        `<option value="${u.id}">${u.nombre} ${u.apellido || ''} (C.C. ${u.cedula || u.username}) - [${u.rol}]</option>`
+    ).join('');
+
+    if (currentVal) select.value = currentVal;
+}
+
+function irAPestañaPermisosUsuario(id) {
+    const tabBtn = document.getElementById('tab-btn-permisos');
+    if (tabBtn) {
+        const triggerEl = bootstrap.Tab.getOrCreateInstance(tabBtn);
+        triggerEl.show();
+    }
+    const select = document.getElementById('permisos-select-usuario');
+    if (select) {
+        select.value = id;
+        cargarPermisosUsuarioSeleccionado(id);
+    }
+}
+
+function cargarPermisosUsuarioSeleccionado(id) {
+    const summary = document.getElementById('permisos-user-summary');
+    const btnGuardar = document.getElementById('btn-guardar-permisos-extra');
+    const checks = document.querySelectorAll('.check-perm-extra');
+
+    checks.forEach(c => c.checked = false);
+
+    if (!id) {
+        if (summary) summary.style.display = 'none';
+        if (btnGuardar) btnGuardar.disabled = true;
+        return;
+    }
+
+    const user = listaUsuariosCache.find(u => String(u.id) === String(id));
+    if (!user) return;
+
+    if (summary) {
+        summary.style.display = 'block';
+        document.getElementById('perm-user-nombre').textContent = `${user.nombre} ${user.apellido || ''} (C.C. ${user.cedula || user.username})`;
+        document.getElementById('perm-user-rol').textContent = `Rol: ${user.rol}`;
+        document.getElementById('perm-user-sede').textContent = `Sede: ${user.sede || 'Sede Suroriental'}`;
+    }
+
+    const extras = Array.isArray(user.permisos_adicionales) ? user.permisos_adicionales : [];
+    checks.forEach(c => {
+        if (extras.includes(c.value) || user.rol === 'ADMINISTRADOR') {
+            c.checked = true;
+        }
+    });
+
+    if (btnGuardar) btnGuardar.disabled = false;
+}
+
+async function guardarPermisosAdicionales() {
+    const select = document.getElementById('permisos-select-usuario');
+    const id = select ? select.value : '';
+    if (!id) return;
+
+    const selectedPerms = [];
+    document.querySelectorAll('.check-perm-extra:checked').forEach(c => {
+        selectedPerms.push(c.value);
+    });
+
+    const btn = document.getElementById('btn-guardar-permisos-extra');
+    if (btn) btn.disabled = true;
+
+    try {
+        const res = await fetch(`${API_BASE}/usuarios/${id}/permisos`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ permisos_adicionales: selectedPerms })
+        });
+        const result = await res.json();
+        if (result.success) {
+            showToast('🔑 Permisos adicionales actualizados correctamente.');
+            await loadUsuarios();
+        } else {
+            showToast(result.error || 'Error actualizando permisos.', 'danger');
+        }
+    } catch (err) {
+        showToast('Error de comunicación con el servidor.', 'danger');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
 }
 
 function cambiarSede(sede) {

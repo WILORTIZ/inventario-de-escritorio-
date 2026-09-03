@@ -302,24 +302,53 @@ function ensureDatabaseSchema() {
             });
         });
 
-        // Tabla de Usuarios, Roles y Permisos
+        // Tabla de Usuarios, Roles y Permisos Multi-Sede
         db.run(`
             CREATE TABLE IF NOT EXISTS usuarios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
+                cedula TEXT UNIQUE,
+                username TEXT UNIQUE,
                 password TEXT NOT NULL,
                 nombre TEXT NOT NULL,
-                rol TEXT NOT NULL,
+                apellido TEXT NOT NULL DEFAULT '',
+                correo TEXT NOT NULL DEFAULT '',
+                sede TEXT NOT NULL DEFAULT 'Sede Suroriental',
+                rol TEXT NOT NULL DEFAULT 'ADMINISTRADOR DE SEDE',
                 estado TEXT DEFAULT 'Activo',
-                permisos TEXT DEFAULT 'ALL',
+                permisos TEXT DEFAULT 'SEDE_ALL',
+                permisos_adicionales TEXT DEFAULT '[]',
                 fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         `, () => {
-            db.get(`SELECT COUNT(*) as count FROM usuarios WHERE username = 'administrador'`, (err, row) => {
-                if (!err && (!row || row.count === 0)) {
+            // Migraciones seguras si la tabla ya existía
+            const cols = [
+                "ALTER TABLE usuarios ADD COLUMN cedula TEXT",
+                "ALTER TABLE usuarios ADD COLUMN apellido TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE usuarios ADD COLUMN correo TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE usuarios ADD COLUMN sede TEXT NOT NULL DEFAULT 'Sede Suroriental'",
+                "ALTER TABLE usuarios ADD COLUMN permisos_adicionales TEXT DEFAULT '[]'"
+            ];
+            cols.forEach(sql => db.run(sql, () => {}));
+            db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_cedula ON usuarios(cedula)`, () => {});
+
+            // 1. Usuario Administrador General Inicial (Cédula: 123456 o admin, Clave: 123456)
+            db.get(`SELECT * FROM usuarios WHERE cedula = '123456' OR cedula = 'admin' OR LOWER(username) = 'administrador'`, (err, row) => {
+                if (!err && !row) {
                     db.run(`
-                        INSERT INTO usuarios (username, password, nombre, rol, estado, permisos)
-                        VALUES ('administrador', '123456', 'Administrador', 'ADMINISTRADOR', 'Activo', 'ALL')
+                        INSERT INTO usuarios (cedula, username, password, nombre, apellido, correo, sede, rol, estado, permisos, permisos_adicionales)
+                        VALUES ('123456', 'administrador', '123456', 'Administrador', 'General', 'admin@inventario.com', 'Sede Suroriental', 'ADMINISTRADOR', 'Activo', 'ALL', '[]')
+                    `);
+                } else if (!err && row && (!row.cedula || row.cedula === 'admin')) {
+                    db.run(`UPDATE usuarios SET cedula = '123456', apellido = 'General', correo = 'admin@inventario.com', sede = 'Sede Suroriental', permisos_adicionales = '[]' WHERE id = ?`, [row.id]);
+                }
+            });
+
+            // 2. Usuario Gio (Giobani Lopez) - Administrador de Sede Suroriental (Cédula: 1130683079, Clave: 8080809)
+            db.get(`SELECT * FROM usuarios WHERE cedula = '1130683079'`, (err, row) => {
+                if (!err && !row) {
+                    db.run(`
+                        INSERT INTO usuarios (cedula, username, password, nombre, apellido, correo, sede, rol, estado, permisos, permisos_adicionales)
+                        VALUES ('1130683079', 'gio', '8080809', 'Giobani', 'Lopez', 'cawy9499@gmail.com', 'Sede Suroriental', 'ADMINISTRADOR DE SEDE', 'Activo', 'SEDE_ALL', '[]')
                     `);
                 }
             });
@@ -418,16 +447,17 @@ function verifyPassword(inputPassword, storedPassword) {
 
 app.post('/api/auth/login', async (req, res) => {
     try {
-        const { username, password } = req.body;
+        const rawCedula = req.body.cedula || req.body.username;
+        const password = req.body.password;
 
         // 1. Validación estricta de tipos de datos (Previene Type Confusion, Inyecciones de Objetos / NoSQL)
-        if (typeof username !== 'string' || typeof password !== 'string') {
-            return res.status(400).json({ success: false, error: 'Parámetros de autenticación inválidos.' });
+        if (typeof rawCedula !== 'string' || typeof password !== 'string' || !rawCedula || !password) {
+            return res.status(400).json({ success: false, error: 'Debe ingresar su número de cédula y contraseña.' });
         }
 
-        const cleanUsername = username.trim();
+        const cleanCedula = rawCedula.trim();
         const clientIp = req.ip || req.connection.remoteAddress || 'local';
-        const rateLimitKey = `${clientIp}_${cleanUsername.toLowerCase()}`;
+        const rateLimitKey = `${clientIp}_${cleanCedula.toLowerCase()}`;
 
         // 2. Control de Fuerza Bruta / Rate Limiting
         const rateCheck = checkLoginRateLimit(rateLimitKey);
@@ -435,23 +465,28 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(429).json({ success: false, error: rateCheck.error });
         }
 
-        // 3. Sanitización de caracteres permitidos en el usuario (Solo alfanuméricos, guiones, puntos y @)
-        const usernameRegex = /^[a-zA-Z0-9_.\-@]{3,50}$/;
-        if (!usernameRegex.test(cleanUsername)) {
+        // 3. Sanitización de caracteres permitidos (Cédula o Alfanumérico)
+        const cedulaRegex = /^[a-zA-Z0-9_.\-@]{3,50}$/;
+        if (!cedulaRegex.test(cleanCedula)) {
             registerFailedLogin(rateLimitKey);
-            return res.status(401).json({ success: false, error: 'Usuario o contraseña incorrectos.' });
+            return res.status(401).json({ success: false, error: 'Número de cédula o contraseña incorrectos.' });
         }
 
         if (password.length > 128) {
             registerFailedLogin(rateLimitKey);
-            return res.status(401).json({ success: false, error: 'Usuario o contraseña incorrectos.' });
+            return res.status(401).json({ success: false, error: 'Número de cédula o contraseña incorrectos.' });
         }
 
-        // 4. Consulta SQL 100% parametrizada (Inmune a SQL Injection estándar e invertida)
-        const user = await dbGet(`SELECT id, username, password, nombre, rol, estado, permisos FROM usuarios WHERE LOWER(username) = LOWER(?)`, [cleanUsername]);
+        // 4. Consulta SQL 100% parametrizada (Busca por Cédula o por Username)
+        const user = await dbGet(`
+            SELECT id, cedula, username, password, nombre, apellido, correo, sede, rol, estado, permisos, permisos_adicionales 
+            FROM usuarios 
+            WHERE LOWER(cedula) = LOWER(?) OR LOWER(username) = LOWER(?)
+        `, [cleanCedula, cleanCedula]);
+
         if (!user) {
             registerFailedLogin(rateLimitKey);
-            return res.status(401).json({ success: false, error: 'Usuario o contraseña incorrectos.' });
+            return res.status(401).json({ success: false, error: 'Número de cédula o contraseña incorrectos.' });
         }
 
         if (user.estado !== 'Activo') {
@@ -475,20 +510,137 @@ app.post('/api/auth/login', async (req, res) => {
         clearFailedLogin(rateLimitKey);
 
         const { password: _, ...userSafe } = user;
+        try {
+            userSafe.permisos_adicionales = JSON.parse(userSafe.permisos_adicionales || '[]');
+        } catch (e) {
+            userSafe.permisos_adicionales = [];
+        }
+
         res.json({
             success: true,
-            message: `Bienvenido, ${user.nombre}`,
+            message: `Bienvenido, ${user.nombre} ${user.apellido || ''}`.trim(),
             user: userSafe
         });
     } catch (err) {
+        console.error('Error en /api/auth/login:', err);
         res.status(500).json({ success: false, error: 'Error interno en el servicio de autenticación.' });
     }
 });
 
+// Listar todos los usuarios
 app.get('/api/usuarios', async (req, res) => {
     try {
-        const users = await dbAll(`SELECT id, username, nombre, rol, estado, permisos, fecha_creacion FROM usuarios ORDER BY id ASC`);
-        res.json({ success: true, data: users });
+        const users = await dbAll(`
+            SELECT id, cedula, username, nombre, apellido, correo, sede, rol, estado, permisos, permisos_adicionales, fecha_creacion 
+            FROM usuarios 
+            ORDER BY id ASC
+        `);
+        const formatted = users.map(u => {
+            try {
+                u.permisos_adicionales = JSON.parse(u.permisos_adicionales || '[]');
+            } catch (e) {
+                u.permisos_adicionales = [];
+            }
+            return u;
+        });
+        res.json({ success: true, data: formatted });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Crear nuevo usuario
+app.post('/api/usuarios', async (req, res) => {
+    try {
+        const { cedula, nombre, apellido, correo, sede, rol, password, permisos_adicionales } = req.body;
+
+        if (!cedula || !nombre || !password) {
+            return res.status(400).json({ success: false, error: 'Cédula, nombre y contraseña son requeridos.' });
+        }
+
+        const cleanCedula = String(cedula).trim();
+        const cleanNombre = String(nombre).trim();
+        const cleanApellido = String(apellido || '').trim();
+        const cleanCorreo = String(correo || '').trim();
+        const cleanSede = String(sede || 'Sede Suroriental').trim();
+        const cleanRol = String(rol || 'ADMINISTRADOR DE SEDE').trim();
+
+        // Validar que la cédula sea única
+        const existing = await dbGet(`SELECT id FROM usuarios WHERE LOWER(cedula) = LOWER(?)`, [cleanCedula]);
+        if (existing) {
+            return res.status(400).json({ success: false, error: 'Ya existe un usuario registrado con esta cédula.' });
+        }
+
+        const hashedPassword = createPasswordHash(String(password));
+        const permisosBase = cleanRol === 'ADMINISTRADOR' ? 'ALL' : 'SEDE_ALL';
+        const permisosExtrasStr = JSON.stringify(Array.isArray(permisos_adicionales) ? permisos_adicionales : []);
+
+        const result = await dbRun(`
+            INSERT INTO usuarios (cedula, username, password, nombre, apellido, correo, sede, rol, estado, permisos, permisos_adicionales)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Activo', ?, ?)
+        `, [cleanCedula, cleanCedula, hashedPassword, cleanNombre, cleanApellido, cleanCorreo, cleanSede, cleanRol, permisosBase, permisosExtrasStr]);
+
+        res.json({ success: true, message: 'Usuario creado exitosamente.', id: result.lastID });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Actualizar usuario (Cédula inmutable)
+app.put('/api/usuarios/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nombre, apellido, correo, sede, rol, estado, password } = req.body;
+
+        const user = await dbGet(`SELECT id FROM usuarios WHERE id = ?`, [id]);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'Usuario no encontrado.' });
+        }
+
+        const cleanNombre = String(nombre || '').trim();
+        const cleanApellido = String(apellido || '').trim();
+        const cleanCorreo = String(correo || '').trim();
+        const cleanSede = String(sede || 'Sede Suroriental').trim();
+        const cleanRol = String(rol || 'ADMINISTRADOR DE SEDE').trim();
+        const cleanEstado = String(estado || 'Activo').trim();
+        const permisosBase = cleanRol === 'ADMINISTRADOR' ? 'ALL' : 'SEDE_ALL';
+
+        if (password && String(password).trim().length > 0) {
+            const hashedPassword = createPasswordHash(String(password));
+            await dbRun(`
+                UPDATE usuarios 
+                SET nombre = ?, apellido = ?, correo = ?, sede = ?, rol = ?, estado = ?, permisos = ?, password = ?
+                WHERE id = ?
+            `, [cleanNombre, cleanApellido, cleanCorreo, cleanSede, cleanRol, cleanEstado, permisosBase, hashedPassword, id]);
+        } else {
+            await dbRun(`
+                UPDATE usuarios 
+                SET nombre = ?, apellido = ?, correo = ?, sede = ?, rol = ?, estado = ?, permisos = ?
+                WHERE id = ?
+            `, [cleanNombre, cleanApellido, cleanCorreo, cleanSede, cleanRol, cleanEstado, permisosBase, id]);
+        }
+
+        res.json({ success: true, message: 'Usuario actualizado exitosamente.' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Asignar o actualizar permisos adicionales de un usuario
+app.put('/api/usuarios/:id/permisos', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { permisos_adicionales } = req.body;
+
+        const user = await dbGet(`SELECT id FROM usuarios WHERE id = ?`, [id]);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'Usuario no encontrado.' });
+        }
+
+        const permisosExtrasStr = JSON.stringify(Array.isArray(permisos_adicionales) ? permisos_adicionales : []);
+        await dbRun(`UPDATE usuarios SET permisos_adicionales = ? WHERE id = ?`, [permisosExtrasStr, id]);
+
+        res.json({ success: true, message: 'Permisos adicionales actualizados con éxito.' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

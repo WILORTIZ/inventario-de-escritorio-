@@ -7,7 +7,17 @@ para actualizar instalaciones existentes sin perder la base de datos de movimien
 
 HISTORIAL DE VERSIONES Y CAMBIOS:
 ----------------------------------------------------------------------
-[Versión 1.1.4] (Última versión estable oficial)
+[Versión 1.2.0] (Última versión estable oficial)
+- Inicio de sesión EXCLUSIVO por Número de Cédula y Contraseña para todos los usuarios.
+- Rol "ADMINISTRADOR DE SEDE": Restricción automática del contexto y acceso exclusivo a su sede asignada.
+- Ocultamiento temporal de la Sede Medellín en los selectores de sede del sistema.
+- Panel de Administración de Usuarios y Permisos Especiales (Oculto en Sidebar con 2 pestañas):
+  * Pestaña 1 (Gestión de Usuarios): Tabla de usuarios por cédula, nombres, correo, sede, rol, estado y modal con Cédula Inmutable.
+  * Pestaña 2 (Permisos Adicionales): Matriz de permisos extraordinarios por usuario (Crear Ítems, Aprobación de Traslados, Deshacer Movimientos, Backups, Bodegas).
+- Creación de usuario inicial 'Giobani Lopez' (Cédula: 1130683079, Clave: 8080809, Rol: Administrador de Sede, Sede: Sede Suroriental, Correo: cawy9499@gmail.com).
+- Usuario Administrador General asignado con Cédula '123456' y Clave '123456'.
+
+[Versión 1.1.4]
 - Cierre de sesión automático por inactividad tras 30 minutos sin movimiento (con detector de interacción unificado y aviso en pantalla de Login).
 - Blindaje total contra Inyección SQL, Inyección Invertida, Type Confusion y manipulación de parámetros en el inicio de sesión.
 - Cifrado seguro de contraseñas con algoritmo PBKDF2 (SHA-512 + Salt criptográfico) y comparación segura en tiempo constante (Timing-Safe).

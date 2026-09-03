@@ -23,28 +23,34 @@ body {
 
 /* SIDEBAR STYLING */
 #sidebar-wrapper {
-    min-height: 100vh;
+    height: 100vh;
+    max-height: 100vh;
+    position: sticky;
+    top: 0;
     width: var(--sidebar-width);
     background-color: var(--sidebar-bg);
     transition: margin 0.25s ease-out;
     display: flex;
     flex-direction: column;
     z-index: 1000;
+    overflow: hidden;
 }
 
 .sidebar-heading {
-    padding: 1.25rem 1.5rem;
-    font-size: 1.15rem;
+    padding: 1rem 1.25rem;
+    font-size: 1.05rem;
     font-weight: 700;
     letter-spacing: 0.5px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
 }
 
 .sidebar-nav {
-    flex-grow: 1;
-    padding: 0.5rem 0;
+    flex: 1 1 auto;
+    padding: 0.25rem 0 3.5rem 0; /* Espacio amplio de scroll para ver todos los ítems */
     overflow-y: auto;
-    max-height: calc(100vh - 140px);
+    overflow-x: hidden;
+    scroll-behavior: smooth;
 }
 
 .sidebar-nav::-webkit-scrollbar {
@@ -59,24 +65,30 @@ body {
 .sidebar-section-header {
     font-size: 0.72rem;
     letter-spacing: 0.8px;
+    padding: 0.6rem 1.25rem;
 }
 
 .nav-link-custom {
     display: flex;
     align-items: center;
-    padding: 0.85rem 1.5rem;
+    padding: 0.55rem 1.25rem;
     color: var(--sidebar-color);
     text-decoration: none;
-    font-size: 0.95rem;
+    font-size: 0.86rem;
     font-weight: 500;
     transition: all 0.2s ease-in-out;
-    border-left: 4px solid transparent;
+    border-left: 3px solid transparent;
+}
+
+.submenu-container .nav-link-custom {
+    padding: 0.45rem 1.25rem 0.45rem 2rem;
+    font-size: 0.83rem;
 }
 
 .nav-link-custom i {
-    font-size: 1.2rem;
-    margin-right: 0.85rem;
-    width: 24px;
+    font-size: 1.1rem;
+    margin-right: 0.75rem;
+    width: 20px;
     text-align: center;
 }
 
@@ -93,9 +105,12 @@ body {
 }
 
 .sidebar-footer {
-    padding: 1rem 1.5rem;
+    padding: 0.45rem 1rem;
+    background-color: #0b1120;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
-    font-size: 0.85rem;
+    font-size: 0.7rem;
+    flex-shrink: 0;
+    line-height: 1.2;
 }
 
 /* MAIN CONTENT WRAPPER */
@@ -328,7 +343,7 @@ body {
 }
 
 .submenu-container.open {
-    max-height: 500px;
+    max-height: 800px;
     opacity: 1;
 }
 

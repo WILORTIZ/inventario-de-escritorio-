@@ -123,6 +123,10 @@
                         <i class="bi bi-file-earmark-bar-graph"></i>
                         <span>Kardex CDS</span>
                     </a>
+                    <a href="#bodegas" class="nav-link-custom" data-view="bodegas" data-inv="CDS" onclick="seleccionarInventario('CDS', 'bodegas')">
+                        <i class="bi bi-building"></i>
+                        <span>Bodegas y Proyectos</span>
+                    </a>
                 </div>
 
                 <!-- 2. INVENTARIO MOVILIDAD (DESPLEGABLE) -->
@@ -164,6 +168,10 @@
                     <a href="#reportes" class="nav-link-custom" data-view="reportes" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'reportes')">
                         <i class="bi bi-file-earmark-bar-graph"></i>
                         <span>Kardex Movilidad</span>
+                    </a>
+                    <a href="#bodegas" class="nav-link-custom" data-view="bodegas" data-inv="MOVILIDAD" onclick="seleccionarInventario('MOVILIDAD', 'bodegas')">
+                        <i class="bi bi-building"></i>
+                        <span>Bodegas y Proyectos</span>
                     </a>
                 </div>
                      <!-- 3. ADMINISTRACIÓN (OCULTO) -->
@@ -394,10 +402,10 @@
                                 </div>
                             </div>
                             <div class="col-6 col-md-3 col-xl">
-                                <div class="btn-action-tile h-100" onclick="navigate('database')">
-                                    <i class="bi bi-database-fill-gear text-primary"></i>
-                                    <span class="fw-semibold">8. Base de Datos</span>
-                                    <small class="text-muted">Copias de Seguridad y Excel</small>
+                                <div class="btn-action-tile h-100" onclick="navigate('bodegas')">
+                                    <i class="bi bi-building text-primary"></i>
+                                    <span class="fw-semibold">8. Bodegas & Proyectos</span>
+                                    <small class="text-muted">Gestión de Destinos Finales</small>
                                 </div>
                             </div>
                         </div>
@@ -1223,7 +1231,7 @@
                 </section>
 
                 <!-- 9. VISTA ADMINISTRADOR: GESTIÓN DE USUARIOS Y PERMISOS (PANEL OCULTO) -->
-                <section id="view-usuarios" class="app-view">
+                <section id="view-usuarios" class="app-view" style="display: none;">
                     <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
                         <div>
                             <h4 class="fw-bold mb-1 text-dark d-flex align-items-center">

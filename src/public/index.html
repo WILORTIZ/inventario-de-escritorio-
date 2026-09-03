@@ -166,27 +166,28 @@
                         <span>Kardex Movilidad</span>
                     </a>
                 </div>
-
-                <!-- 3. ADMINISTRACIÓN (DESPLEGABLE) -->
-                <div class="sidebar-section-header clickable open d-flex align-items-center justify-content-between border-top border-white border-opacity-10 mt-1" id="header-submenu-admin" onclick="toggleSubmenu('admin')">
-                    <span class="text-white-50 fw-bold"><i class="bi bi-shield-lock-fill me-2 text-info"></i>Administración</span>
-                    <div class="d-flex align-items-center gap-1">
-                        <i class="bi bi-chevron-down submenu-chevron text-white-50"></i>
+                     <!-- 3. ADMINISTRACIÓN (OCULTO) -->
+                <div id="sidebar-section-admin" style="display: none !important;">
+                    <div class="sidebar-section-header clickable d-flex align-items-center justify-content-between border-top border-white border-opacity-10 mt-1" id="header-submenu-admin" onclick="toggleSubmenu('admin')">
+                        <span class="text-white-50 fw-bold"><i class="bi bi-shield-lock-fill me-2 text-info"></i>Administración</span>
+                        <div class="d-flex align-items-center gap-1">
+                            <i class="bi bi-chevron-down submenu-chevron text-white-50"></i>
+                        </div>
                     </div>
-                </div>
-                <div class="submenu-container open" id="submenu-admin">
-                    <a href="#bodegas" class="nav-link-custom" data-view="bodegas" onclick="seleccionarAdmin('bodegas')">
-                        <i class="bi bi-building"></i>
-                        <span>Bodegas y Proyectos</span>
-                    </a>
-                    <a href="#database" class="nav-link-custom" data-view="database" onclick="seleccionarAdmin('database')">
-                        <i class="bi bi-database-fill-gear"></i>
-                        <span>Base de Datos & Backup</span>
-                    </a>
-                    <a href="#usuarios" class="nav-link-custom" data-view="usuarios" id="sidebar-nav-usuarios" style="display: none;" onclick="seleccionarAdmin('usuarios')">
-                        <i class="bi bi-people-fill"></i>
-                        <span>Usuarios y Permisos</span>
-                    </a>
+                    <div class="submenu-container" id="submenu-admin">
+                        <a href="#bodegas" class="nav-link-custom" data-view="bodegas" onclick="seleccionarAdmin('bodegas')">
+                            <i class="bi bi-building"></i>
+                            <span>Bodegas y Proyectos</span>
+                        </a>
+                        <a href="#database" class="nav-link-custom" data-view="database" onclick="seleccionarAdmin('database')">
+                            <i class="bi bi-database-fill-gear"></i>
+                            <span>Base de Datos & Backup</span>
+                        </a>
+                        <a href="#usuarios" class="nav-link-custom" data-view="usuarios" id="sidebar-nav-usuarios" style="display: none;" onclick="seleccionarAdmin('usuarios')">
+                            <i class="bi bi-people-fill"></i>
+                            <span>Usuarios y Permisos</span>
+                        </a>
+                    </div>
                 </div>
             </div>
 
@@ -200,29 +201,25 @@
         </aside>
 
         <!-- CONTENIDO PRINCIPAL -->
-        <div id="page-content-wrapper">
-            <!-- TOP NAVBAR -->
-            <header class="top-navbar d-flex align-items-center justify-content-between">
-                <div class="d-flex align-items-center">
-                    <button class="btn btn-light border me-3 shadow-sm" id="sidebarToggle" title="Ocultar / Mostrar Menú Lateral (Modo Pantalla Completa)" aria-label="Alternar Menú Lateral">
+        <div id="page-content-wrapper" class="w-100 d-flex flex-column min-vh-100">
+            
+            <!-- NAVBAR SUPERIOR -->
+            <header class="navbar navbar-expand navbar-light bg-white border-bottom px-4 py-2 sticky-top shadow-xs">
+                <div class="d-flex align-items-center gap-3">
+                    <button class="btn btn-light btn-sm border" id="sidebarToggle" title="Alternar Menú Lateral">
                         <i class="bi bi-list fs-5"></i>
                     </button>
-                    <div class="d-none d-md-flex align-items-center flex-wrap gap-2">
-                        <span class="fw-bold text-dark fs-6" id="page-title">Panel de Control</span>
-                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1" id="navbar-sede-badge"><i class="bi bi-geo-alt-fill me-1 text-danger"></i>Sede Suroriental</span>
-                        <span class="badge bg-info-subtle text-info border border-info-subtle px-2 py-1" id="navbar-inv-badge"><i class="bi bi-boxes me-1"></i>Inventario CDS</span>
-                        <span class="text-muted ms-2" style="font-size: 0.85rem;" id="system-date"></span>
+                    
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-primary px-2.5 py-1.5 fw-bold" id="header-context-badge">CDS • Sede Suroriental</span>
+                        <span class="text-muted small d-none d-md-inline" id="system-date">| Hoy</span>
                     </div>
                 </div>
 
-                <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center gap-2 ms-auto">
                     <button class="btn btn-outline-secondary btn-sm d-flex align-items-center px-3" data-bs-toggle="modal" data-bs-target="#modalBuscarItem">
                         <i class="bi bi-search me-2"></i>
                         <span>Buscar Ítem</span>
-                    </button>
-                    <button class="btn btn-outline-primary btn-sm d-flex align-items-center px-3" onclick="navigate('database')">
-                        <i class="bi bi-database-fill-gear me-2"></i>
-                        <span>Base de Datos</span>
                     </button>
                     <button class="btn btn-primary btn-sm d-flex align-items-center px-3 shadow-sm" onclick="openModalMovimiento()">
                         <i class="bi bi-plus-circle-fill me-2"></i>
@@ -232,16 +229,16 @@
                     <!-- USUARIO ACTIVO / ROLES -->
                     <div class="dropdown ms-2">
                         <button class="btn btn-light btn-sm border d-flex align-items-center gap-2 shadow-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" id="user-dropdown-btn">
-                            <div class="user-avatar-circle" id="user-avatar-text">A</div>
+                            <div class="user-avatar-circle" id="user-avatar-text">G</div>
                             <div class="text-start d-none d-lg-block">
-                                <div class="fw-bold text-dark lh-1" style="font-size: 0.8rem;" id="nav-user-name">Administrador</div>
-                                <span class="text-muted" style="font-size: 0.68rem;" id="nav-user-rol">Administrador del Sistema</span>
+                                <div class="fw-bold text-dark lh-1" style="font-size: 0.8rem;" id="nav-user-name">Giobani Lopez</div>
+                                <span class="text-muted" style="font-size: 0.68rem;" id="nav-user-rol">Administrador de Sede</span>
                             </div>
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="min-width: 200px;">
                             <li class="px-3 py-2 border-bottom">
-                                <div class="fw-bold text-dark small" id="dropdown-user-fullname">Administrador</div>
-                                <div class="text-muted text-xs" id="dropdown-user-username">@administrador</div>
+                                <div class="fw-bold text-dark small" id="dropdown-user-fullname">Giobani Lopez</div>
+                                <div class="text-muted text-xs" id="dropdown-user-username">C.C. 1130683079</div>
                             </li>
                             <li>
                                 <button class="dropdown-item py-2 text-danger small d-flex align-items-center" onclick="cerrarSesion()">

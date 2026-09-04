@@ -288,7 +288,17 @@ function actualizarWidgetUsuario(user) {
     const initial = user.nombre ? user.nombre.charAt(0).toUpperCase() : 'A';
     const nombreCompleto = `${user.nombre} ${user.apellido || ''}`.trim();
     const isSuperAdmin = (user.rol === 'ADMINISTRADOR') || (user.cedula === '1130683079') || (user.cedula === '123456') || (user.cedula === 'admin');
-    const rolLabel = isSuperAdmin ? 'Administrador del Sistema' : 'Administrador de Sede';
+    
+    let rolLabel = 'Usuario (Solo Ingreso)';
+    if (isSuperAdmin) {
+        rolLabel = 'Administrador del Sistema';
+    } else if (user.rol === 'ADMINISTRADOR DE SEDE') {
+        rolLabel = 'Administrador de Sede';
+    } else if (user.rol === 'USUARIO') {
+        rolLabel = 'Usuario (Solo Ingreso)';
+    } else {
+        rolLabel = user.rol || 'Usuario';
+    }
 
     if (avatar) avatar.textContent = initial;
     if (name) name.textContent = nombreCompleto;
@@ -442,9 +452,12 @@ function renderTablaUsuarios(usuarios) {
     }
 
     tbody.innerHTML = usuarios.map(u => {
-        const rolBadge = u.rol === 'ADMINISTRADOR'
-            ? `<span class="badge bg-primary px-2 py-1"><i class="bi bi-shield-lock-fill me-1"></i>Administrador General</span>`
-            : `<span class="badge bg-info text-dark px-2 py-1"><i class="bi bi-building me-1"></i>Admin. Sede</span>`;
+        let rolBadge = `<span class="badge bg-secondary px-2 py-1"><i class="bi bi-person me-1"></i>Usuario</span>`;
+        if (u.rol === 'ADMINISTRADOR') {
+            rolBadge = `<span class="badge bg-primary px-2 py-1"><i class="bi bi-shield-lock-fill me-1"></i>Administrador General</span>`;
+        } else if (u.rol === 'ADMINISTRADOR DE SEDE') {
+            rolBadge = `<span class="badge bg-info text-dark px-2 py-1"><i class="bi bi-building me-1"></i>Admin. Sede</span>`;
+        }
         
         const estadoBadge = u.estado === 'Activo'
             ? `<span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">Activo</span>`
@@ -2004,6 +2017,11 @@ async function sugerirSiguienteCodigo() {
 }
 
 function openModalNuevoItem() {
+    if (appState.currentUser?.rol === 'USUARIO' && !tienePermiso('CREAR_ITEMS')) {
+        showToast('🔒 El rol USUARIO no tiene permiso para crear nuevos ítems en el catálogo.', 'warning');
+        return;
+    }
+
     const form = document.getElementById('form-item');
     if (form) form.reset();
 
@@ -2055,6 +2073,11 @@ function openModalNuevoItem() {
 }
 
 function editarItem(codigo) {
+    if (appState.currentUser?.rol === 'USUARIO' && !tienePermiso('CREAR_ITEMS')) {
+        showToast('🔒 El rol USUARIO no tiene permiso para modificar ítems en el catálogo.', 'warning');
+        return;
+    }
+
     const item = appState.items.find(i => i.codigo === codigo);
     if (!item) return;
 
@@ -2563,6 +2586,11 @@ async function actualizarBadgesTraslados() {
 }
 
 async function openModalNuevoTraslado() {
+    if (appState.currentUser?.rol === 'USUARIO' && !tienePermiso('GESTIONAR_TRASLADOS')) {
+        showToast('🔒 El rol USUARIO no tiene permiso para solicitar o gestionar traslados.', 'warning');
+        return;
+    }
+
     const form = document.getElementById('form-nuevo-traslado');
     if (form) form.reset();
 
@@ -3125,6 +3153,11 @@ function filtrarTablaProyectosUI(query) {
 }
 
 async function openModalNuevaBodega() {
+    if (appState.currentUser?.rol === 'USUARIO' && !tienePermiso('ADMINISTRAR_BODEGAS')) {
+        showToast('🔒 El rol USUARIO no tiene permiso para crear bodegas.', 'warning');
+        return;
+    }
+
     document.getElementById('form-bodega').reset();
     document.getElementById('bod-is-edit').value = '0';
     document.getElementById('modalBodegaTitle').innerHTML = '<i class="bi bi-building-add text-secondary me-2"></i>Nueva Bodega (Autogenerada)';
@@ -3335,6 +3368,11 @@ async function ejecutarEliminarBodega() {
 }
 
 function openModalNuevoProyecto() {
+    if (appState.currentUser?.rol === 'USUARIO' && !tienePermiso('ADMINISTRAR_BODEGAS')) {
+        showToast('🔒 El rol USUARIO no tiene permiso para crear proyectos o frentes de obra.', 'warning');
+        return;
+    }
+
     document.getElementById('form-proyecto').reset();
     document.getElementById('proy-id').value = '';
     document.getElementById('modalProyectoTitle').innerHTML = '<i class="bi bi-cone-striped text-warning me-2"></i>Nuevo Frente / Proyecto';

@@ -718,7 +718,7 @@ app.post('/api/usuarios', async (req, res) => {
         }
 
         const hashedPassword = createPasswordHash(String(password));
-        const permisosBase = cleanRol === 'ADMINISTRADOR' ? 'ALL' : 'SEDE_ALL';
+        const permisosBase = cleanRol === 'ADMINISTRADOR' ? 'ALL' : (cleanRol === 'USUARIO' ? 'NINGUNO' : 'SEDE_ALL');
         const permisosExtrasStr = JSON.stringify(Array.isArray(permisos_adicionales) ? permisos_adicionales : []);
 
         const result = await dbRun(`
@@ -749,7 +749,7 @@ app.put('/api/usuarios/:id', async (req, res) => {
         const cleanSede = String(sede || 'Sede Suroriental').trim();
         const cleanRol = String(rol || 'ADMINISTRADOR DE SEDE').trim();
         const cleanEstado = String(estado || 'Activo').trim();
-        const permisosBase = cleanRol === 'ADMINISTRADOR' ? 'ALL' : 'SEDE_ALL';
+        const permisosBase = cleanRol === 'ADMINISTRADOR' ? 'ALL' : (cleanRol === 'USUARIO' ? 'NINGUNO' : 'SEDE_ALL');
 
         if (password && String(password).trim().length > 0) {
             const hashedPassword = createPasswordHash(String(password));

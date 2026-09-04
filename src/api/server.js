@@ -15,20 +15,46 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// Helper para consultas Promise
+const dbAll = (sql, params = []) => new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+    });
+});
+
+const dbGet = (sql, params = []) => new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+    });
+});
+
+const dbRun = (sql, params = []) => new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+        if (err) reject(err);
+        else resolve(this);
+    });
+});
+
 // Inicializador de base de datos SQLite autocontenida (0 configuraciones requeridas)
-const db = new sqlite3.Database(DB_PATH, (err) => {
+const db = new sqlite3.Database(DB_PATH, async (err) => {
     if (err) {
         console.error('Error al conectar con SQLite:', err.message);
     } else {
         console.log('Conectado a la base de datos SQLite:', DB_PATH);
-        ensureDatabaseSchema();
+        await runDatabaseMigrations();
     }
 });
 
-// Función de auto-instalación de esquema y datos base
-function ensureDatabaseSchema() {
-    db.serialize(() => {
-        db.run(`
+// ==============================================================
+// SISTEMA DE MIGRACIONES AUTOMÁTICAS Y SEGURAS (PARA CUALQUIER PC / ACTUALIZACIÓN)
+// ==============================================================
+async function runDatabaseMigrations() {
+    console.log('[MIGRACIONES] Verificando esquema y ejecutando migraciones automáticas...');
+    try {
+        // 1. Creación de tablas base si no existen
+        await dbRun(`
             CREATE TABLE IF NOT EXISTS items (
                 codigo INTEGER PRIMARY KEY,
                 nombre TEXT NOT NULL,
@@ -43,11 +69,13 @@ function ensureDatabaseSchema() {
                 stock_minimo INTEGER DEFAULT 0,
                 estado TEXT DEFAULT 'Activo',
                 observaciones TEXT,
-                fecha_registro TEXT
+                fecha_registro TEXT,
+                sede TEXT DEFAULT 'Sede Suroriental',
+                tipo_inventario TEXT DEFAULT 'CDS'
             )
         `);
 
-        db.run(`
+        await dbRun(`
             CREATE TABLE IF NOT EXISTS bodegas (
                 codigo TEXT PRIMARY KEY,
                 nombre TEXT NOT NULL UNIQUE,
@@ -55,39 +83,25 @@ function ensureDatabaseSchema() {
                 responsable TEXT,
                 estado TEXT DEFAULT 'Activa',
                 observaciones TEXT,
-                es_central INTEGER DEFAULT 0
+                es_central INTEGER DEFAULT 0,
+                sede TEXT DEFAULT 'Sede Suroriental',
+                tipo_inventario TEXT DEFAULT 'CDS'
             )
         `);
 
-        // Comprobar y migrar columna es_central si no existe
-        db.all(`PRAGMA table_info(bodegas)`, (err, columns) => {
-            if (!err && columns && columns.length > 0) {
-                const hasEsCentral = columns.some(c => c.name === 'es_central');
-                if (!hasEsCentral) {
-                    db.run(`ALTER TABLE bodegas ADD COLUMN es_central INTEGER DEFAULT 0`, () => {
-                        db.run(`UPDATE bodegas SET es_central = 1 WHERE codigo = 'BOD-001' OR rowid = 1`);
-                    });
-                } else {
-                    db.get(`SELECT COUNT(*) as total, SUM(es_central) as centralCount FROM bodegas`, (e, r) => {
-                        if (!e && r && r.total > 0 && (!r.centralCount || r.centralCount === 0)) {
-                            db.run(`UPDATE bodegas SET es_central = 1 WHERE codigo = 'BOD-001' OR rowid = 1`);
-                        }
-                    });
-                }
-            }
-        });
-
-        db.run(`
+        await dbRun(`
             CREATE TABLE IF NOT EXISTS proyectos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nombre TEXT NOT NULL UNIQUE,
                 responsable TEXT,
                 estado TEXT DEFAULT 'Activo',
-                observaciones TEXT
+                observaciones TEXT,
+                sede TEXT DEFAULT 'Sede Suroriental',
+                tipo_inventario TEXT DEFAULT 'CDS'
             )
         `);
 
-        db.run(`
+        await dbRun(`
             CREATE TABLE IF NOT EXISTS movimientos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 n_movimiento TEXT NOT NULL UNIQUE,
@@ -108,12 +122,14 @@ function ensureDatabaseSchema() {
                 documento_referencia TEXT,
                 observaciones TEXT,
                 fecha_vencimiento_lote TEXT,
+                sede TEXT DEFAULT 'Sede Suroriental',
+                tipo_inventario TEXT DEFAULT 'CDS',
                 creado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (codigo_item) REFERENCES items(codigo)
             )
         `);
 
-        db.run(`
+        await dbRun(`
             CREATE TABLE IF NOT EXISTS control_vencimientos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 codigo_item INTEGER NOT NULL,
@@ -126,11 +142,13 @@ function ensureDatabaseSchema() {
                 estado TEXT,
                 observaciones TEXT,
                 n_movimiento_origen TEXT,
+                sede TEXT DEFAULT 'Sede Suroriental',
+                tipo_inventario TEXT DEFAULT 'CDS',
                 FOREIGN KEY (codigo_item) REFERENCES items(codigo)
             )
         `);
 
-        db.run(`
+        await dbRun(`
             CREATE TABLE IF NOT EXISTS sedes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 codigo TEXT UNIQUE NOT NULL,
@@ -141,7 +159,7 @@ function ensureDatabaseSchema() {
             )
         `);
 
-        db.run(`
+        await dbRun(`
             CREATE TABLE IF NOT EXISTS tipos_inventario (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 codigo TEXT UNIQUE NOT NULL,
@@ -150,7 +168,7 @@ function ensureDatabaseSchema() {
             )
         `);
 
-        db.run(`
+        await dbRun(`
             CREATE TABLE IF NOT EXISTS traslados_pendientes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 n_traslado TEXT NOT NULL UNIQUE,
@@ -180,42 +198,7 @@ function ensureDatabaseSchema() {
             )
         `);
 
-        // Insertar sedes y tipos base si no existen
-        const sedesBase = [
-            ['SUR', 'Sede Suroriental', 'Sector Suroriental', 'Administrador Regional', 'Activa'],
-            ['MED', 'Sede Medellín', 'Medellín Centro Operativo', 'Administrador Regional', 'Activa']
-        ];
-        const sStmt = db.prepare(`INSERT OR IGNORE INTO sedes (codigo, nombre, direccion, responsable, estado) VALUES (?, ?, ?, ?, ?)`);
-        sedesBase.forEach(s => sStmt.run(s));
-        sStmt.finalize();
-
-        const tiposBase = [
-            ['CDS', 'Inventario CDS', 'Inventario y Almacenamiento Central CDS'],
-            ['MOVILIDAD', 'Inventario Movilidad', 'Inventario Operativo de Movilidad y Transporte']
-        ];
-        const tStmt = db.prepare(`INSERT OR IGNORE INTO tipos_inventario (codigo, nombre, descripcion) VALUES (?, ?, ?)`);
-        tiposBase.forEach(t => tStmt.run(t));
-        tStmt.finalize();
-
-        // Migrar columnas sede y tipo_inventario en tablas operativas
-        ['items', 'movimientos', 'control_vencimientos', 'bodegas', 'proyectos'].forEach(tableName => {
-            db.all(`PRAGMA table_info(${tableName})`, (err, cols) => {
-                if (!err && cols && cols.length > 0) {
-                    if (!cols.some(c => c.name === 'sede')) {
-                        db.run(`ALTER TABLE ${tableName} ADD COLUMN sede TEXT DEFAULT 'Sede Suroriental'`, () => {
-                            db.run(`UPDATE ${tableName} SET sede = 'Sede Suroriental' WHERE sede IS NULL`);
-                        });
-                    }
-                    if (!cols.some(c => c.name === 'tipo_inventario')) {
-                        db.run(`ALTER TABLE ${tableName} ADD COLUMN tipo_inventario TEXT DEFAULT 'CDS'`, () => {
-                            db.run(`UPDATE ${tableName} SET tipo_inventario = 'CDS' WHERE tipo_inventario IS NULL`);
-                        });
-                    }
-                }
-            });
-        });
-
-        db.run(`
+        await dbRun(`
             CREATE TABLE IF NOT EXISTS listas_config (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 tipo TEXT NOT NULL,
@@ -224,24 +207,192 @@ function ensureDatabaseSchema() {
             )
         `);
 
-        // Comprobar si las bodegas base existen; si no, insertarlas
-        db.get(`SELECT COUNT(*) as count FROM bodegas`, (err, row) => {
-            if (row && row.count === 0) {
-                const bodegas = [
-                    ['BOD-001', 'CDS', 'Sede Principal / Almacén Central', 'Administrador CDS', 'Activa', 'Centro de Distribución y Almacenamiento Principal (Control Oficial)', 1],
-                    ['BOD-002', 'AOM', 'Sede Operativa AOM', 'Líder Operativo AOM', 'Activa', 'Bodega de Operaciones y Mantenimiento', 0],
-                    ['BOD-003', 'PROYECTOS', 'Frentes de Obra e Infraestructura', 'Coordinador de Proyectos', 'Activa', 'Destino de materiales y herramientas para proyectos', 0],
-                    ['BOD-004', 'DISPOSICION FINAL', 'Área de Bajas y Scrap', 'Control Calidad / SST', 'Activa', 'Destino exclusivo de bajas por ítems dañados, gastados o vencidos', 0],
-                    ['BOD-005', 'MOVILIDAD', 'Vehículos y Flota Operativa', 'Logística / Transporte', 'Activa', 'Bodega operativa para gestión de movilidad y transporte', 0],
-                    ['BOD-006', 'TRASLADOS', 'Tránsito y Reubicación', 'Logística / Despachos', 'Activa', 'Bodega temporal para traslados y movimientos intersedes', 0]
-                ];
-                const stmt = db.prepare(`INSERT OR REPLACE INTO bodegas (codigo, nombre, ubicacion, responsable, estado, observaciones, es_central) VALUES (?, ?, ?, ?, ?, ?, ?)`);
-                bodegas.forEach(b => stmt.run(b));
-                stmt.finalize();
-            }
-        });
+        await dbRun(`
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cedula TEXT UNIQUE,
+                username TEXT UNIQUE,
+                password TEXT NOT NULL,
+                nombre TEXT NOT NULL,
+                apellido TEXT NOT NULL DEFAULT '',
+                correo TEXT NOT NULL DEFAULT '',
+                sede TEXT NOT NULL DEFAULT 'Sede Suroriental',
+                rol TEXT NOT NULL DEFAULT 'ADMINISTRADOR DE SEDE',
+                estado TEXT DEFAULT 'Activo',
+                permisos TEXT DEFAULT 'SEDE_ALL',
+                permisos_adicionales TEXT DEFAULT '[]',
+                fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
 
-        // Comprobar si las listas maestras existen por tipo
+        await dbRun(`
+            CREATE TABLE IF NOT EXISTS permisos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                codigo TEXT UNIQUE NOT NULL,
+                nombre TEXT NOT NULL,
+                descripcion TEXT DEFAULT '',
+                categoria TEXT DEFAULT 'GENERAL',
+                estado TEXT DEFAULT 'Activo',
+                fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        await dbRun(`
+            CREATE TABLE IF NOT EXISTS causales_movimientos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tipo_movimiento TEXT NOT NULL,
+                nombre TEXT NOT NULL,
+                descripcion TEXT DEFAULT '',
+                estado TEXT DEFAULT 'Activo',
+                orden INTEGER DEFAULT 0,
+                fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // 2. Comprobación y migración de columnas en tablas existentes de versiones previas
+        const columnasPorTabla = {
+            items: [
+                { name: 'sede', type: "TEXT DEFAULT 'Sede Suroriental'" },
+                { name: 'tipo_inventario', type: "TEXT DEFAULT 'CDS'" },
+                { name: 'subcategoria', type: "TEXT DEFAULT 'General'" },
+                { name: 'marca', type: "TEXT DEFAULT 'Generico'" },
+                { name: 'referencia', type: "TEXT DEFAULT '-'" },
+                { name: 'aplica_vencimiento', type: "INTEGER DEFAULT 0" },
+                { name: 'fecha_vencimiento_default', type: "TEXT" },
+                { name: 'stock_minimo', type: "INTEGER DEFAULT 0" },
+                { name: 'estado', type: "TEXT DEFAULT 'Activo'" },
+                { name: 'observaciones', type: "TEXT" },
+                { name: 'fecha_registro', type: "TEXT" }
+            ],
+            bodegas: [
+                { name: 'sede', type: "TEXT DEFAULT 'Sede Suroriental'" },
+                { name: 'tipo_inventario', type: "TEXT DEFAULT 'CDS'" },
+                { name: 'es_central', type: "INTEGER DEFAULT 0" },
+                { name: 'ubicacion', type: "TEXT" },
+                { name: 'responsable', type: "TEXT" },
+                { name: 'estado', type: "TEXT DEFAULT 'Activa'" },
+                { name: 'observaciones', type: "TEXT" }
+            ],
+            proyectos: [
+                { name: 'sede', type: "TEXT DEFAULT 'Sede Suroriental'" },
+                { name: 'tipo_inventario', type: "TEXT DEFAULT 'CDS'" },
+                { name: 'responsable', type: "TEXT" },
+                { name: 'estado', type: "TEXT DEFAULT 'Activo'" },
+                { name: 'observaciones', type: "TEXT" }
+            ],
+            movimientos: [
+                { name: 'sede', type: "TEXT DEFAULT 'Sede Suroriental'" },
+                { name: 'tipo_inventario', type: "TEXT DEFAULT 'CDS'" },
+                { name: 'bodega_origen', type: "TEXT" },
+                { name: 'bodega_destino', type: "TEXT" },
+                { name: 'causal_condicion', type: "TEXT" },
+                { name: 'ubicacion_cds', type: "TEXT" },
+                { name: 'proyecto_destino', type: "TEXT" },
+                { name: 'responsable', type: "TEXT" },
+                { name: 'persona_recibe_devuelve', type: "TEXT" },
+                { name: 'documento_referencia', type: "TEXT" },
+                { name: 'observaciones', type: "TEXT" },
+                { name: 'fecha_vencimiento_lote', type: "TEXT" },
+                { name: 'creado_en', type: "DATETIME" }
+            ],
+            control_vencimientos: [
+                { name: 'sede', type: "TEXT DEFAULT 'Sede Suroriental'" },
+                { name: 'tipo_inventario', type: "TEXT DEFAULT 'CDS'" },
+                { name: 'bodega', type: "TEXT DEFAULT 'CDS'" },
+                { name: 'n_movimiento_origen', type: "TEXT" },
+                { name: 'observaciones', type: "TEXT" },
+                { name: 'estado', type: "TEXT" }
+            ],
+            usuarios: [
+                { name: 'cedula', type: "TEXT" },
+                { name: 'apellido', type: "TEXT NOT NULL DEFAULT ''" },
+                { name: 'correo', type: "TEXT NOT NULL DEFAULT ''" },
+                { name: 'sede', type: "TEXT NOT NULL DEFAULT 'Sede Suroriental'" },
+                { name: 'rol', type: "TEXT NOT NULL DEFAULT 'ADMINISTRADOR DE SEDE'" },
+                { name: 'estado', type: "TEXT DEFAULT 'Activo'" },
+                { name: 'permisos', type: "TEXT DEFAULT 'SEDE_ALL'" },
+                { name: 'permisos_adicionales', type: "TEXT DEFAULT '[]'" },
+                { name: 'fecha_creacion', type: "DATETIME" }
+            ]
+        };
+
+        for (const [tableName, cols] of Object.entries(columnasPorTabla)) {
+            const existingCols = await dbAll(`PRAGMA table_info(${tableName})`);
+            const colNames = existingCols.map(c => c.name);
+            for (const col of cols) {
+                if (!colNames.includes(col.name)) {
+                    console.log(`[MIGRACIONES] Añadiendo columna faltante '${col.name}' a '${tableName}'...`);
+                    try {
+                        await dbRun(`ALTER TABLE ${tableName} ADD COLUMN ${col.name} ${col.type}`);
+                    } catch (errCol) {
+                        console.warn(`[MIGRACIONES] Nota al alterar ${tableName}.${col.name}:`, errCol.message);
+                    }
+                }
+            }
+        }
+
+        // 3. Normalización de valores NULL en registros antiguos
+        await dbRun(`UPDATE items SET sede = 'Sede Suroriental' WHERE sede IS NULL OR sede = ''`);
+        await dbRun(`UPDATE items SET tipo_inventario = 'CDS' WHERE tipo_inventario IS NULL OR tipo_inventario = ''`);
+        await dbRun(`UPDATE movimientos SET sede = 'Sede Suroriental' WHERE sede IS NULL OR sede = ''`);
+        await dbRun(`UPDATE movimientos SET tipo_inventario = 'CDS' WHERE tipo_inventario IS NULL OR tipo_inventario = ''`);
+        await dbRun(`UPDATE bodegas SET sede = 'Sede Suroriental' WHERE sede IS NULL OR sede = ''`);
+        await dbRun(`UPDATE bodegas SET tipo_inventario = 'CDS' WHERE tipo_inventario IS NULL OR tipo_inventario = ''`);
+        await dbRun(`UPDATE proyectos SET sede = 'Sede Suroriental' WHERE sede IS NULL OR sede = ''`);
+        await dbRun(`UPDATE proyectos SET tipo_inventario = 'CDS' WHERE tipo_inventario IS NULL OR tipo_inventario = ''`);
+        await dbRun(`UPDATE control_vencimientos SET sede = 'Sede Suroriental' WHERE sede IS NULL OR sede = ''`);
+        await dbRun(`UPDATE control_vencimientos SET tipo_inventario = 'CDS' WHERE tipo_inventario IS NULL OR tipo_inventario = ''`);
+        await dbRun(`UPDATE usuarios SET sede = 'Sede Suroriental' WHERE sede IS NULL OR sede = ''`);
+        await dbRun(`UPDATE usuarios SET permisos_adicionales = '[]' WHERE permisos_adicionales IS NULL OR permisos_adicionales = ''`);
+
+        // Comprobar bodega central
+        const centralCheck = await dbGet(`SELECT COUNT(*) as total, SUM(es_central) as centralCount FROM bodegas`);
+        if (centralCheck && centralCheck.total > 0 && (!centralCheck.centralCount || centralCheck.centralCount === 0)) {
+            await dbRun(`UPDATE bodegas SET es_central = 1 WHERE codigo = 'BOD-001' OR rowid = 1`);
+        }
+
+        // 4. Índices
+        await dbRun(`CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_cedula ON usuarios(cedula)`);
+        await dbRun(`CREATE INDEX IF NOT EXISTS idx_items_sede_tipo ON items(sede, tipo_inventario)`);
+        await dbRun(`CREATE INDEX IF NOT EXISTS idx_mov_sede_tipo ON movimientos(sede, tipo_inventario)`);
+        await dbRun(`CREATE INDEX IF NOT EXISTS idx_causales_tipo ON causales_movimientos(tipo_movimiento, estado)`);
+
+        // 5. Precarga de Datos Maestros (Solo si las tablas están vacías)
+        // Sedes
+        const sedesBase = [
+            ['SUR', 'Sede Suroriental', 'Sector Suroriental', 'Administrador Regional', 'Activa'],
+            ['MED', 'Sede Medellín', 'Medellín Centro Operativo', 'Administrador Regional', 'Activa']
+        ];
+        for (const s of sedesBase) {
+            await dbRun(`INSERT OR IGNORE INTO sedes (codigo, nombre, direccion, responsable, estado) VALUES (?, ?, ?, ?, ?)`, s);
+        }
+
+        // Tipos de Inventario
+        const tiposBase = [
+            ['CDS', 'Inventario CDS', 'Inventario y Almacenamiento Central CDS'],
+            ['MOVILIDAD', 'Inventario Movilidad', 'Inventario Operativo de Movilidad y Transporte']
+        ];
+        for (const t of tiposBase) {
+            await dbRun(`INSERT OR IGNORE INTO tipos_inventario (codigo, nombre, descripcion) VALUES (?, ?, ?)`, t);
+        }
+
+        // Bodegas iniciales
+        const bodegasCount = await dbGet(`SELECT COUNT(*) as count FROM bodegas`);
+        if (!bodegasCount || bodegasCount.count === 0) {
+            const bodegas = [
+                ['BOD-001', 'CDS', 'Sede Principal / Almacén Central', 'Administrador CDS', 'Activa', 'Centro de Distribución y Almacenamiento Principal (Control Oficial)', 1],
+                ['BOD-002', 'AOM', 'Sede Operativa AOM', 'Líder Operativo AOM', 'Activa', 'Bodega de Operaciones y Mantenimiento', 0],
+                ['BOD-003', 'PROYECTOS', 'Frentes de Obra e Infraestructura', 'Coordinador de Proyectos', 'Activa', 'Destino de materiales y herramientas para proyectos', 0],
+                ['BOD-004', 'DISPOSICION FINAL', 'Área de Bajas y Scrap', 'Control Calidad / SST', 'Activa', 'Destino exclusivo de bajas por ítems dañados, gastados o vencidos', 0],
+                ['BOD-005', 'MOVILIDAD', 'Vehículos y Flota Operativa', 'Logística / Transporte', 'Activa', 'Bodega operativa para gestión de movilidad y transporte', 0],
+                ['BOD-006', 'TRASLADOS', 'Tránsito y Reubicación', 'Logística / Despachos', 'Activa', 'Bodega temporal para traslados y movimientos intersedes', 0]
+            ];
+            for (const b of bodegas) {
+                await dbRun(`INSERT OR IGNORE INTO bodegas (codigo, nombre, ubicacion, responsable, estado, observaciones, es_central) VALUES (?, ?, ?, ?, ?, ?, ?)`, b);
+            }
+        }
+
+        // Listas Config maestras
         const listasPorDefecto = [
             ['categoria', 'Herramientas', 1],
             ['categoria', 'Tornilleria', 2],
@@ -291,180 +442,87 @@ function ensureDatabaseSchema() {
             ['causal_disposicion', 'Deterioro Operativo / Merma', 4],
             ['causal_disposicion', 'Inutilizable / Scrap', 5]
         ];
-
-        ['categoria', 'unidad_medida', 'ubicacion_cds', 'causal_disposicion'].forEach(tipo => {
-            db.get(`SELECT COUNT(*) as count FROM listas_config WHERE tipo = ?`, [tipo], (err, row) => {
-                if (!err && (!row || row.count === 0)) {
-                    const stmt = db.prepare(`INSERT INTO listas_config (tipo, valor, orden) VALUES (?, ?, ?)`);
-                    listasPorDefecto.filter(l => l[0] === tipo).forEach(l => stmt.run(l));
-                    stmt.finalize();
+        for (const tipo of ['categoria', 'unidad_medida', 'ubicacion_cds', 'causal_disposicion']) {
+            const countRow = await dbGet(`SELECT COUNT(*) as count FROM listas_config WHERE tipo = ?`, [tipo]);
+            if (!countRow || countRow.count === 0) {
+                for (const l of listasPorDefecto.filter(item => item[0] === tipo)) {
+                    await dbRun(`INSERT INTO listas_config (tipo, valor, orden) VALUES (?, ?, ?)`, l);
                 }
-            });
-        });
+            }
+        }
 
-        // Tabla de Usuarios, Roles y Permisos Multi-Sede
-        db.run(`
-            CREATE TABLE IF NOT EXISTS usuarios (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                cedula TEXT UNIQUE,
-                username TEXT UNIQUE,
-                password TEXT NOT NULL,
-                nombre TEXT NOT NULL,
-                apellido TEXT NOT NULL DEFAULT '',
-                correo TEXT NOT NULL DEFAULT '',
-                sede TEXT NOT NULL DEFAULT 'Sede Suroriental',
-                rol TEXT NOT NULL DEFAULT 'ADMINISTRADOR DE SEDE',
-                estado TEXT DEFAULT 'Activo',
-                permisos TEXT DEFAULT 'SEDE_ALL',
-                permisos_adicionales TEXT DEFAULT '[]',
-                fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        `, () => {
-            // Migraciones seguras si la tabla ya existía
-            const cols = [
-                "ALTER TABLE usuarios ADD COLUMN cedula TEXT",
-                "ALTER TABLE usuarios ADD COLUMN apellido TEXT NOT NULL DEFAULT ''",
-                "ALTER TABLE usuarios ADD COLUMN correo TEXT NOT NULL DEFAULT ''",
-                "ALTER TABLE usuarios ADD COLUMN sede TEXT NOT NULL DEFAULT 'Sede Suroriental'",
-                "ALTER TABLE usuarios ADD COLUMN permisos_adicionales TEXT DEFAULT '[]'"
+        // Permisos del sistema
+        const defaultPermisos = [
+            ['ACCESO_MULTI_SEDE', 'Acceso Multi-Sedes (Ver Todas las Sedes)', 'Permite alternar entre sedes y realizar transacciones en cualquier sede.', 'SEDES'],
+            ['CREAR_ITEMS', 'Creación de Ítems', 'Permite registrar nuevos productos en el catálogo maestro.', 'CATALOGO'],
+            ['GESTIONAR_TRASLADOS', 'Aprobación de Traslados', 'Permite emitir, aceptar o rechazar traslados entre bodegas centrales.', 'TRASLADOS'],
+            ['ELIMINAR_MOVIMIENTOS', 'Eliminar / Deshacer Movimientos', 'Permite anular transacciones del libro diario de movimientos.', 'MOVIMIENTOS'],
+            ['EXPORTAR_BACKUPS', 'Copias de Seguridad (Backups)', 'Permite exportar y restaurar la base de datos SQLite y respaldos.', 'SISTEMA'],
+            ['ADMINISTRAR_BODEGAS', 'Configurar Bodegas y Proyectos', 'Permite crear y gestionar bodegas satélites y frentes de obra.', 'BODEGAS']
+        ];
+        for (const p of defaultPermisos) {
+            await dbRun(`INSERT OR IGNORE INTO permisos (codigo, nombre, descripcion, categoria) VALUES (?, ?, ?, ?)`, p);
+        }
+
+        // Causales de movimientos
+        const causalesCount = await dbGet(`SELECT COUNT(*) as count FROM causales_movimientos`);
+        if (!causalesCount || causalesCount.count === 0) {
+            const defaultCausales = [
+                ['ENTRADA', 'COMPRA / PROVEEDOR', 'Ingreso por compra a proveedor', 'Activo', 1],
+                ['ENTRADA', 'INVENTARIO INICIAL', 'Cargue inicial o conteo de arranque', 'Activo', 2],
+                ['ENTRADA', 'DOTACION / HERRAMIENTAS NUEVAS', 'Ingreso de dotación o herramientas nuevas', 'Activo', 3],
+                ['ENTRADA', 'DONACION / OTRO INGRESO', 'Otros ingresos y donaciones', 'Activo', 4],
+                ['ENTREGA', 'USO EN OBRA / PROYECTO', 'Despacho para ejecución de obra o proyecto', 'Activo', 1],
+                ['ENTREGA', 'DOTACION PERSONAL', 'Entrega de dotación a personal', 'Activo', 2],
+                ['ENTREGA', 'MANTENIMIENTO OPERATIVO', 'Uso en mantenimiento correctivo o preventivo', 'Activo', 3],
+                ['ENTREGA', 'CONSUMO GENERAL', 'Consumo operativo general', 'Activo', 4],
+                ['DEVOLUCION', 'SOBRANTE DE OBRA', 'Material sobrante devuelto por proyecto', 'Activo', 1],
+                ['DEVOLUCION', 'CAMBIO DE MATERIAL', 'Devolución por cambio de referencia', 'Activo', 2],
+                ['DEVOLUCION', 'DESPACHO ERRADO', 'Retorno por error en despacho inicial', 'Activo', 3],
+                ['DEVOLUCION', 'HERRAMIENTA REINTEGRADA', 'Reintegro de herramienta al almacén', 'Activo', 4],
+                ['DEVOLUCION', 'OTRA DEVOLUCION', 'Otras causales de devolución', 'Activo', 5],
+                ['DISPOSICION FINAL', 'DAÑADO / ROTO', 'Baja por daño físico o rotura', 'Activo', 1],
+                ['DISPOSICION FINAL', 'CADUCADO / VENCIDO', 'Baja por fecha de vencimiento cumplida', 'Activo', 2],
+                ['DISPOSICION FINAL', 'OBSOLETO / SCRAP', 'Material en desuso o scrap', 'Activo', 3],
+                ['DISPOSICION FINAL', 'DEFECTUOSO DE FABRICA', 'Falla de fabricación irreparable', 'Activo', 4],
+                ['DISPOSICION FINAL', 'DESGASTE NO REPARABLE', 'Fin de vida útil por desgaste', 'Activo', 5],
+                ['AJUSTE POSITIVO', 'CONTEO FISICO / AUDITORIA', 'Ajuste positivo por auditoría física', 'Activo', 1],
+                ['AJUSTE POSITIVO', 'SOBRANTE DETECTADO EN BODEGA', 'Sobrante no registrado', 'Activo', 2],
+                ['AJUSTE POSITIVO', 'CORRECCION DE SALDO', 'Corrección contable de saldo', 'Activo', 3],
+                ['AJUSTE NEGATIVO', 'CONTEO FISICO / AUDITORIA', 'Ajuste negativo por auditoría física', 'Activo', 1],
+                ['AJUSTE NEGATIVO', 'FALTANTE DETECTADO EN BODEGA', 'Faltante no justificado', 'Activo', 2],
+                ['AJUSTE NEGATIVO', 'MERMA / EVAPORACION', 'Pérdida natural por evaporación o merma', 'Activo', 3],
+                ['AJUSTE NEGATIVO', 'CORRECCION DE SALDO', 'Corrección contable de saldo', 'Activo', 4]
             ];
-            cols.forEach(sql => db.run(sql, () => {}));
-            db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_cedula ON usuarios(cedula)`, () => {});
+            for (const c of defaultCausales) {
+                await dbRun(`INSERT INTO causales_movimientos (tipo_movimiento, nombre, descripcion, estado, orden) VALUES (?, ?, ?, ?, ?)`, c);
+            }
+        }
 
-            // 1. Usuario Administrador General Inicial (Cédula: 123456 o admin, Clave: 123456)
-            db.get(`SELECT * FROM usuarios WHERE cedula = '123456' OR cedula = 'admin' OR LOWER(username) = 'administrador'`, (err, row) => {
-                if (!err && !row) {
-                    db.run(`
-                        INSERT INTO usuarios (cedula, username, password, nombre, apellido, correo, sede, rol, estado, permisos, permisos_adicionales)
-                        VALUES ('123456', 'administrador', '123456', 'Administrador', 'General', 'admin@inventario.com', 'Sede Suroriental', 'ADMINISTRADOR', 'Activo', 'ALL', '[]')
-                    `);
-                } else if (!err && row && (!row.cedula || row.cedula === 'admin')) {
-                    db.run(`UPDATE usuarios SET cedula = '123456', apellido = 'General', correo = 'admin@inventario.com', sede = 'Sede Suroriental', permisos_adicionales = '[]' WHERE id = ?`, [row.id]);
-                }
-            });
+        // Usuarios iniciales (Preservando usuarios existentes)
+        const adminRow = await dbGet(`SELECT * FROM usuarios WHERE cedula = '123456' OR cedula = 'admin' OR LOWER(username) = 'administrador'`);
+        if (!adminRow) {
+            await dbRun(`
+                INSERT INTO usuarios (cedula, username, password, nombre, apellido, correo, sede, rol, estado, permisos, permisos_adicionales)
+                VALUES ('123456', 'administrador', '123456', 'Administrador', 'General', 'admin@inventario.com', 'Sede Suroriental', 'ADMINISTRADOR', 'Activo', 'ALL', '[]')
+            `);
+        } else if (!adminRow.cedula || adminRow.cedula === 'admin') {
+            await dbRun(`UPDATE usuarios SET cedula = '123456', apellido = 'General', correo = 'admin@inventario.com', sede = 'Sede Suroriental', permisos_adicionales = '[]' WHERE id = ?`, [adminRow.id]);
+        }
 
-            // 2. Usuario Gio (Giobani Lopez) - Administrador de Sede Suroriental (Cédula: 1130683079, Clave: 8080809)
-            db.get(`SELECT * FROM usuarios WHERE cedula = '1130683079'`, (err, row) => {
-                if (!err && !row) {
-                    db.run(`
-                        INSERT INTO usuarios (cedula, username, password, nombre, apellido, correo, sede, rol, estado, permisos, permisos_adicionales)
-                        VALUES ('1130683079', 'gio', '8080809', 'Giobani', 'Lopez', 'cawy9499@gmail.com', 'Sede Suroriental', 'ADMINISTRADOR DE SEDE', 'Activo', 'SEDE_ALL', '[]')
-                    `);
-                }
-            });
-        });
+        const gioRow = await dbGet(`SELECT * FROM usuarios WHERE cedula = '1130683079'`);
+        if (!gioRow) {
+            await dbRun(`
+                INSERT INTO usuarios (cedula, username, password, nombre, apellido, correo, sede, rol, estado, permisos, permisos_adicionales)
+                VALUES ('1130683079', 'gio', '8080809', 'Giobani', 'Lopez', 'cawy9499@gmail.com', 'Sede Suroriental', 'ADMINISTRADOR DE SEDE', 'Activo', 'SEDE_ALL', '[]')
+            `);
+        }
 
-        // Tabla de Permisos del Sistema
-        db.run(`
-            CREATE TABLE IF NOT EXISTS permisos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                codigo TEXT UNIQUE NOT NULL,
-                nombre TEXT NOT NULL,
-                descripcion TEXT DEFAULT '',
-                categoria TEXT DEFAULT 'GENERAL',
-                estado TEXT DEFAULT 'Activo',
-                fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        `, () => {
-            db.get(`SELECT COUNT(*) as count FROM permisos`, (err, row) => {
-                if (!err && (!row || row.count === 0)) {
-                    const defaultPermisos = [
-                        ['ACCESO_MULTI_SEDE', 'Acceso Multi-Sedes (Ver Todas las Sedes)', 'Permite alternar entre sedes y realizar transacciones en cualquier sede.', 'SEDES'],
-                        ['CREAR_ITEMS', 'Creación de Ítems', 'Permite registrar nuevos productos en el catálogo maestro.', 'CATALOGO'],
-                        ['GESTIONAR_TRASLADOS', 'Aprobación de Traslados', 'Permite emitir, aceptar o rechazar traslados entre bodegas centrales.', 'TRASLADOS'],
-                        ['ELIMINAR_MOVIMIENTOS', 'Eliminar / Deshacer Movimientos', 'Permite anular transacciones del libro diario de movimientos.', 'MOVIMIENTOS'],
-                        ['EXPORTAR_BACKUPS', 'Copias de Seguridad (Backups)', 'Permite exportar y restaurar la base de datos SQLite y respaldos.', 'SISTEMA'],
-                        ['ADMINISTRAR_BODEGAS', 'Configurar Bodegas y Proyectos', 'Permite crear y gestionar bodegas satélites y frentes de obra.', 'BODEGAS']
-                    ];
-                    const stmt = db.prepare(`INSERT OR IGNORE INTO permisos (codigo, nombre, descripcion, categoria) VALUES (?, ?, ?, ?)`);
-                    defaultPermisos.forEach(p => stmt.run(p));
-                    stmt.finalize();
-                }
-            });
-        });
-
-        // Tabla de Causales y Motivos de Movimiento
-        db.run(`
-            CREATE TABLE IF NOT EXISTS causales_movimientos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                tipo_movimiento TEXT NOT NULL,
-                nombre TEXT NOT NULL,
-                descripcion TEXT DEFAULT '',
-                estado TEXT DEFAULT 'Activo',
-                orden INTEGER DEFAULT 0,
-                fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        `, () => {
-            db.get(`SELECT COUNT(*) as count FROM causales_movimientos`, (err, row) => {
-                if (!err && (!row || row.count === 0)) {
-                    const defaultCausales = [
-                        // ENTRADA
-                        ['ENTRADA', 'COMPRA / PROVEEDOR', 'Ingreso por compra a proveedor', 'Activo', 1],
-                        ['ENTRADA', 'INVENTARIO INICIAL', 'Cargue inicial o conteo de arranque', 'Activo', 2],
-                        ['ENTRADA', 'DOTACION / HERRAMIENTAS NUEVAS', 'Ingreso de dotación o herramientas nuevas', 'Activo', 3],
-                        ['ENTRADA', 'DONACION / OTRO INGRESO', 'Otros ingresos y donaciones', 'Activo', 4],
-
-                        // ENTREGA
-                        ['ENTREGA', 'USO EN OBRA / PROYECTO', 'Despacho para ejecución de obra o proyecto', 'Activo', 1],
-                        ['ENTREGA', 'DOTACION PERSONAL', 'Entrega de dotación a personal', 'Activo', 2],
-                        ['ENTREGA', 'MANTENIMIENTO OPERATIVO', 'Uso en mantenimiento correctivo o preventivo', 'Activo', 3],
-                        ['ENTREGA', 'CONSUMO GENERAL', 'Consumo operativo general', 'Activo', 4],
-
-                        // DEVOLUCION
-                        ['DEVOLUCION', 'SOBRANTE DE OBRA', 'Material sobrante devuelto por proyecto', 'Activo', 1],
-                        ['DEVOLUCION', 'CAMBIO DE MATERIAL', 'Devolución por cambio de referencia', 'Activo', 2],
-                        ['DEVOLUCION', 'DESPACHO ERRADO', 'Retorno por error en despacho inicial', 'Activo', 3],
-                        ['DEVOLUCION', 'HERRAMIENTA REINTEGRADA', 'Reintegro de herramienta al almacén', 'Activo', 4],
-                        ['DEVOLUCION', 'OTRA DEVOLUCION', 'Otras causales de devolución', 'Activo', 5],
-
-                        // DISPOSICION FINAL
-                        ['DISPOSICION FINAL', 'DAÑADO / ROTO', 'Baja por daño físico o rotura', 'Activo', 1],
-                        ['DISPOSICION FINAL', 'CADUCADO / VENCIDO', 'Baja por fecha de vencimiento cumplida', 'Activo', 2],
-                        ['DISPOSICION FINAL', 'OBSOLETO / SCRAP', 'Material en desuso o scrap', 'Activo', 3],
-                        ['DISPOSICION FINAL', 'DEFECTUOSO DE FABRICA', 'Falla de fabricación irreparable', 'Activo', 4],
-                        ['DISPOSICION FINAL', 'DESGASTE NO REPARABLE', 'Fin de vida útil por desgaste', 'Activo', 5],
-
-                        // AJUSTE POSITIVO
-                        ['AJUSTE POSITIVO', 'CONTEO FISICO / AUDITORIA', 'Ajuste positivo por auditoría física', 'Activo', 1],
-                        ['AJUSTE POSITIVO', 'SOBRANTE DETECTADO EN BODEGA', 'Sobrante no registrado', 'Activo', 2],
-                        ['AJUSTE POSITIVO', 'CORRECCION DE SALDO', 'Corrección contable de saldo', 'Activo', 3],
-
-                        // AJUSTE NEGATIVO
-                        ['AJUSTE NEGATIVO', 'CONTEO FISICO / AUDITORIA', 'Ajuste negativo por auditoría física', 'Activo', 1],
-                        ['AJUSTE NEGATIVO', 'FALTANTE DETECTADO EN BODEGA', 'Faltante no justificado', 'Activo', 2],
-                        ['AJUSTE NEGATIVO', 'MERMA / EVAPORACION', 'Pérdida natural por evaporación o merma', 'Activo', 3],
-                        ['AJUSTE NEGATIVO', 'CORRECCION DE SALDO', 'Corrección contable de saldo', 'Activo', 4]
-                    ];
-                    const stmt = db.prepare(`INSERT INTO causales_movimientos (tipo_movimiento, nombre, descripcion, estado, orden) VALUES (?, ?, ?, ?, ?)`);
-                    defaultCausales.forEach(c => stmt.run(c));
-                    stmt.finalize();
-                }
-            });
-        });
-    });
+        console.log('[MIGRACIONES] ✅ Base de datos y migraciones completadas exitosamente sin alterar datos existentes.');
+    } catch (err) {
+        console.error('[MIGRACIONES] ❌ Error ejecutando migraciones:', err);
+    }
 }
-
-// Helper para consultas Promise
-const dbAll = (sql, params = []) => new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows);
-    });
-});
-
-const dbGet = (sql, params = []) => new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
-    });
-});
-
-const dbRun = (sql, params = []) => new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-        if (err) reject(err);
-        else resolve(this);
-    });
-});
 
 // ==========================================
 // 0. AUTENTICACIÓN SEGURA, USUARIOS Y ROLES (PROTECCIÓN ANTI-INYECCIÓN Y BRUTE FORCE)

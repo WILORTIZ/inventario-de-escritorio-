@@ -6,6 +6,7 @@
     <title>INVENTARIO | Sistema Empresarial de Gestión Física y Vencimientos</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="css/custom.css">
 </head><body>
     <!-- PANTALLA DE INICIO DE SESIÓN (LOGIN) -->
@@ -38,9 +39,8 @@
                     </div>
                 </div>
 
-                <button type="submit" class="btn btn-primary w-100 py-2 fw-bold shadow d-flex align-items-center justify-content-center gap-2" id="btn-login-submit">
-                    <i class="bi bi-door-open-fill"></i>
-                    <span>Iniciar Sesión</span>
+                <button type="submit" class="btn btn-primary w-100 py-2.5 fw-bold shadow">
+                    <i class="bi bi-box-arrow-in-right me-2"></i>Ingresar al Sistema
                 </button>
             </form>
 
@@ -131,7 +131,7 @@
 
                 <!-- 2. INVENTARIO MOVILIDAD (DESPLEGABLE) -->
                 <div class="sidebar-section-header clickable d-flex align-items-center justify-content-between border-top border-white border-opacity-10 mt-1" id="header-submenu-movilidad" onclick="toggleSubmenu('movilidad')">
-                    <span class="text-warning fw-bold"><i class="bi bi-truck me-2"></i>Inventario Movilidad</span>
+                    <span class="text-warning fw-bold"><i class="fa-solid fa-helmet-safety me-2"></i>Inventario Movilidad</span>
                     <div class="d-flex align-items-center gap-1">
                         <span class="badge bg-warning bg-opacity-25 text-warning" style="font-size: 0.6rem;">Flota</span>
                         <i class="bi bi-chevron-down submenu-chevron text-white-50"></i>
@@ -174,26 +174,23 @@
                         <span>Bodegas y Proyectos</span>
                     </a>
                 </div>
-                     <!-- 3. ADMINISTRACIÓN (OCULTO) -->
-                <div id="sidebar-section-admin" style="display: none !important;">
+                <!-- 3. PANEL DE ADMINISTRACIÓN GENERAL (EXCLUSIVO SUPER ADMINISTRADOR) -->
+                <div id="sidebar-section-admin" style="display: none;">
                     <div class="sidebar-section-header clickable d-flex align-items-center justify-content-between border-top border-white border-opacity-10 mt-1" id="header-submenu-admin" onclick="toggleSubmenu('admin')">
-                        <span class="text-white-50 fw-bold"><i class="bi bi-shield-lock-fill me-2 text-info"></i>Administración</span>
+                        <span class="text-warning fw-bold"><i class="bi bi-shield-lock-fill me-2 text-warning"></i>Administración</span>
                         <div class="d-flex align-items-center gap-1">
+                            <span class="badge bg-warning bg-opacity-25 text-warning" style="font-size: 0.6rem;">Admin</span>
                             <i class="bi bi-chevron-down submenu-chevron text-white-50"></i>
                         </div>
                     </div>
                     <div class="submenu-container" id="submenu-admin">
-                        <a href="#bodegas" class="nav-link-custom" data-view="bodegas" onclick="seleccionarAdmin('bodegas')">
-                            <i class="bi bi-building"></i>
-                            <span>Bodegas y Proyectos</span>
-                        </a>
-                        <a href="#database" class="nav-link-custom" data-view="database" onclick="seleccionarAdmin('database')">
-                            <i class="bi bi-database-fill-gear"></i>
-                            <span>Base de Datos & Backup</span>
-                        </a>
-                        <a href="#usuarios" class="nav-link-custom" data-view="usuarios" id="sidebar-nav-usuarios" style="display: none;" onclick="seleccionarAdmin('usuarios')">
-                            <i class="bi bi-people-fill"></i>
+                        <a href="#usuarios" class="nav-link-custom" data-view="usuarios" id="sidebar-nav-usuarios" onclick="seleccionarAdmin('usuarios')">
+                            <i class="bi bi-people-fill text-info"></i>
                             <span>Usuarios y Permisos</span>
+                        </a>
+                        <a href="#database" class="nav-link-custom" data-view="database" id="sidebar-nav-database" onclick="seleccionarAdmin('database')">
+                            <i class="bi bi-database-fill-gear text-success"></i>
+                            <span>Base de Datos & Backup</span>
                         </a>
                     </div>
                 </div>
@@ -700,21 +697,21 @@
                         <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
                             <div>
                                 <h5 class="fw-bold mb-1 text-dark">
-                                    <i class="bi bi-building text-primary me-2"></i>Gestión de Bodegas y Proyectos Finales
+                                    <i class="bi bi-building-gear text-primary me-2"></i>Gestión de Bodegas, Destinos Finales, Categorías y Ubicaciones
                                 </h5>
                                 <p class="text-muted mb-0 small">
-                                    Configuración y asignación de bodegas físicas y frentes de obra por sede y tipo de inventario.
+                                    Administración centralizada de almacenes físicos, frentes de trabajo / destinos finales, categorías de ítems y posiciones de estantería.
                                 </p>
                             </div>
                             <div class="d-flex align-items-center gap-2">
                                 <button class="btn btn-outline-secondary btn-sm" onclick="loadBodegasYProyectos()">
-                                    <i class="bi bi-arrow-clockwise me-1"></i> Actualizar
+                                    <i class="bi bi-arrow-clockwise me-1"></i> Actualizar Listas
                                 </button>
                             </div>
                         </div>
 
                         <!-- BARRA DE FILTRADO CONTEXTUAL -->
-                        <div class="row g-3 bg-light p-3 rounded-3 border">
+                        <div class="row g-3 bg-light p-3 rounded-3 border mb-3">
                             <div class="col-12 col-md-5">
                                 <label class="form-label fw-bold small mb-1"><i class="bi bi-geo-alt-fill text-danger me-1"></i>Filtrar por Sede:</label>
                                 <select class="form-select form-select-sm fw-semibold" id="filter-bodegas-sede" onchange="loadBodegasYProyectos()">
@@ -733,31 +730,74 @@
                                 </button>
                             </div>
                         </div>
+
+                        <!-- NAVEGACIÓN EN BLOQUES / PESTAÑAS (TABS) -->
+                        <ul class="nav nav-pills custom-pills gap-2 p-1 bg-white border rounded-3" id="bodegasProyectosTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active fw-semibold d-flex align-items-center gap-2 py-2 px-3" id="tab-btn-bodegas" data-bs-toggle="pill" data-bs-target="#pane-tab-bodegas" type="button" role="tab">
+                                    <i class="bi bi-shop text-primary"></i>
+                                    <span>1. Bodegas y Almacenes</span>
+                                    <span class="badge bg-primary rounded-pill ms-1" id="badge-count-bodegas">0</span>
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link fw-semibold d-flex align-items-center gap-2 py-2 px-3" id="tab-btn-proyectos" data-bs-toggle="pill" data-bs-target="#pane-tab-proyectos" type="button" role="tab">
+                                    <i class="bi bi-cone-striped text-warning"></i>
+                                    <span>2. Proyectos / Destino Final</span>
+                                    <span class="badge bg-warning text-dark rounded-pill ms-1" id="badge-count-proyectos">0</span>
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link fw-semibold d-flex align-items-center gap-2 py-2 px-3" id="tab-btn-categorias" data-bs-toggle="pill" data-bs-target="#pane-tab-categorias" type="button" role="tab">
+                                    <i class="bi bi-tags-fill text-success"></i>
+                                    <span>3. Categorías de Materiales</span>
+                                    <span class="badge bg-success rounded-pill ms-1" id="badge-count-categorias">0</span>
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link fw-semibold d-flex align-items-center gap-2 py-2 px-3" id="tab-btn-ubicaciones" data-bs-toggle="pill" data-bs-target="#pane-tab-ubicaciones" type="button" role="tab">
+                                    <i class="bi bi-geo-fill text-info"></i>
+                                    <span>4. Ubicaciones CDS / Estantes</span>
+                                    <span class="badge bg-info text-dark rounded-pill ms-1" id="badge-count-ubicaciones">0</span>
+                                </button>
+                            </li>
+                        </ul>
                     </div>
 
-                    <div class="row g-4">
-                        <!-- PANEL BODEGAS -->
-                        <div class="col-12 col-lg-6">
-                            <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
-                                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <!-- CONTENIDO DE LAS PESTAÑAS (BLOQUES DE ANCHO COMPLETO) -->
+                    <div class="tab-content" id="bodegasProyectosTabsContent">
+                        
+                        <!-- PESTAÑA 1: BODEGAS Y ALMACENES -->
+                        <div class="tab-pane fade show active" id="pane-tab-bodegas" role="tabpanel">
+                            <div class="card card-custom border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+                                <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
                                     <div>
-                                        <h6 class="fw-bold mb-1 text-dark"><i class="bi bi-shop me-1 text-primary"></i>Bodegas / Almacenes Físicos</h6>
-                                        <p class="text-muted mb-0 small">Bodegas centrales y almacenes satélites</p>
+                                        <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-shop me-2 text-primary"></i>Catálogo de Bodegas y Almacenes Físicos</h6>
+                                        <small class="text-muted">Puntos de acopio y bodegas satélites registradas en el sistema</small>
                                     </div>
-                                    <button class="btn btn-primary btn-sm px-3 fw-semibold shadow-sm" onclick="openModalNuevaBodega()">
-                                        <i class="bi bi-plus-circle-fill me-1"></i> Nueva Bodega
-                                    </button>
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <div class="input-group input-group-sm" style="max-width: 260px;">
+                                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                                            <input type="text" class="form-control bg-light border-start-0" id="search-bodegas-input" placeholder="Buscar bodega, código..." oninput="filtrarTablaBodegasUI(this.value)">
+                                        </div>
+                                        <button class="btn btn-primary btn-sm px-3 fw-semibold shadow-sm d-flex align-items-center gap-1.5" onclick="openModalNuevaBodega()">
+                                            <i class="bi bi-plus-circle-fill"></i>
+                                            <span>Nueva Bodega</span>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="table-responsive">
-                                    <table class="table table-hover align-middle mb-0 table-custom" style="font-size: 0.85rem;">
-                                        <thead>
+                                    <table class="table table-hover align-middle mb-0 table-custom" style="font-size: 0.88rem;">
+                                        <thead class="table-light">
                                             <tr>
-                                                <th>Código</th>
-                                                <th>Bodega</th>
-                                                <th>Sede / Inv.</th>
+                                                <th style="width: 110px;">Código</th>
+                                                <th>Nombre de Bodega</th>
+                                                <th>Ubicación Física</th>
+                                                <th>Sede</th>
+                                                <th>Inventario</th>
                                                 <th>Responsable</th>
-                                                <th class="text-center">Estado</th>
-                                                <th class="text-center">Acciones</th>
+                                                <th class="text-center" style="width: 100px;">Estado</th>
+                                                <th class="text-center" style="width: 110px;">Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody id="table-bodegas-body"></tbody>
@@ -766,28 +806,37 @@
                             </div>
                         </div>
 
-                        <!-- PANEL PROYECTOS -->
-                        <div class="col-12 col-lg-6">
-                            <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
-                                <div class="d-flex align-items-center justify-content-between mb-3">
+                        <!-- PESTAÑA 2: PROYECTOS / DESTINO FINAL -->
+                        <div class="tab-pane fade" id="pane-tab-proyectos" role="tabpanel">
+                            <div class="card card-custom border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+                                <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
                                     <div>
-                                        <h6 class="fw-bold mb-1 text-dark"><i class="bi bi-cone-striped me-1 text-warning"></i>Frentes de Obra / Proyectos Finales</h6>
-                                        <p class="text-muted mb-0 small">Destinos operativos finales de entrega de materiales</p>
+                                        <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-cone-striped me-2 text-warning"></i>Proyectos, Obras y Destinos Finales</h6>
+                                        <small class="text-muted">Centros de costo, frentes y destinos de entregas operativas</small>
                                     </div>
-                                    <button class="btn btn-warning btn-sm px-3 fw-semibold shadow-sm text-dark" onclick="openModalNuevoProyecto()">
-                                        <i class="bi bi-plus-circle-fill me-1"></i> Nuevo Proyecto
-                                    </button>
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <div class="input-group input-group-sm" style="max-width: 260px;">
+                                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                                            <input type="text" class="form-control bg-light border-start-0" id="search-proyectos-input" placeholder="Buscar proyecto, obra..." oninput="filtrarTablaProyectosUI(this.value)">
+                                        </div>
+                                        <button class="btn btn-warning btn-sm px-3 fw-semibold shadow-sm text-dark d-flex align-items-center gap-1.5" onclick="openModalNuevoProyecto()">
+                                            <i class="bi bi-plus-circle-fill"></i>
+                                            <span>Nuevo Proyecto / Destino</span>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="table-responsive">
-                                    <table class="table table-hover align-middle mb-0 table-custom" style="font-size: 0.85rem;">
-                                        <thead>
+                                    <table class="table table-hover align-middle mb-0 table-custom" style="font-size: 0.88rem;">
+                                        <thead class="table-light">
                                             <tr>
-                                                <th>ID</th>
-                                                <th>Proyecto / Frente</th>
-                                                <th>Sede / Inv.</th>
-                                                <th>Responsable</th>
-                                                <th class="text-center">Estado</th>
-                                                <th class="text-center">Acciones</th>
+                                                <th style="width: 90px;">ID</th>
+                                                <th>Nombre del Proyecto / Destino</th>
+                                                <th>Observaciones / Descripción</th>
+                                                <th>Sede</th>
+                                                <th>Inventario</th>
+                                                <th>Responsable Asignado</th>
+                                                <th class="text-center" style="width: 100px;">Estado</th>
+                                                <th class="text-center" style="width: 110px;">Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody id="table-proyectos-body"></tbody>
@@ -795,21 +844,149 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- PESTAÑA 3: CATEGORÍAS DE MATERIALES -->
+                        <div class="tab-pane fade" id="pane-tab-categorias" role="tabpanel">
+                            <div class="card card-custom border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+                                <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+                                    <div>
+                                        <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-tags-fill me-2 text-success"></i>Categorías y Familias de Materiales</h6>
+                                        <small class="text-muted">Clasificación taxonómica de ítems para inventario y kardex</small>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <div class="input-group input-group-sm" style="max-width: 260px;">
+                                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                                            <input type="text" class="form-control bg-light border-start-0" id="search-categorias-input" placeholder="Buscar categoría..." oninput="filtrarTablaCategoriasUI(this.value)">
+                                        </div>
+                                        <button class="btn btn-success btn-sm px-3 fw-semibold shadow-sm text-white d-flex align-items-center gap-1.5" onclick="openModalNuevaCategoria()">
+                                            <i class="bi bi-plus-circle-fill"></i>
+                                            <span>Nueva Categoría</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0 table-custom" style="font-size: 0.88rem;">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 90px;">Orden</th>
+                                                <th>Nombre de la Categoría</th>
+                                                <th>Descripción</th>
+                                                <th class="text-center" style="width: 140px;">Ítems Asociados</th>
+                                                <th class="text-center" style="width: 110px;">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="table-categorias-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- PESTAÑA 4: UBICACIONES FÍSICAS CDS -->
+                        <div class="tab-pane fade" id="pane-tab-ubicaciones" role="tabpanel">
+                            <div class="card card-custom border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+                                <div class="card-header bg-white py-3 px-4 border-bottom d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+                                    <div>
+                                        <h6 class="fw-bold mb-0 text-dark"><i class="bi bi-geo-fill me-2 text-info"></i>Ubicaciones Físicas y Posiciones en Bodega</h6>
+                                        <small class="text-muted">Estanterías, niveles y zonas de almacenamiento físico</small>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <div class="input-group input-group-sm" style="max-width: 260px;">
+                                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                                            <input type="text" class="form-control bg-light border-start-0" id="search-ubicaciones-input" placeholder="Buscar ubicación..." oninput="filtrarTablaUbicacionesUI(this.value)">
+                                        </div>
+                                        <button class="btn btn-info btn-sm px-3 fw-semibold shadow-sm text-dark d-flex align-items-center gap-1.5" onclick="openModalNuevaUbicacion()">
+                                            <i class="bi bi-plus-circle-fill"></i>
+                                            <span>Nueva Ubicación</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0 table-custom" style="font-size: 0.88rem;">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 90px;">Orden</th>
+                                                <th>Código / Nombre de Posición</th>
+                                                <th class="text-center" style="width: 140px;">Ítems Asignados</th>
+                                                <th class="text-center" style="width: 110px;">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="table-ubicaciones-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 </section>
 
                 <!-- 7. VISTA KARDEX Y REPORTES -->
                 <section id="view-reportes" class="app-view" style="display: none;">
-                    <!-- CENTRO DE REPORTES GERENCIALES -->
+                    <!-- CENTRO DE REPORTES GERENCIALES Y FILTRADO PREVIO -->
                     <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
-                        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
+                        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
                             <div>
-                                <h5 class="fw-bold mb-1 text-dark">Centro de Reportes Gerenciales y Auditoría</h5>
-                                <p class="text-muted mb-0 small">Exportación directa a hojas de cálculo Excel (.xlsx) estructuradas por columnas</p>
+                                <h5 class="fw-bold mb-1 text-dark">
+                                    <i class="bi bi-file-earmark-bar-graph text-primary me-2"></i>Centro de Reportes Gerenciales, Filtros y Auditoría
+                                </h5>
+                                <p class="text-muted mb-0 small">Personalice fechas, sedes, categorías y condiciones antes de generar y exportar a Excel (.xlsx)</p>
                             </div>
-                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-2">
-                                <i class="bi bi-file-earmark-excel-fill me-1"></i> Formato Nativo XLSX Compatible
-                            </span>
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <button class="btn btn-primary btn-sm fw-bold shadow-sm d-flex align-items-center px-3" onclick="openModalFiltroReporte()">
+                                    <i class="bi bi-sliders2-vertical me-2"></i> Generador de Reportes con Filtros
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- BARRA DE FILTRADO RÁPIDO PARA REPORTES -->
+                        <div class="bg-light p-3 rounded-3 border mb-4">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <span class="fw-bold small text-dark"><i class="bi bi-funnel-fill text-primary me-1"></i>Filtro Previo Activo para Descargas Rápidas:</span>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-secondary py-0 px-2" style="font-size: 0.72rem;" onclick="setQuickDateRange('HOY')">Hoy</button>
+                                    <button class="btn btn-outline-secondary py-0 px-2" style="font-size: 0.72rem;" onclick="setQuickDateRange('7DIAS')">7 Días</button>
+                                    <button class="btn btn-outline-secondary py-0 px-2" style="font-size: 0.72rem;" onclick="setQuickDateRange('MES')">Este Mes</button>
+                                    <button class="btn btn-outline-secondary py-0 px-2" style="font-size: 0.72rem;" onclick="setQuickDateRange('TODO')">Todo</button>
+                                </div>
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-12 col-sm-6 col-md-2">
+                                    <label class="form-label small text-muted mb-0" style="font-size: 0.75rem;">Fecha Desde:</label>
+                                    <input type="date" class="form-control form-control-sm" id="rep-quick-fecha-desde" onchange="actualizarPrevisualizacionReporte()">
+                                </div>
+                                <div class="col-12 col-sm-6 col-md-2">
+                                    <label class="form-label small text-muted mb-0" style="font-size: 0.75rem;">Fecha Hasta:</label>
+                                    <input type="date" class="form-control form-control-sm" id="rep-quick-fecha-hasta" onchange="actualizarPrevisualizacionReporte()">
+                                </div>
+                                <div class="col-12 col-sm-6 col-md-2">
+                                    <label class="form-label small text-muted mb-0" style="font-size: 0.75rem;">Categoría:</label>
+                                    <select class="form-select form-select-sm" id="rep-quick-categoria" onchange="actualizarPrevisualizacionReporte()"></select>
+                                </div>
+                                <div class="col-12 col-sm-6 col-md-2">
+                                    <label class="form-label small text-muted mb-0" style="font-size: 0.75rem;">Ubicación CDS:</label>
+                                    <select class="form-select form-select-sm" id="rep-quick-ubicacion" onchange="actualizarPrevisualizacionReporte()"></select>
+                                </div>
+                                <div class="col-12 col-sm-6 col-md-2">
+                                    <label class="form-label small text-muted mb-0" style="font-size: 0.75rem;">Tipo Movimiento:</label>
+                                    <select class="form-select form-select-sm" id="rep-quick-tipo-mov" onchange="actualizarPrevisualizacionReporte()">
+                                        <option value="TODOS">-- Todos los Tipos --</option>
+                                        <option value="ENTRADA">Entrada</option>
+                                        <option value="ENTREGA">Entrega (Salida)</option>
+                                        <option value="DEVOLUCION">Devolución</option>
+                                        <option value="TRASLADO">Traslado</option>
+                                        <option value="DISPOSICION FINAL">Baja / Disp. Final</option>
+                                        <option value="AJUSTE POSITIVO">Ajuste Positivo</option>
+                                        <option value="AJUSTE NEGATIVO">Ajuste Negativo</option>
+                                    </select>
+                                </div>
+                                <div class="col-12 col-sm-12 col-md-2 d-flex align-items-end gap-1">
+                                    <button class="btn btn-outline-primary btn-sm w-100 fw-semibold" onclick="aplicarFiltrosYMostrarEnPantalla('MOVIMIENTOS')" title="Ver datos filtrados en pantalla">
+                                        <i class="bi bi-search me-1"></i> Previsualizar
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm px-2" onclick="limpiarFiltrosRapidosReportes()" title="Limpiar filtros">
+                                        <i class="bi bi-x-circle"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="row g-3 mb-4">
@@ -820,10 +997,15 @@
                                         <i class="bi bi-boxes fs-4"></i>
                                         <h6 class="fw-bold mb-0">Balance de Stock</h6>
                                     </div>
-                                    <p class="text-muted small mb-3">Existencias actuales, entradas, entregas y saldo físico de todos los ítems en CDS.</p>
-                                    <button class="btn btn-success btn-sm w-100 mt-auto fw-semibold" onclick="exportInventarioExcel()">
-                                        <i class="bi bi-download me-1"></i> Descargar Excel
-                                    </button>
+                                    <p class="text-muted small mb-3">Existencias, entradas, salidas y saldo físico de ítems con los filtros activos.</p>
+                                    <div class="d-flex flex-column gap-1.5 mt-auto">
+                                        <button class="btn btn-outline-success btn-sm w-100 fw-semibold" onclick="openModalFiltroReporte('BALANCE')">
+                                            <i class="bi bi-funnel-fill me-1"></i> Filtrar y Descargar
+                                        </button>
+                                        <button class="btn btn-success btn-sm w-100 fw-semibold text-white" onclick="exportInventarioExcelFiltrado()">
+                                            <i class="bi bi-file-earmark-excel-fill me-1"></i> Descargar Excel (.xlsx)
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -834,10 +1016,15 @@
                                         <i class="bi bi-exclamation-triangle-fill fs-4 text-warning"></i>
                                         <h6 class="fw-bold mb-0 text-dark">Stock Crítico / Bajo</h6>
                                     </div>
-                                    <p class="text-muted small mb-3">Filtro exclusivo de ítems bajo el stock mínimo o sin existencias para reabastecimiento.</p>
-                                    <button class="btn btn-warning btn-sm w-100 mt-auto fw-semibold text-dark" onclick="exportReporteStockBajoExcel()">
-                                        <i class="bi bi-download me-1"></i> Descargar Excel
-                                    </button>
+                                    <p class="text-muted small mb-3">Filtro de ítems en nivel crítico o sin existencias para reabastecimiento.</p>
+                                    <div class="d-flex flex-column gap-1.5 mt-auto">
+                                        <button class="btn btn-outline-warning btn-sm w-100 fw-semibold text-dark" onclick="openModalFiltroReporte('STOCK_CRITICO')">
+                                            <i class="bi bi-funnel-fill me-1"></i> Filtrar y Descargar
+                                        </button>
+                                        <button class="btn btn-warning btn-sm w-100 fw-semibold text-dark" onclick="exportReporteStockBajoExcelFiltrado()">
+                                            <i class="bi bi-file-earmark-excel-fill me-1"></i> Descargar Excel (.xlsx)
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -848,10 +1035,15 @@
                                         <i class="bi bi-alarm-fill fs-4"></i>
                                         <h6 class="fw-bold mb-0">Lotes y Vencimientos</h6>
                                     </div>
-                                    <p class="text-muted small mb-3">Estado de caducidad, días restantes y lotes con semáforo de alerta en CDS.</p>
-                                    <button class="btn btn-danger btn-sm w-100 mt-auto fw-semibold" onclick="exportReporteVencidosExcel()">
-                                        <i class="bi bi-download me-1"></i> Descargar Excel
-                                    </button>
+                                    <p class="text-muted small mb-3">Caducidad, lotes vencidos y semáforo de alerta con filtros de fecha.</p>
+                                    <div class="d-flex flex-column gap-1.5 mt-auto">
+                                        <button class="btn btn-outline-danger btn-sm w-100 fw-semibold" onclick="openModalFiltroReporte('VENCIMIENTOS')">
+                                            <i class="bi bi-funnel-fill me-1"></i> Filtrar y Descargar
+                                        </button>
+                                        <button class="btn btn-danger btn-sm w-100 fw-semibold text-white" onclick="exportReporteVencidosExcelFiltrado()">
+                                            <i class="bi bi-file-earmark-excel-fill me-1"></i> Descargar Excel (.xlsx)
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -862,11 +1054,43 @@
                                         <i class="bi bi-journal-text fs-4"></i>
                                         <h6 class="fw-bold mb-0">Libro Movimientos</h6>
                                     </div>
-                                    <p class="text-muted small mb-3">Trazabilidad histórica completa de transacciones, orígenes, destinos y causales.</p>
-                                    <button class="btn btn-primary btn-sm w-100 mt-auto fw-semibold" onclick="exportMovimientosExcel()">
-                                        <i class="bi bi-download me-1"></i> Descargar Excel
+                                    <p class="text-muted small mb-3">Trazabilidad de entradas, salidas, responsables y causales por rango.</p>
+                                    <div class="d-flex flex-column gap-1.5 mt-auto">
+                                        <button class="btn btn-outline-primary btn-sm w-100 fw-semibold" onclick="openModalFiltroReporte('MOVIMIENTOS')">
+                                            <i class="bi bi-funnel-fill me-1"></i> Filtrar y Descargar
+                                        </button>
+                                        <button class="btn btn-primary btn-sm w-100 fw-semibold text-white" onclick="exportMovimientosExcelFiltrado()">
+                                            <i class="bi bi-file-earmark-excel-fill me-1"></i> Descargar Excel (.xlsx)
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SECCIÓN DINÁMICA: VISUALIZADOR DE REPORTE FILTRADO EN PANTALLA -->
+                        <div id="reporte-live-container" class="border-top pt-4 mb-4" style="display: none;">
+                            <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
+                                <div>
+                                    <h6 class="fw-bold mb-1 text-dark" id="reporte-live-title">
+                                        <i class="bi bi-table text-primary me-2"></i>Resultados del Reporte Filtrado
+                                    </h6>
+                                    <div class="small text-muted" id="reporte-live-subtitle">Filtros aplicados en tiempo real</div>
+                                </div>
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <span class="badge bg-primary fs-6 px-3 py-1.5" id="reporte-live-badge-count">0 registros</span>
+                                    <button class="btn btn-success btn-sm fw-bold shadow-sm" onclick="exportarReporteLiveActual()">
+                                        <i class="bi bi-file-earmark-excel-fill me-1"></i> Exportar Esta Tabla (.xlsx)
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="cerrarVisualizadorReporteLive()">
+                                        <i class="bi bi-x-lg"></i>
                                     </button>
                                 </div>
+                            </div>
+                            <div class="table-responsive rounded-3 border" style="max-height: 480px; overflow-y: auto;">
+                                <table class="table table-hover align-middle mb-0" style="font-size: 0.82rem;" id="table-reporte-live">
+                                    <thead class="table-dark sticky-top" id="thead-reporte-live"></thead>
+                                    <tbody id="tbody-reporte-live"></tbody>
+                                </table>
                             </div>
                         </div>
 
@@ -1360,8 +1584,19 @@
                                                     <small class="text-muted d-block">Permite exportar y restaurar la base de datos SQLite (.db) y JSON.</small>
                                                 </div>
                                             </div>
-                                            <div class="col-12">
-                                                <div class="p-3 border rounded-3 bg-light">
+                                            <div class="col-12 col-md-6">
+                                                <div class="p-3 border rounded-3 bg-light h-100">
+                                                    <div class="form-check form-switch mb-2">
+                                                        <input class="form-check-input check-perm-extra" type="checkbox" id="perm-extra-multi-sede" value="ACCESO_MULTI_SEDE">
+                                                        <label class="form-check-label fw-bold text-dark" for="perm-extra-multi-sede">
+                                                            <i class="bi bi-geo-alt-fill text-danger me-1"></i>Acceso Multi-Sedes (Ver Todas las Sedes)
+                                                        </label>
+                                                    </div>
+                                                    <small class="text-muted d-block">Permite alternar entre sedes y realizar movimientos o configuraciones en cualquier sede. Sin este permiso, el usuario solo puede operar en su sede asignada.</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <div class="p-3 border rounded-3 bg-light h-100">
                                                     <div class="form-check form-switch mb-2">
                                                         <input class="form-check-input check-perm-extra" type="checkbox" id="perm-extra-bodegas" value="ADMINISTRAR_BODEGAS">
                                                         <label class="form-check-label fw-bold text-dark" for="perm-extra-bodegas">Configurar Bodegas y Proyectos</label>
@@ -1436,19 +1671,29 @@
                                 </div>
                             </div>
 
-                            <div class="col-12 col-md-4">
-                                <label class="form-label fw-bold small">Cantidad <span class="text-danger">*</span></label>
+                            <div class="col-12 col-md-6" id="col-mov-cantidad">
+                                <label class="form-label fw-bold small" id="lbl-mov-cantidad">Cantidad <span class="text-danger">*</span></label>
                                 <input type="number" step="any" min="0.01" class="form-control" id="mov-cantidad" required placeholder="0.00">
                             </div>
 
-                            <div class="col-12 col-md-4">
-                                <label class="form-label fw-bold small">Bodega Origen</label>
+                            <div class="col-12 col-md-6" id="col-mov-bodega-origen">
+                                <label class="form-label fw-bold small" id="lbl-mov-bodega-origen"><i class="bi bi-box-arrow-up-right me-1 text-danger"></i>Bodega Origen <span class="text-danger">*</span></label>
                                 <select class="form-select" id="mov-bodega-origen" onchange="actualizarStockPreviewEnMovimiento()"></select>
                             </div>
 
-                            <div class="col-12 col-md-4">
-                                <label class="form-label fw-bold small">Bodega Destino</label>
+                            <div class="col-12 col-md-6" id="col-mov-bodega-destino">
+                                <label class="form-label fw-bold small" id="lbl-mov-bodega-destino"><i class="bi bi-box-arrow-in-down-right me-1 text-success"></i>Bodega Destino <span class="text-danger">*</span></label>
                                 <select class="form-select" id="mov-bodega-destino"></select>
+                            </div>
+
+                            <div class="col-12 col-md-6" id="col-mov-proyecto">
+                                <label class="form-label fw-bold small" id="lbl-mov-proyecto"><i class="bi bi-buildings me-1 text-primary"></i>Proyecto / Destino Final <span class="text-danger">*</span></label>
+                                <select class="form-select" id="mov-proyecto"></select>
+                            </div>
+
+                            <div class="col-12 col-md-6" id="col-mov-causal">
+                                <label class="form-label fw-bold small" id="lbl-mov-causal"><i class="bi bi-info-circle me-1"></i>Causal / Condición</label>
+                                <select class="form-select" id="mov-causal"></select>
                             </div>
 
                             <div class="col-12 col-md-6" id="mov-vencimiento-container" style="display: none;">
@@ -1460,33 +1705,23 @@
                                 </div>
                             </div>
 
-                            <div class="col-12 col-md-6">
-                                <label class="form-label fw-bold small">Causal / Condición</label>
-                                <select class="form-select" id="mov-causal"></select>
-                            </div>
-
-                            <div class="col-12 col-md-6">
-                                <label class="form-label fw-bold small">Proyecto / Destino Final</label>
-                                <select class="form-select" id="mov-proyecto"></select>
-                            </div>
-
-                            <div class="col-12 col-md-6">
-                                <label class="form-label fw-bold small">Responsable Transacción</label>
-                                <input type="text" class="form-control" id="mov-responsable" value="Administrador CDS" required>
-                            </div>
-
-                            <div class="col-12 col-md-6">
-                                <label class="form-label fw-bold small">Persona que Recibe / Devuelve</label>
+                            <div class="col-12 col-md-6" id="col-mov-persona-recibe">
+                                <label class="form-label fw-bold small" id="lbl-mov-persona-recibe"><i class="bi bi-person-badge me-1"></i>Persona que Recibe / Devuelve</label>
                                 <input type="text" class="form-control" id="mov-persona-recibe" placeholder="Nombre de quien recibe/entrega">
                             </div>
 
-                            <div class="col-12 col-md-6">
-                                <label class="form-label fw-bold small">Documento / Referencia</label>
+                            <div class="col-12 col-md-6" id="col-mov-doc-ref">
+                                <label class="form-label fw-bold small" id="lbl-mov-doc-ref"><i class="bi bi-receipt me-1"></i>Documento / Referencia</label>
                                 <input type="text" class="form-control" id="mov-doc-ref" placeholder="Ej: REMISION-1045, FACT-992">
                             </div>
 
-                            <div class="col-12">
-                                <label class="form-label fw-bold small">Observaciones</label>
+                            <div class="col-12 col-md-6" id="col-mov-responsable">
+                                <label class="form-label fw-bold small"><i class="bi bi-shield-check me-1"></i>Responsable Transacción <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="mov-responsable" value="Administrador CDS" required>
+                            </div>
+
+                            <div class="col-12" id="col-mov-observaciones">
+                                <label class="form-label fw-bold small"><i class="bi bi-chat-left-text me-1"></i>Observaciones</label>
                                 <textarea class="form-control" id="mov-observaciones" rows="2" placeholder="Detalles u observaciones del movimiento"></textarea>
                             </div>
                         </div>
@@ -1628,7 +1863,12 @@
                             </div>
 
                             <div class="col-12 col-md-4">
-                                <label class="form-label fw-bold small">Categoría <span class="text-danger">*</span></label>
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label class="form-label fw-bold small mb-0">Categoría <span class="text-danger">*</span></label>
+                                    <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none small text-primary fw-semibold" onclick="openModalNuevaCategoria()" title="Crear nueva categoría">
+                                        <i class="bi bi-plus-circle me-1"></i>Nueva
+                                    </button>
+                                </div>
                                 <select class="form-select" id="item-categoria" required></select>
                             </div>
 
@@ -1653,7 +1893,12 @@
                             </div>
 
                             <div class="col-12 col-md-4">
-                                <label class="form-label fw-bold small">Ubicación Bodega CDS</label>
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label class="form-label fw-bold small mb-0">Ubicación Bodega CDS</label>
+                                    <button type="button" class="btn btn-link btn-sm p-0 text-info fw-bold text-decoration-none" onclick="openModalNuevaUbicacion()" style="font-size: 0.75rem;">
+                                        <i class="bi bi-plus-circle me-1"></i>Nueva
+                                    </button>
+                                </div>
                                 <select class="form-select" id="item-ubicacion"></select>
                             </div>
 
@@ -1901,6 +2146,154 @@
                     <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancelar</button>
                     <button type="button" class="btn btn-danger btn-sm px-4 fw-bold shadow-sm" id="btn-confirmar-eliminar-proy" onclick="ejecutarEliminarProyecto()">
                         <i class="bi bi-trash3-fill me-1"></i> Confirmar y Eliminar Proyecto
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Crear / Modificar Categoría -->
+    <div class="modal fade" id="modalNuevaCategoria" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+                <div class="modal-header bg-success text-white p-3">
+                    <h6 class="modal-title fw-bold text-white" id="modalCategoriaTitle">
+                        <i class="bi bi-tags-fill me-2"></i>Nueva Categoría de Materiales
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="form-categoria" onsubmit="submitCategoria(event)">
+                    <input type="hidden" id="cat-id">
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Nombre de la Categoría <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="cat-nombre" required placeholder="Ej: Tornilleria, Herramientas, Cableado...">
+                            <div class="form-text text-muted small">Nombre único para clasificar y agrupar los ítems del inventario.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Orden de Visualización</label>
+                            <input type="number" class="form-control" id="cat-orden" min="1" placeholder="Ej: 1, 2, 3...">
+                            <div class="form-text text-muted small">Posición en la que aparecerá en los menús desplegables.</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light p-3">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success btn-sm px-4 fw-bold text-white" id="btn-guardar-categoria">
+                            <i class="bi bi-check2-circle me-1"></i> Guardar Categoría
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Confirmar Eliminación de Categoría -->
+    <div class="modal fade" id="modalEliminarCategoria" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+                <div class="modal-header bg-danger text-white p-3">
+                    <h6 class="modal-title fw-bold text-white">
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Confirmar Eliminación de Categoría
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="alert alert-warning border-warning d-flex align-items-start gap-2 mb-3">
+                        <i class="bi bi-info-circle-fill text-warning fs-5 flex-shrink-0 mt-1"></i>
+                        <div class="small">
+                            <strong>Atención:</strong> Solo se pueden eliminar categorías que no posean ítems ni materiales asociados en el inventario.
+                        </div>
+                    </div>
+                    
+                    <div class="card border rounded-3 p-3 bg-light mb-3">
+                        <div class="row g-2 small">
+                            <div class="col-12"><span class="text-muted">Categoría:</span> <strong class="text-dark fs-6" id="del-cat-nombre">--</strong></div>
+                            <div class="col-12"><span class="text-muted">Ítems Asociados:</span> <span class="badge bg-secondary" id="del-cat-items">0</span></div>
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="del-cat-id-input">
+                    <p class="text-muted small mb-0">¿Está seguro de que desea eliminar permanentemente esta categoría?</p>
+                </div>
+                <div class="modal-footer bg-light p-3">
+                    <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger btn-sm px-4 fw-bold shadow-sm" id="btn-confirmar-eliminar-cat" onclick="ejecutarEliminarCategoria()">
+                        <i class="bi bi-trash3-fill me-1"></i> Confirmar y Eliminar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Crear / Modificar Ubicación -->
+    <div class="modal fade" id="modalNuevaUbicacion" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+                <div class="modal-header bg-info text-dark p-3">
+                    <h6 class="modal-title fw-bold text-dark" id="modalUbicacionTitle">
+                        <i class="bi bi-geo-fill me-2"></i>Nueva Ubicación / Posición Física
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="form-ubicacion" onsubmit="submitUbicacion(event)">
+                    <input type="hidden" id="ubi-id">
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Código o Nombre de Ubicación <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control text-uppercase" id="ubi-nombre" required placeholder="Ej: A1, B2, E-3, ESTANTE 4...">
+                            <div class="form-text text-muted small">Identificador físico del estante, pasillo o casillero en bodega CDS.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small">Orden de Visualización</label>
+                            <input type="number" class="form-control" id="ubi-orden" min="1" placeholder="Ej: 1, 2, 3...">
+                            <div class="form-text text-muted small">Posición en la que aparecerá en los selectores de ubicación.</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light p-3">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-info btn-sm px-4 fw-bold text-dark" id="btn-guardar-ubicacion">
+                            <i class="bi bi-check2-circle me-1"></i> Guardar Ubicación
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Confirmar Eliminación de Ubicación -->
+    <div class="modal fade" id="modalEliminarUbicacion" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow rounded-4 overflow-hidden">
+                <div class="modal-header bg-danger text-white p-3">
+                    <h6 class="modal-title fw-bold text-white">
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Confirmar Eliminación de Ubicación
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="alert alert-warning border-warning d-flex align-items-start gap-2 mb-3">
+                        <i class="bi bi-info-circle-fill text-warning fs-5 flex-shrink-0 mt-1"></i>
+                        <div class="small">
+                            <strong>Atención:</strong> Solo se pueden eliminar ubicaciones que no posean ítems ni materiales asociados en el inventario.
+                        </div>
+                    </div>
+                    
+                    <div class="card border rounded-3 p-3 bg-light mb-3">
+                        <div class="row g-2 small">
+                            <div class="col-12"><span class="text-muted">Ubicación / Posición:</span> <strong class="text-dark fs-6" id="del-ubi-nombre">--</strong></div>
+                            <div class="col-12"><span class="text-muted">Ítems Asignados:</span> <span class="badge bg-secondary" id="del-ubi-items">0</span></div>
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="del-ubi-id-input">
+                    <p class="text-muted small mb-0">¿Está seguro de que desea eliminar permanentemente esta ubicación?</p>
+                </div>
+                <div class="modal-footer bg-light p-3">
+                    <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-danger btn-sm px-4 fw-bold shadow-sm" id="btn-confirmar-eliminar-ubi" onclick="ejecutarEliminarUbicacion()">
+                        <i class="bi bi-trash3-fill me-1"></i> Confirmar y Eliminar
                     </button>
                 </div>
             </div>
@@ -2234,6 +2627,210 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Generador y Filtro Avanzado de Reportes -->
+    <div class="modal fade" id="modalFiltroReporte" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="modal-header bg-dark text-white p-3">
+                    <h6 class="modal-title fw-bold text-white d-flex align-items-center">
+                        <i class="bi bi-sliders2-vertical text-warning me-2 fs-5"></i>
+                        Generador de Reportes y Auditoría con Filtros Previos
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4 bg-light">
+                    <!-- PASO 1: SELECCIÓN DE REPORTE -->
+                    <div class="card border rounded-3 p-3 bg-white mb-3 shadow-xs">
+                        <label class="form-label fw-bold text-dark small mb-2"><i class="bi bi-file-earmark-text-fill text-primary me-1"></i>1. Seleccione el Tipo de Reporte a Generar:</label>
+                        <div class="row g-2">
+                            <div class="col-12 col-md-4 col-xl-2.4">
+                                <div class="form-check p-0">
+                                    <input type="radio" class="btn-check" name="rep-tipo-modal" id="rep-tipo-movs" value="MOVIMIENTOS" checked onchange="onCambioTipoReporteModal()">
+                                    <label class="btn btn-outline-primary btn-sm w-100 text-start py-2 px-2.5 h-100 d-flex flex-column justify-content-center" for="rep-tipo-movs">
+                                        <div class="fw-bold"><i class="bi bi-journal-text me-1"></i>Movimientos</div>
+                                        <small class="text-muted" style="font-size: 0.72rem;">Libro diario y auditoría</small>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-4 col-xl-2.4">
+                                <div class="form-check p-0">
+                                    <input type="radio" class="btn-check" name="rep-tipo-modal" id="rep-tipo-balance" value="BALANCE" onchange="onCambioTipoReporteModal()">
+                                    <label class="btn btn-outline-success btn-sm w-100 text-start py-2 px-2.5 h-100 d-flex flex-column justify-content-center" for="rep-tipo-balance">
+                                        <div class="fw-bold"><i class="bi bi-boxes me-1"></i>Balance de Stock</div>
+                                        <small class="text-muted" style="font-size: 0.72rem;">Existencias físicas CDS</small>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-4 col-xl-2.4">
+                                <div class="form-check p-0">
+                                    <input type="radio" class="btn-check" name="rep-tipo-modal" id="rep-tipo-critico" value="STOCK_CRITICO" onchange="onCambioTipoReporteModal()">
+                                    <label class="btn btn-outline-warning btn-sm w-100 text-start py-2 px-2.5 h-100 d-flex flex-column justify-content-center text-dark" for="rep-tipo-critico">
+                                        <div class="fw-bold"><i class="bi bi-exclamation-triangle-fill me-1 text-warning"></i>Stock Crítico / Bajo</div>
+                                        <small class="text-muted" style="font-size: 0.72rem;">Reabastecimiento y faltantes</small>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6 col-xl-2.4">
+                                <div class="form-check p-0">
+                                    <input type="radio" class="btn-check" name="rep-tipo-modal" id="rep-tipo-venc" value="VENCIMIENTOS" onchange="onCambioTipoReporteModal()">
+                                    <label class="btn btn-outline-danger btn-sm w-100 text-start py-2 px-2.5 h-100 d-flex flex-column justify-content-center" for="rep-tipo-venc">
+                                        <div class="fw-bold"><i class="bi bi-alarm-fill me-1"></i>Vencimientos</div>
+                                        <small class="text-muted" style="font-size: 0.72rem;">Control de lotes y alertas</small>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6 col-xl-2.4">
+                                <div class="form-check p-0">
+                                    <input type="radio" class="btn-check" name="rep-tipo-modal" id="rep-tipo-cat" value="CATALOGO" onchange="onCambioTipoReporteModal()">
+                                    <label class="btn btn-outline-secondary btn-sm w-100 text-start py-2 px-2.5 h-100 d-flex flex-column justify-content-center" for="rep-tipo-cat">
+                                        <div class="fw-bold"><i class="bi bi-tags-fill me-1"></i>Catálogo Maestro</div>
+                                        <small class="text-muted" style="font-size: 0.72rem;">Listado general de ítems</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PASO 2: FORMULARIO DE FILTROS PREVIOS -->
+                    <div class="card border rounded-3 p-3 bg-white mb-3 shadow-xs">
+                        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                            <span class="fw-bold text-dark small"><i class="bi bi-funnel-fill text-warning me-1"></i>2. Configure los Filtros Deseados:</span>
+                            <div class="d-flex align-items-center gap-1">
+                                <span class="small text-muted me-1" style="font-size: 0.75rem;">Rango rápido:</span>
+                                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.72rem;" onclick="setModalDateRange('HOY')">Hoy</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.72rem;" onclick="setModalDateRange('7DIAS')">7 Días</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.72rem;" onclick="setModalDateRange('MES')">Este Mes</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.72rem;" onclick="setModalDateRange('MES_ANT')">Mes Anterior</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.72rem;" onclick="setModalDateRange('TODO')">Todo</button>
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <!-- Fechas -->
+                            <div class="col-12 col-sm-6 col-md-3" id="group-filtro-fechas-desde">
+                                <label class="form-label small fw-semibold mb-1">Fecha Desde:</label>
+                                <input type="date" class="form-control form-control-sm" id="modal-filtro-fecha-desde" onchange="ejecutarFiltroReporteModal()">
+                            </div>
+                            <div class="col-12 col-sm-6 col-md-3" id="group-filtro-fechas-hasta">
+                                <label class="form-label small fw-semibold mb-1">Fecha Hasta:</label>
+                                <input type="date" class="form-control form-control-sm" id="modal-filtro-fecha-hasta" onchange="ejecutarFiltroReporteModal()">
+                            </div>
+
+                            <!-- Sede e Inventario -->
+                            <div class="col-12 col-sm-6 col-md-3">
+                                <label class="form-label small fw-semibold mb-1"><i class="bi bi-geo-alt-fill text-danger me-1"></i>Sede:</label>
+                                <select class="form-select form-select-sm fw-semibold" id="modal-filtro-sede" onchange="ejecutarFiltroReporteModal()">
+                                    <option value="TODAS">-- Todas las Sedes --</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-sm-6 col-md-3">
+                                <label class="form-label small fw-semibold mb-1"><i class="bi bi-boxes text-info me-1"></i>Inventario:</label>
+                                <select class="form-select form-select-sm fw-semibold" id="modal-filtro-tipo-inv" onchange="ejecutarFiltroReporteModal()">
+                                    <option value="TODOS">-- Todos los Inventarios --</option>
+                                </select>
+                            </div>
+
+                            <!-- Categoría y Ubicación -->
+                            <div class="col-12 col-sm-6 col-md-3">
+                                <label class="form-label small fw-semibold mb-1"><i class="bi bi-tags-fill text-success me-1"></i>Categoría:</label>
+                                <select class="form-select form-select-sm" id="modal-filtro-categoria" onchange="ejecutarFiltroReporteModal()">
+                                    <option value="TODAS">-- Todas las Categorías --</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-sm-6 col-md-3">
+                                <label class="form-label small fw-semibold mb-1"><i class="bi bi-geo-fill text-info me-1"></i>Ubicación CDS:</label>
+                                <select class="form-select form-select-sm" id="modal-filtro-ubicacion" onchange="ejecutarFiltroReporteModal()">
+                                    <option value="TODAS">-- Todas las Ubicaciones --</option>
+                                </select>
+                            </div>
+
+                            <!-- Filtros dinámicos según reporte -->
+                            <div class="col-12 col-sm-6 col-md-3" id="group-filtro-tipo-mov">
+                                <label class="form-label small fw-semibold mb-1"><i class="bi bi-arrow-left-right text-primary me-1"></i>Tipo Movimiento:</label>
+                                <select class="form-select form-select-sm" id="modal-filtro-tipo-mov" onchange="ejecutarFiltroReporteModal()">
+                                    <option value="TODOS">-- Todos los Tipos --</option>
+                                    <option value="ENTRADA">Entrada</option>
+                                    <option value="ENTREGA">Entrega (Salida)</option>
+                                    <option value="DEVOLUCION">Devolución</option>
+                                    <option value="TRASLADO">Traslado</option>
+                                    <option value="DISPOSICION FINAL">Baja / Disp. Final</option>
+                                    <option value="AJUSTE POSITIVO">Ajuste Positivo</option>
+                                    <option value="AJUSTE NEGATIVO">Ajuste Negativo</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-sm-6 col-md-3" id="group-filtro-bodega">
+                                <label class="form-label small fw-semibold mb-1"><i class="bi bi-shop text-secondary me-1"></i>Bodega:</label>
+                                <select class="form-select form-select-sm" id="modal-filtro-bodega" onchange="ejecutarFiltroReporteModal()">
+                                    <option value="TODAS">-- Todas las Bodegas --</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-sm-6 col-md-3" id="group-filtro-proyecto">
+                                <label class="form-label small fw-semibold mb-1"><i class="bi bi-cone-striped text-warning me-1"></i>Frente / Proyecto:</label>
+                                <select class="form-select form-select-sm" id="modal-filtro-proyecto" onchange="ejecutarFiltroReporteModal()">
+                                    <option value="TODOS">-- Todos los Proyectos --</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-sm-6 col-md-3" id="group-filtro-estado-venc" style="display: none;">
+                                <label class="form-label small fw-semibold mb-1"><i class="bi bi-alarm-fill text-danger me-1"></i>Estado Caducidad:</label>
+                                <select class="form-select form-select-sm" id="modal-filtro-estado-venc" onchange="ejecutarFiltroReporteModal()">
+                                    <option value="TODOS">-- Todos los Lotes --</option>
+                                    <option value="SOLO_VENCIDOS">¡Solo Vencidos!</option>
+                                    <option value="PROXIMOS_30_DIAS">Próximos a Vencer (30 Días)</option>
+                                    <option value="VENCIDOS_Y_PROXIMOS">Vencidos + Próximos a Vencer</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-sm-6 col-md-3" id="group-filtro-estado-stock" style="display: none;">
+                                <label class="form-label small fw-semibold mb-1"><i class="bi bi-shield-exclamation text-warning me-1"></i>Condición de Stock:</label>
+                                <select class="form-select form-select-sm" id="modal-filtro-estado-stock" onchange="ejecutarFiltroReporteModal()">
+                                    <option value="TODOS">-- Todos los Ítems --</option>
+                                    <option value="CRITICO_O_BAJO">Stock Crítico o Sin Existencias</option>
+                                    <option value="STOCK_BAJO">Solo Stock Bajo</option>
+                                    <option value="SIN_EXISTENCIAS">Solo Sin Existencias (0)</option>
+                                    <option value="CON_STOCK">Solo Ítems Con Existencias (&gt; 0)</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-sm-6 col-md-3">
+                                <label class="form-label small fw-semibold mb-1"><i class="bi bi-search me-1"></i>Buscar Texto / Código:</label>
+                                <input type="text" class="form-control form-control-sm" id="modal-filtro-search" placeholder="Ej: Tornillo, MOV-001, Giobani..." oninput="ejecutarFiltroReporteModal()">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PASO 3: RESUMEN Y VISTA PREVIA -->
+                    <div class="card border rounded-3 p-3 bg-white shadow-xs">
+                        <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="fw-bold text-dark small"><i class="bi bi-eye-fill text-info me-1"></i>3. Vista Previa de Registros:</span>
+                                <span class="badge bg-primary fs-6 px-3 py-1" id="modal-filtro-count-badge">0 registros encontrados</span>
+                            </div>
+                            <div class="small text-muted" id="modal-filtro-summary-text">Listo para exportar</div>
+                        </div>
+
+                        <div class="table-responsive rounded-2 border bg-light" style="max-height: 250px; overflow-y: auto;">
+                            <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.78rem;" id="table-modal-filtro-preview">
+                                <thead class="table-dark sticky-top" id="thead-modal-filtro-preview"></thead>
+                                <tbody id="tbody-modal-filtro-preview"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-white p-3 d-flex justify-content-between">
+                    <button type="button" class="btn btn-outline-secondary btn-sm px-3" onclick="resetearFiltrosModalReporte()">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i> Restablecer Filtros
+                    </button>
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-outline-primary btn-sm px-3 fw-bold" onclick="mostrarResultadosEnPantallaDesdeModal()">
+                            <i class="bi bi-display me-1"></i> Ver en Pantalla Completa
+                        </button>
+                        <button type="button" class="btn btn-success btn-sm px-4 fw-bold text-white shadow-sm" id="btn-exportar-modal-filtro" onclick="descargarExcelDesdeModalFiltro()">
+                            <i class="bi bi-file-earmark-excel-fill me-1"></i> Descargar Excel (.xlsx) Filtrado
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

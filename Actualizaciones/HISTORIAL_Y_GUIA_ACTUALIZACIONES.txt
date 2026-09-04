@@ -7,7 +7,18 @@ para actualizar instalaciones existentes sin perder la base de datos de movimien
 
 HISTORIAL DE VERSIONES Y CAMBIOS:
 ----------------------------------------------------------------------
-[Versión 1.2.0] (Última versión estable oficial)
+[Versión 1.2.6] (Última versión estable oficial)
+- Módulo completo de Gestión de Categorías de Inventario:
+  * Panel dedicado en "Gestión de Bodegas, Destinos y Categorías" con tabla de categorías, orden, badge de ítems asignados y acciones.
+  * Creación y modificación de categorías con orden personalizado y actualización en cascada sobre los ítems existentes.
+  * Eliminación segura con validación de bloqueo preventivo si la categoría tiene ítems asociados en el catálogo maestro.
+  * Acceso directo para crear categorías desde el modal de creación de ítems.
+- Reparación y carga dinámica de ítems en el Modal de Movimientos / Entradas:
+  * Descarga garantizada y asíncrona del catálogo activo al abrir "Nuevo Movimiento" / "Registrar Entrada", garantizando que el desplegable siempre muestre todos los ítems disponibles con código, nombre y unidad de medida.
+  * Preservación total del historial y base de datos existente del usuario sin alteraciones.
+
+[Versión 1.2.5]
+- Optimización de notificaciones Toast y actualización de balances operativos.
 - Inicio de sesión EXCLUSIVO por Número de Cédula y Contraseña para todos los usuarios.
 - Rol "ADMINISTRADOR DE SEDE": Restricción automática del contexto y acceso exclusivo a su sede asignada.
 - Ocultamiento temporal de la Sede Medellín en los selectores de sede del sistema.

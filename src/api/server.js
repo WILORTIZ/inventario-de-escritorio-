@@ -1813,6 +1813,214 @@ app.delete('/api/proyectos/:id', async (req, res) => {
     }
 });
 
+// ------------------------------------------
+// CRUD DE CATEGORÍAS
+// ------------------------------------------
+app.get('/api/categorias', async (req, res) => {
+    try {
+        const categorias = await dbAll(`
+            SELECT l.id, l.valor as nombre, l.orden,
+                   (SELECT COUNT(*) FROM items i WHERE LOWER(TRIM(i.categoria)) = LOWER(TRIM(l.valor))) as total_items
+            FROM listas_config l
+            WHERE l.tipo = 'categoria'
+            ORDER BY l.orden ASC, l.valor ASC
+        `);
+        res.json({ success: true, data: categorias });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/categorias', async (req, res) => {
+    try {
+        let { nombre, orden } = req.body;
+        if (!nombre || !nombre.trim()) {
+            return res.status(400).json({ success: false, error: 'El nombre de la categoría es obligatorio.' });
+        }
+        nombre = nombre.trim();
+
+        // Verificar si ya existe
+        const existing = await dbGet(`SELECT * FROM listas_config WHERE tipo = 'categoria' AND LOWER(valor) = LOWER(?)`, [nombre]);
+        if (existing) {
+            return res.status(400).json({ success: false, error: `La categoría "${nombre}" ya existe.` });
+        }
+
+        if (orden === undefined || orden === null || isNaN(parseInt(orden, 10))) {
+            const maxOrdenRow = await dbGet(`SELECT MAX(orden) as max_ord FROM listas_config WHERE tipo = 'categoria'`);
+            orden = (maxOrdenRow && maxOrdenRow.max_ord ? maxOrdenRow.max_ord : 0) + 1;
+        }
+
+        await dbRun(`INSERT INTO listas_config (tipo, valor, orden) VALUES ('categoria', ?, ?)`, [nombre, parseInt(orden, 10)]);
+        res.json({ success: true, message: `Categoría "${nombre}" creada exitosamente.` });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.put('/api/categorias/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        let { nombre, orden } = req.body;
+        if (!nombre || !nombre.trim()) {
+            return res.status(400).json({ success: false, error: 'El nombre de la categoría es obligatorio.' });
+        }
+        nombre = nombre.trim();
+
+        const currentCat = await dbGet(`SELECT * FROM listas_config WHERE id = ? AND tipo = 'categoria'`, [id]);
+        if (!currentCat) {
+            return res.status(404).json({ success: false, error: 'La categoría especificada no existe.' });
+        }
+
+        // Verificar si otro registro ya tiene ese nombre
+        const dup = await dbGet(`SELECT * FROM listas_config WHERE tipo = 'categoria' AND LOWER(valor) = LOWER(?) AND id != ?`, [nombre, id]);
+        if (dup) {
+            return res.status(400).json({ success: false, error: `Ya existe otra categoría con el nombre "${nombre}".` });
+        }
+
+        const oldNombre = currentCat.valor;
+        const ordVal = (orden !== undefined && !isNaN(parseInt(orden, 10))) ? parseInt(orden, 10) : currentCat.orden;
+
+        await dbRun(`UPDATE listas_config SET valor = ?, orden = ? WHERE id = ?`, [nombre, ordVal, id]);
+
+        // Actualización en cascada para ítems existentes
+        if (oldNombre !== nombre) {
+            await dbRun(`UPDATE items SET categoria = ? WHERE LOWER(TRIM(categoria)) = LOWER(TRIM(?))`, [nombre, oldNombre]);
+        }
+
+        res.json({ success: true, message: `Categoría "${nombre}" modificada exitosamente.` });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.delete('/api/categorias/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const cat = await dbGet(`SELECT * FROM listas_config WHERE id = ? AND tipo = 'categoria'`, [id]);
+        if (!cat) {
+            return res.status(404).json({ success: false, error: 'La categoría no existe.' });
+        }
+
+        // Validar si hay ítems usando esta categoría
+        const itemsCount = await dbGet(`SELECT COUNT(*) as count FROM items WHERE LOWER(TRIM(categoria)) = LOWER(TRIM(?))`, [cat.valor]);
+        if (itemsCount && itemsCount.count > 0) {
+            return res.status(400).json({
+                success: false,
+                error: `No es posible eliminar la categoría "${cat.valor}" porque tiene ${itemsCount.count} ítems asociados en el inventario. Modifique o reasigne dichos ítems antes de proceder.`
+            });
+        }
+
+        await dbRun(`DELETE FROM listas_config WHERE id = ?`, [id]);
+        res.json({ success: true, message: `Categoría "${cat.valor}" eliminada exitosamente.` });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ------------------------------------------
+// CRUD DE UBICACIONES FÍSICAS (CDS)
+// ------------------------------------------
+app.get('/api/ubicaciones', async (req, res) => {
+    try {
+        const ubicaciones = await dbAll(`
+            SELECT l.id, l.valor as nombre, l.orden,
+                   (SELECT COUNT(*) FROM items i WHERE LOWER(TRIM(i.ubicacion_cds)) = LOWER(TRIM(l.valor))) as total_items
+            FROM listas_config l
+            WHERE l.tipo = 'ubicacion_cds'
+            ORDER BY l.orden ASC, l.valor ASC
+        `);
+        res.json({ success: true, data: ubicaciones });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/ubicaciones', async (req, res) => {
+    try {
+        let { nombre, orden } = req.body;
+        if (!nombre || !nombre.trim()) {
+            return res.status(400).json({ success: false, error: 'El nombre o código de ubicación es obligatorio.' });
+        }
+        nombre = nombre.trim().toUpperCase();
+
+        // Verificar si ya existe
+        const existing = await dbGet(`SELECT * FROM listas_config WHERE tipo = 'ubicacion_cds' AND LOWER(valor) = LOWER(?)`, [nombre]);
+        if (existing) {
+            return res.status(400).json({ success: false, error: `La ubicación "${nombre}" ya existe en el sistema.` });
+        }
+
+        if (orden === undefined || orden === null || isNaN(parseInt(orden, 10))) {
+            const maxOrdenRow = await dbGet(`SELECT MAX(orden) as max_ord FROM listas_config WHERE tipo = 'ubicacion_cds'`);
+            orden = (maxOrdenRow && maxOrdenRow.max_ord ? maxOrdenRow.max_ord : 0) + 1;
+        }
+
+        await dbRun(`INSERT INTO listas_config (tipo, valor, orden) VALUES ('ubicacion_cds', ?, ?)`, [nombre, parseInt(orden, 10)]);
+        res.json({ success: true, message: `Ubicación "${nombre}" creada exitosamente.` });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.put('/api/ubicaciones/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        let { nombre, orden } = req.body;
+        if (!nombre || !nombre.trim()) {
+            return res.status(400).json({ success: false, error: 'El nombre o código de ubicación es obligatorio.' });
+        }
+        nombre = nombre.trim().toUpperCase();
+
+        const currentUbi = await dbGet(`SELECT * FROM listas_config WHERE id = ? AND tipo = 'ubicacion_cds'`, [id]);
+        if (!currentUbi) {
+            return res.status(404).json({ success: false, error: 'La ubicación especificada no existe.' });
+        }
+
+        // Verificar si otro registro ya tiene ese nombre
+        const dup = await dbGet(`SELECT * FROM listas_config WHERE tipo = 'ubicacion_cds' AND LOWER(valor) = LOWER(?) AND id != ?`, [nombre, id]);
+        if (dup) {
+            return res.status(400).json({ success: false, error: `Ya existe otra ubicación con el nombre "${nombre}".` });
+        }
+
+        const oldNombre = currentUbi.valor;
+        const ordVal = (orden !== undefined && !isNaN(parseInt(orden, 10))) ? parseInt(orden, 10) : currentUbi.orden;
+
+        await dbRun(`UPDATE listas_config SET valor = ?, orden = ? WHERE id = ?`, [nombre, ordVal, id]);
+
+        // Actualización en cascada para ítems existentes
+        if (oldNombre !== nombre) {
+            await dbRun(`UPDATE items SET ubicacion_cds = ? WHERE LOWER(TRIM(ubicacion_cds)) = LOWER(TRIM(?))`, [nombre, oldNombre]);
+        }
+
+        res.json({ success: true, message: `Ubicación "${nombre}" modificada exitosamente.` });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.delete('/api/ubicaciones/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const ubi = await dbGet(`SELECT * FROM listas_config WHERE id = ? AND tipo = 'ubicacion_cds'`, [id]);
+        if (!ubi) {
+            return res.status(404).json({ success: false, error: 'La ubicación no existe.' });
+        }
+
+        // Validar si hay ítems usando esta ubicación
+        const itemsCount = await dbGet(`SELECT COUNT(*) as count FROM items WHERE LOWER(TRIM(ubicacion_cds)) = LOWER(TRIM(?))`, [ubi.valor]);
+        if (itemsCount && itemsCount.count > 0) {
+            return res.status(400).json({
+                success: false,
+                error: `No es posible eliminar la ubicación "${ubi.valor}" porque tiene ${itemsCount.count} ítem(s) asociados en el inventario. Reasigne la ubicación de dichos ítems antes de proceder.`
+            });
+        }
+
+        await dbRun(`DELETE FROM listas_config WHERE id = ?`, [id]);
+        res.json({ success: true, message: `Ubicación "${ubi.valor}" eliminada exitosamente.` });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // ==========================================
 // 6. TRASLADOS ENTRE BODEGAS CENTRALES Y TRASLADOS PENDIENTES
 // ==========================================
@@ -2227,23 +2435,17 @@ app.get('/api/config', async (req, res) => {
         const tipos_inventario = await dbAll(`SELECT * FROM tipos_inventario ORDER BY id ASC`);
         let categorias = (await dbAll(`SELECT DISTINCT valor FROM listas_config WHERE tipo = 'categoria' ORDER BY orden ASC`)).map(r => r.valor);
         let unidades = (await dbAll(`SELECT DISTINCT valor FROM listas_config WHERE tipo = 'unidad_medida' ORDER BY orden ASC`)).map(r => r.valor);
-        let ubicaciones = (await dbAll(`SELECT DISTINCT valor FROM listas_config WHERE tipo = 'ubicacion_cds' ORDER BY orden ASC, valor ASC`)).map(r => r.valor);
+        let ubicacionesList = (await dbAll(`SELECT valor FROM listas_config WHERE tipo = 'ubicacion_cds' ORDER BY orden ASC, valor ASC`)).map(r => r.valor);
         let causales = (await dbAll(`SELECT DISTINCT valor FROM listas_config WHERE tipo = 'causal_disposicion' ORDER BY orden ASC`)).map(r => r.valor);
         let bodegas = (await dbAll(`SELECT nombre FROM bodegas WHERE estado = 'Activa' ORDER BY codigo ASC`)).map(r => r.nombre);
         let proyectos = (await dbAll(`SELECT nombre FROM proyectos WHERE estado = 'Activo' ORDER BY nombre ASC`)).map(r => r.nombre);
 
-        // Si no hay ubicaciones en listas_config, o para incluir ubicaciones existentes en ítems
-        const defaultUbicaciones = [
-            'A1', 'A2', 'A3', 'A4', 'A5',
-            'B1', 'B2', 'B3', 'B4', 'B5',
-            'C1', 'C2', 'C3', 'C4', 'C5',
-            'D1', 'D2', 'D3', 'D4', 'D5',
-            'T1', 'T2', 'T3', 'T4', 'T5'
-        ];
+        // Incluir ubicaciones activas en listas_config y cualquier ubicación existente en ítems
         const itemUbicaciones = (await dbAll(`SELECT DISTINCT ubicacion_cds FROM items WHERE ubicacion_cds IS NOT NULL AND ubicacion_cds != '' AND ubicacion_cds != '-'`)).map(r => r.ubicacion_cds);
         
-        const setUbicaciones = new Set([...ubicaciones, ...defaultUbicaciones, ...itemUbicaciones]);
-        ubicaciones = Array.from(setUbicaciones).filter(Boolean).sort();
+        const setUbicaciones = new Set(ubicacionesList);
+        itemUbicaciones.forEach(u => setUbicaciones.add(u));
+        let ubicaciones = Array.from(setUbicaciones).filter(Boolean);
 
         res.json({
             success: true,
@@ -2298,6 +2500,314 @@ app.get('/api/reportes/kardex/:codigo', async (req, res) => {
         });
 
         res.json({ success: true, item, kardex, saldo_final: saldo });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ==========================================
+// 7.1. GENERADOR DE REPORTES CON FILTROS DINÁMICOS
+// ==========================================
+app.post('/api/reportes/filtrar', async (req, res) => {
+    try {
+        const {
+            tipo_reporte = 'MOVIMIENTOS',
+            sede,
+            tipo_inventario,
+            categoria,
+            ubicacion,
+            bodega,
+            proyecto,
+            tipo_movimiento,
+            fecha_desde,
+            fecha_hasta,
+            estado_stock,
+            estado_vencimiento,
+            codigo_item,
+            search
+        } = req.body;
+
+        if (tipo_reporte === 'MOVIMIENTOS') {
+            let query = `
+                SELECT m.*, i.categoria, i.subcategoria, i.marca, i.referencia
+                FROM movimientos m
+                LEFT JOIN items i ON m.codigo_item = i.codigo
+                WHERE 1=1
+            `;
+            const params = [];
+
+            if (sede && sede !== 'TODAS' && sede !== 'ALL') {
+                query += ` AND m.sede = ?`;
+                params.push(sede);
+            }
+            if (tipo_inventario && tipo_inventario !== 'TODOS' && tipo_inventario !== 'ALL') {
+                query += ` AND m.tipo_inventario = ?`;
+                params.push(tipo_inventario);
+            }
+            if (categoria && categoria !== 'TODAS' && categoria !== 'ALL') {
+                query += ` AND i.categoria = ?`;
+                params.push(categoria);
+            }
+            if (ubicacion && ubicacion !== 'TODAS' && ubicacion !== 'ALL') {
+                query += ` AND (m.ubicacion_cds = ? OR i.ubicacion_cds = ?)`;
+                params.push(ubicacion, ubicacion);
+            }
+            if (tipo_movimiento && tipo_movimiento !== 'TODOS' && tipo_movimiento !== 'ALL') {
+                query += ` AND m.tipo_movimiento = ?`;
+                params.push(tipo_movimiento);
+            }
+            if (bodega && bodega !== 'TODAS' && bodega !== 'ALL') {
+                query += ` AND (m.bodega_origen = ? OR m.bodega_destino = ?)`;
+                params.push(bodega, bodega);
+            }
+            if (proyecto && proyecto !== 'TODOS' && proyecto !== 'ALL') {
+                query += ` AND m.proyecto_destino = ?`;
+                params.push(proyecto);
+            }
+            if (fecha_desde) {
+                query += ` AND m.fecha >= ?`;
+                params.push(fecha_desde);
+            }
+            if (fecha_hasta) {
+                query += ` AND m.fecha <= ?`;
+                params.push(fecha_hasta);
+            }
+            if (codigo_item) {
+                query += ` AND m.codigo_item = ?`;
+                params.push(parseInt(codigo_item, 10));
+            }
+            if (search && search.trim()) {
+                const s = `%${search.trim()}%`;
+                query += ` AND (m.n_movimiento LIKE ? OR CAST(m.codigo_item AS TEXT) LIKE ? OR m.nombre_item LIKE ? OR m.responsable LIKE ? OR m.persona_recibe_devuelve LIKE ? OR m.documento_referencia LIKE ?)`;
+                params.push(s, s, s, s, s, s);
+            }
+
+            query += ` ORDER BY m.fecha DESC, m.hora DESC, m.id DESC`;
+            const data = await dbAll(query, params);
+            return res.json({ success: true, count: data.length, data });
+        }
+
+        if (tipo_reporte === 'BALANCE' || tipo_reporte === 'STOCK_CRITICO') {
+            let query = `SELECT * FROM items WHERE 1=1`;
+            const params = [];
+
+            if (sede && sede !== 'TODAS' && sede !== 'ALL') {
+                query += ` AND (sede = ? OR sede IS NULL)`;
+                params.push(sede);
+            }
+            if (tipo_inventario && tipo_inventario !== 'TODOS' && tipo_inventario !== 'ALL') {
+                query += ` AND (tipo_inventario = ? OR tipo_inventario IS NULL)`;
+                params.push(tipo_inventario);
+            }
+            if (categoria && categoria !== 'TODAS' && categoria !== 'ALL') {
+                query += ` AND categoria = ?`;
+                params.push(categoria);
+            }
+            if (ubicacion && ubicacion !== 'TODAS' && ubicacion !== 'ALL') {
+                query += ` AND ubicacion_cds = ?`;
+                params.push(ubicacion);
+            }
+            if (codigo_item) {
+                query += ` AND codigo = ?`;
+                params.push(parseInt(codigo_item, 10));
+            }
+            if (search && search.trim()) {
+                const s = `%${search.trim()}%`;
+                query += ` AND (CAST(codigo AS TEXT) LIKE ? OR nombre LIKE ? OR marca LIKE ? OR referencia LIKE ?)`;
+                params.push(s, s, s, s);
+            }
+
+            query += ` ORDER BY codigo ASC`;
+            const items = await dbAll(query, params);
+
+            let movFilter = `WHERE 1=1`;
+            let movParams = [];
+            if (sede && sede !== 'TODAS' && sede !== 'ALL') {
+                movFilter += ` AND sede = ?`;
+                movParams.push(sede);
+            }
+            if (tipo_inventario && tipo_inventario !== 'TODOS' && tipo_inventario !== 'ALL') {
+                movFilter += ` AND tipo_inventario = ?`;
+                movParams.push(tipo_inventario);
+            }
+            if (fecha_hasta) {
+                movFilter += ` AND fecha <= ?`;
+                movParams.push(fecha_hasta);
+            }
+
+            const movimientos = await dbAll(`SELECT * FROM movimientos ${movFilter}`, movParams);
+
+            const movByItem = {};
+            movimientos.forEach(m => {
+                if (!movByItem[m.codigo_item]) {
+                    movByItem[m.codigo_item] = {
+                        entradas: 0,
+                        devoluciones: 0,
+                        entregas_recibidas: 0,
+                        ajustes_pos: 0,
+                        entregas_enviadas: 0,
+                        disp_final: 0,
+                        ajustes_neg: 0
+                    };
+                }
+                const b = movByItem[m.codigo_item];
+                if (m.tipo_movimiento === 'ENTRADA' && (m.bodega_destino === 'CDS' || !m.bodega_destino)) b.entradas += m.cantidad;
+                if (m.tipo_movimiento === 'DEVOLUCION' && m.bodega_destino === 'CDS') b.devoluciones += m.cantidad;
+                if (m.tipo_movimiento === 'ENTRADA POR TRASLADO' && m.bodega_destino === 'CDS') b.entregas_recibidas += m.cantidad;
+                if (m.tipo_movimiento === 'AJUSTE POSITIVO' && (m.bodega_destino === 'CDS' || !m.bodega_destino)) b.ajustes_pos += m.cantidad;
+                if (m.tipo_movimiento === 'ENTREGA' && (m.bodega_origen === 'CDS' || !m.bodega_origen)) b.entregas_enviadas += m.cantidad;
+                if (m.tipo_movimiento === 'DISPOSICION FINAL' && (m.bodega_origen === 'CDS' || !m.bodega_origen)) b.disp_final += m.cantidad;
+                if (m.tipo_movimiento === 'SALIDA POR TRASLADO' && (m.bodega_origen === 'CDS' || !m.bodega_origen)) b.entregas_enviadas += m.cantidad;
+                if (m.tipo_movimiento === 'AJUSTE NEGATIVO' && (m.bodega_origen === 'CDS' || !m.bodega_origen)) b.ajustes_neg += m.cantidad;
+            });
+
+            let balance = items.map(item => {
+                const b = movByItem[item.codigo] || { entradas: 0, devoluciones: 0, entregas_recibidas: 0, ajustes_pos: 0, entregas_enviadas: 0, disp_final: 0, ajustes_neg: 0 };
+                const totalPos = b.entradas + b.devoluciones + b.entregas_recibidas + b.ajustes_pos;
+                const totalNeg = b.entregas_enviadas + b.disp_final + b.ajustes_neg;
+                const existencia = totalPos - totalNeg;
+
+                let estado_stock = 'NORMAL';
+                if (existencia < 0) estado_stock = 'ERROR: SOBREGIRO';
+                else if (existencia === 0) estado_stock = 'SIN EXISTENCIAS';
+                else if (existencia <= item.stock_minimo) estado_stock = 'STOCK BAJO';
+
+                return {
+                    codigo: item.codigo,
+                    codigo_item: item.codigo,
+                    nombre: item.nombre,
+                    nombre_item: item.nombre,
+                    categoria: item.categoria,
+                    subcategoria: item.subcategoria,
+                    unidad_medida: item.unidad_medida,
+                    marca: item.marca,
+                    referencia: item.referencia,
+                    ubicacion_cds: item.ubicacion_cds,
+                    sede: item.sede || sede || 'Sede Suroriental',
+                    tipo_inventario: item.tipo_inventario || tipo_inventario || 'CDS',
+                    entradas: b.entradas,
+                    devoluciones: b.devoluciones,
+                    entregas_recibidas: b.entregas_recibidas,
+                    ajustes_pos: b.ajustes_pos,
+                    entregas_enviadas: b.entregas_enviadas,
+                    disp_final: b.disp_final,
+                    ajustes_neg: b.ajustes_neg,
+                    existencia,
+                    stock_minimo: item.stock_minimo,
+                    estado_stock,
+                    aplica_vencimiento: item.aplica_vencimiento
+                };
+            });
+
+            if (tipo_reporte === 'STOCK_CRITICO' || estado_stock === 'CRITICO_O_BAJO') {
+                balance = balance.filter(i => i.existencia <= i.stock_minimo || i.estado_stock === 'SIN EXISTENCIAS');
+            } else if (estado_stock === 'CON_STOCK') {
+                balance = balance.filter(i => i.existencia > 0);
+            } else if (estado_stock === 'SIN_EXISTENCIAS') {
+                balance = balance.filter(i => i.existencia === 0);
+            } else if (estado_stock === 'STOCK_BAJO') {
+                balance = balance.filter(i => i.estado_stock === 'STOCK BAJO');
+            }
+
+            return res.json({ success: true, count: balance.length, data: balance });
+        }
+
+        if (tipo_reporte === 'VENCIMIENTOS') {
+            let query = `
+                SELECT cv.*, i.categoria, i.unidad_medida as item_unidad
+                FROM control_vencimientos cv
+                LEFT JOIN items i ON cv.codigo_item = i.codigo
+                WHERE cv.cant_disponible > 0
+            `;
+            const params = [];
+
+            if (sede && sede !== 'TODAS' && sede !== 'ALL') {
+                query += ` AND cv.sede = ?`;
+                params.push(sede);
+            }
+            if (tipo_inventario && tipo_inventario !== 'TODOS' && tipo_inventario !== 'ALL') {
+                query += ` AND cv.tipo_inventario = ?`;
+                params.push(tipo_inventario);
+            }
+            if (categoria && categoria !== 'TODAS' && categoria !== 'ALL') {
+                query += ` AND i.categoria = ?`;
+                params.push(categoria);
+            }
+            if (bodega && bodega !== 'TODAS' && bodega !== 'ALL') {
+                query += ` AND cv.bodega = ?`;
+                params.push(bodega);
+            }
+            if (fecha_hasta) {
+                query += ` AND cv.fecha_vencimiento <= ?`;
+                params.push(fecha_hasta);
+            }
+            if (search && search.trim()) {
+                const s = `%${search.trim()}%`;
+                query += ` AND (CAST(cv.codigo_item AS TEXT) LIKE ? OR cv.nombre_item LIKE ? OR cv.n_movimiento_origen LIKE ?)`;
+                params.push(s, s, s);
+            }
+
+            query += ` ORDER BY cv.fecha_vencimiento ASC`;
+            const lotes = await dbAll(query, params);
+
+            const hoyStr = new Date().toISOString().split('T')[0];
+            let processed = lotes.map(lote => {
+                const diffDias = Math.ceil((new Date(lote.fecha_vencimiento) - new Date(hoyStr)) / (1000 * 60 * 60 * 24));
+                let estadoAct = 'VIGENTE';
+                if (diffDias <= 0) estadoAct = '¡VENCIDO!';
+                else if (diffDias <= 30) estadoAct = 'PROXIMO A VENCER';
+
+                return {
+                    ...lote,
+                    dias_restantes: diffDias,
+                    estado_actualizado: estadoAct,
+                    unidad_medida: lote.item_unidad || 'Unidad'
+                };
+            });
+
+            if (estado_vencimiento === 'SOLO_VENCIDOS') {
+                processed = processed.filter(l => l.dias_restantes <= 0);
+            } else if (estado_vencimiento === 'PROXIMOS_30_DIAS') {
+                processed = processed.filter(l => l.dias_restantes > 0 && l.dias_restantes <= 30);
+            } else if (estado_vencimiento === 'VENCIDOS_Y_PROXIMOS') {
+                processed = processed.filter(l => l.dias_restantes <= 30);
+            }
+
+            return res.json({ success: true, count: processed.length, data: processed });
+        }
+
+        if (tipo_reporte === 'CATALOGO') {
+            let query = `SELECT * FROM items WHERE 1=1`;
+            const params = [];
+
+            if (sede && sede !== 'TODAS' && sede !== 'ALL') {
+                query += ` AND (sede = ? OR sede IS NULL)`;
+                params.push(sede);
+            }
+            if (tipo_inventario && tipo_inventario !== 'TODOS' && tipo_inventario !== 'ALL') {
+                query += ` AND (tipo_inventario = ? OR tipo_inventario IS NULL)`;
+                params.push(tipo_inventario);
+            }
+            if (categoria && categoria !== 'TODAS' && categoria !== 'ALL') {
+                query += ` AND categoria = ?`;
+                params.push(categoria);
+            }
+            if (ubicacion && ubicacion !== 'TODAS' && ubicacion !== 'ALL') {
+                query += ` AND ubicacion_cds = ?`;
+                params.push(ubicacion);
+            }
+            if (search && search.trim()) {
+                const s = `%${search.trim()}%`;
+                query += ` AND (CAST(codigo AS TEXT) LIKE ? OR nombre LIKE ? OR marca LIKE ? OR referencia LIKE ?)`;
+                params.push(s, s, s, s);
+            }
+
+            query += ` ORDER BY codigo ASC`;
+            const data = await dbAll(query, params);
+            return res.json({ success: true, count: data.length, data });
+        }
+
+        res.status(400).json({ success: false, error: 'Tipo de reporte no reconocido.' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

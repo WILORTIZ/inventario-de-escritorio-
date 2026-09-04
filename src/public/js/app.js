@@ -165,6 +165,23 @@ function asegurarSubmenuAbierto(invId) {
 const INACTIVITY_LIMIT_MS = 30 * 60 * 1000; // 30 minutos de inactividad
 let lastActivityThrottle = 0;
 
+// Helper global para validación granular de permisos
+function tienePermiso(codigoPermiso) {
+    if (!appState.currentUser) return false;
+    if (appState.currentUser.rol === 'ADMINISTRADOR') return true;
+    
+    let extras = appState.currentUser.permisos_adicionales;
+    if (typeof extras === 'string') {
+        try {
+            extras = JSON.parse(extras);
+        } catch (e) {
+            extras = [];
+        }
+    }
+    if (!Array.isArray(extras)) extras = [];
+    return extras.includes(codigoPermiso);
+}
+
 function registrarActividadUsuario() {
     const now = Date.now();
     // Throttle para no saturar localStorage en cada milisegundo de movimiento de mouse
@@ -236,17 +253,23 @@ function checkAuth() {
         }
     }
 
-    // Regla de Rol: Administrador de Sede fijado a su sede asignada
-    if (user.rol === 'ADMINISTRADOR DE SEDE' && user.sede) {
-        appState.currentSede = user.sede;
-        const globalSedeSelect = document.getElementById('global-sede-select');
+    // Regla de Permisos: Control Multi-Sedes vs Sede Asignada
+    const puedeMultiSede = tienePermiso('ACCESO_MULTI_SEDE');
+    const globalSedeSelect = document.getElementById('global-sede-select');
+
+    if (!puedeMultiSede) {
+        const userSede = user.sede || 'Sede Suroriental';
+        appState.currentSede = userSede;
         if (globalSedeSelect) {
-            globalSedeSelect.value = user.sede;
-            globalSedeSelect.disabled = true; // Fijado exclusivamente a su sede
+            globalSedeSelect.value = userSede;
+            globalSedeSelect.disabled = true;
+            globalSedeSelect.title = `🔒 Sede asignada: ${userSede} (Requiere permiso de Ver Sedes)`;
         }
     } else {
-        const globalSedeSelect = document.getElementById('global-sede-select');
-        if (globalSedeSelect) globalSedeSelect.disabled = false;
+        if (globalSedeSelect) {
+            globalSedeSelect.disabled = false;
+            globalSedeSelect.title = 'Seleccionar Sede Operativa';
+        }
     }
 
     localStorage.setItem('inventario_last_activity', Date.now().toString());
@@ -264,13 +287,20 @@ function actualizarWidgetUsuario(user) {
 
     const initial = user.nombre ? user.nombre.charAt(0).toUpperCase() : 'A';
     const nombreCompleto = `${user.nombre} ${user.apellido || ''}`.trim();
-    const rolLabel = user.rol === 'ADMINISTRADOR' ? 'Administrador del Sistema' : 'Administrador de Sede';
+    const isSuperAdmin = (user.rol === 'ADMINISTRADOR') || (user.cedula === '1130683079') || (user.cedula === '123456') || (user.cedula === 'admin');
+    const rolLabel = isSuperAdmin ? 'Administrador del Sistema' : 'Administrador de Sede';
 
     if (avatar) avatar.textContent = initial;
     if (name) name.textContent = nombreCompleto;
     if (rol) rol.textContent = rolLabel;
     if (fullname) fullname.textContent = nombreCompleto;
     if (username) username.textContent = user.cedula ? `C.C. ${user.cedula}` : `@${user.username}`;
+
+    // Panel de Administración visible exclusivamente para el Super Administrador General
+    const adminSection = document.getElementById('sidebar-section-admin');
+    if (adminSection) {
+        adminSection.style.display = isSuperAdmin ? 'block' : 'none';
+    }
 }
 
 async function ejecutarLogin(e) {
@@ -310,13 +340,23 @@ async function ejecutarLogin(e) {
             localStorage.setItem('inventario_user', JSON.stringify(result.user));
             localStorage.setItem('inventario_last_activity', Date.now().toString());
 
-            // Si es administrador de sede, aplicar su sede asignada
-            if (result.user.rol === 'ADMINISTRADOR DE SEDE' && result.user.sede) {
-                appState.currentSede = result.user.sede;
-                const globalSedeSelect = document.getElementById('global-sede-select');
+            // Regla de Permisos Multi-Sedes
+            const puedeMultiSede = (result.user.rol === 'ADMINISTRADOR') || 
+                (Array.isArray(result.user.permisos_adicionales) && result.user.permisos_adicionales.includes('ACCESO_MULTI_SEDE'));
+
+            const globalSedeSelect = document.getElementById('global-sede-select');
+            if (!puedeMultiSede) {
+                const userSede = result.user.sede || 'Sede Suroriental';
+                appState.currentSede = userSede;
                 if (globalSedeSelect) {
-                    globalSedeSelect.value = result.user.sede;
+                    globalSedeSelect.value = userSede;
                     globalSedeSelect.disabled = true;
+                    globalSedeSelect.title = `🔒 Sede asignada: ${userSede} (Requiere permiso de Ver Sedes)`;
+                }
+            } else {
+                if (globalSedeSelect) {
+                    globalSedeSelect.disabled = false;
+                    globalSedeSelect.title = 'Seleccionar Sede Operativa';
                 }
             }
             
@@ -360,6 +400,11 @@ function cerrarSesion() {
     const loginScreen = document.getElementById('login-screen');
     if (loginScreen) loginScreen.style.display = 'flex';
     
+    const adminSection = document.getElementById('sidebar-section-admin');
+    if (adminSection) {
+        adminSection.style.display = 'none';
+    }
+
     const alertBox = document.getElementById('login-alert');
     if (alertBox) {
         alertBox.style.display = 'none';
@@ -451,16 +496,21 @@ function abrirModalNuevoUsuario() {
     if (form) form.reset();
     document.getElementById('usr-id').value = '';
     
+    // Poblar sedes disponibles
+    const sedesList = (appState.sedes && appState.sedes.length > 0) ? appState.sedes.map(s => s.nombre) : ['Sede Suroriental', 'Sede Medellín'];
+    fillSelect('usr-sede', sedesList, false);
+
     const cedulaInput = document.getElementById('usr-cedula');
     if (cedulaInput) {
         cedulaInput.removeAttribute('readonly');
         cedulaInput.disabled = false;
+        cedulaInput.classList.remove('bg-light');
     }
     
     document.getElementById('modalUsuarioTitle').innerHTML = '<i class="bi bi-person-plus-fill text-info me-2"></i>Registrar Nuevo Usuario';
     document.getElementById('usr-password-label').innerHTML = 'Contraseña <span class="text-danger">*</span>';
     document.getElementById('usr-password').required = true;
-    document.getElementById('usr-cedula-help').textContent = 'La cédula será el usuario para iniciar sesión y no podrá modificarse una vez creada.';
+    document.getElementById('usr-cedula-help').innerHTML = '<i class="bi bi-info-circle me-1"></i>La cédula será el usuario para iniciar sesión y no podrá modificarse una vez creada.';
 
     const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalUsuario'));
     modal.show();
@@ -472,11 +522,17 @@ function abrirModalEditarUsuario(id) {
 
     document.getElementById('usr-id').value = user.id;
     
+    // Poblar sedes disponibles
+    const sedesList = (appState.sedes && appState.sedes.length > 0) ? appState.sedes.map(s => s.nombre) : ['Sede Suroriental', 'Sede Medellín'];
+    fillSelect('usr-sede', sedesList, false);
+
+    // Cédula estrictamente inmutable
     const cedulaInput = document.getElementById('usr-cedula');
     if (cedulaInput) {
         cedulaInput.value = user.cedula || user.username;
         cedulaInput.setAttribute('readonly', 'true');
         cedulaInput.disabled = false;
+        cedulaInput.classList.add('bg-light');
     }
 
     document.getElementById('usr-nombre').value = user.nombre || '';
@@ -488,8 +544,8 @@ function abrirModalEditarUsuario(id) {
     
     document.getElementById('usr-password').value = '';
     document.getElementById('usr-password').required = false;
-    document.getElementById('usr-password-label').innerHTML = 'Nueva Contraseña (Opcional)';
-    document.getElementById('usr-cedula-help').textContent = '🔒 El número de cédula es inmutable.';
+    document.getElementById('usr-password-label').innerHTML = 'Nueva Contraseña (Opcional - Dejar vacío para conservar la actual)';
+    document.getElementById('usr-cedula-help').innerHTML = '<span class="text-warning fw-semibold"><i class="bi bi-lock-fill me-1"></i>El número de cédula es inmutable y no se puede modificar.</span>';
     document.getElementById('modalUsuarioTitle').innerHTML = `<i class="bi bi-person-gear text-warning me-2"></i>Editar Usuario: ${user.nombre} (${user.cedula})`;
 
     const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalUsuario'));
@@ -640,6 +696,14 @@ async function guardarPermisosAdicionales() {
         if (result.success) {
             showToast('🔑 Permisos adicionales actualizados correctamente.');
             await loadUsuarios();
+
+            // Si el usuario modificado es el usuario actualmente en sesión, sincronizar permisos en caliente
+            if (appState.currentUser && String(appState.currentUser.id) === String(id)) {
+                appState.currentUser.permisos_adicionales = selectedPerms;
+                localStorage.setItem('inventario_user', JSON.stringify(appState.currentUser));
+                checkAuth();
+                actualizarBadgesContexto();
+            }
         } else {
             showToast(result.error || 'Error actualizando permisos.', 'danger');
         }
@@ -651,6 +715,20 @@ async function guardarPermisosAdicionales() {
 }
 
 function cambiarSede(sede) {
+    if (!tienePermiso('ACCESO_MULTI_SEDE')) {
+        const userSede = appState.currentUser?.sede || 'Sede Suroriental';
+        if (sede !== userSede) {
+            showToast(`⛔ No tiene permiso para operar en otras sedes. Su sede asignada es '${userSede}'.`, 'warning');
+            const globalSedeSelect = document.getElementById('global-sede-select');
+            if (globalSedeSelect) {
+                globalSedeSelect.value = userSede;
+                globalSedeSelect.disabled = true;
+            }
+            appState.currentSede = userSede;
+            return;
+        }
+    }
+
     appState.currentSede = sede;
     const globalSedeSelect = document.getElementById('global-sede-select');
     if (globalSedeSelect) globalSedeSelect.value = sede;
@@ -703,9 +781,14 @@ function actualizarBadgesContexto() {
 
     const invBadge = document.getElementById('navbar-inv-badge');
     if (invBadge) {
-        const icon = appState.currentInventario === 'MOVILIDAD' ? 'bi-truck' : 'bi-boxes';
+        const iconHtml = appState.currentInventario === 'MOVILIDAD' ? '<i class="fa-solid fa-helmet-safety me-1 text-warning"></i>' : '<i class="bi bi-boxes me-1 text-info"></i>';
         const label = appState.currentInventario === 'MOVILIDAD' ? 'Inventario Movilidad' : 'Inventario CDS';
-        invBadge.innerHTML = `<i class="bi ${icon} me-1"></i>${label}`;
+        invBadge.innerHTML = `${iconHtml}${label}`;
+    }
+
+    const headerBadge = document.getElementById('header-context-badge');
+    if (headerBadge) {
+        headerBadge.textContent = `${appState.currentInventario} • ${appState.currentSede}`;
     }
 
     const footerContext = document.getElementById('sidebar-footer-context');
@@ -727,6 +810,19 @@ async function recargarDatosContexto() {
 }
 
 function navigate(viewName) {
+    const isSuperAdmin = appState.currentUser && (
+        appState.currentUser.rol === 'ADMINISTRADOR' ||
+        appState.currentUser.cedula === '1130683079' ||
+        appState.currentUser.cedula === '123456' ||
+        appState.currentUser.cedula === 'admin'
+    );
+
+    if ((viewName === 'usuarios' || viewName === 'database') && !isSuperAdmin) {
+        showToast('⛔ Acceso denegado. Este panel es exclusivo para el Administrador del Sistema.', 'warning');
+        navigate('inicio');
+        return;
+    }
+
     appState.currentView = viewName;
 
     // Actualizar enlaces del sidebar que no tienen data-inv (o correspondientes)
@@ -761,6 +857,7 @@ function navigate(viewName) {
         'traslados': `Traslados entre Bodegas Centrales (${invLabel})`,
         'bodegas': 'Bodegas y Proyectos',
         'reportes': `Kardex & Reportes ${invLabel}`,
+        'usuarios': 'Panel de Administración: Usuarios y Permisos',
         'database': 'Gestión de Base de Datos y Backups'
     };
     const pageTitleEl = document.getElementById('page-title');
@@ -776,6 +873,8 @@ function navigate(viewName) {
     if (viewName === 'vencimientos') loadVencimientos();
     if (viewName === 'traslados') loadTraslados();
     if (viewName === 'bodegas') loadBodegasYProyectos();
+    if (viewName === 'reportes') initFiltrosReportes();
+    if (viewName === 'usuarios') loadUsuarios();
 }
 
 // ==============================================================
@@ -808,8 +907,19 @@ function populateSelectOptions() {
 
     // Selectores de Sede y Tipo de Inventario en modales y global
     fillSelect('global-sede-select', sedesList, false);
-    if (document.getElementById('global-sede-select')) {
-        document.getElementById('global-sede-select').value = appState.currentSede;
+    const globalSedeSelect = document.getElementById('global-sede-select');
+    if (globalSedeSelect) {
+        if (!tienePermiso('ACCESO_MULTI_SEDE')) {
+            const userSede = appState.currentUser?.sede || 'Sede Suroriental';
+            appState.currentSede = userSede;
+            globalSedeSelect.value = userSede;
+            globalSedeSelect.disabled = true;
+            globalSedeSelect.title = `🔒 Sede asignada: ${userSede} (Requiere permiso de Ver Sedes)`;
+        } else {
+            globalSedeSelect.value = appState.currentSede;
+            globalSedeSelect.disabled = false;
+            globalSedeSelect.title = 'Seleccionar Sede Operativa';
+        }
     }
 
     fillSelect('item-sede', sedesList, false);
@@ -834,21 +944,31 @@ function populateSelectOptions() {
     fillSelect('item-categoria', categorias, false);
     fillSelect('item-unidad', unidades, false);
     fillSelect('item-ubicacion', defaultUbicaciones, false);
-
     fillSelect('mov-bodega-origen', bodegas, true, '-- Sin Bodega Origen --');
     fillSelect('mov-bodega-destino', bodegas, true, '-- Sin Bodega Destino --');
     fillSelect('mov-causal', causales, true, '-- Seleccionar Causal --');
     fillSelect('mov-proyecto', proyectos, true, 'Operación Central / General');
+
+    // Selector de sedes en modal de usuarios
+    fillSelect('usr-sede', sedesList, false);
 }
 
-function fillSelect(elementId, items, allowEmpty = false, emptyText = '-- Seleccione --') {
-    const select = document.getElementById(elementId);
+function fillSelect(elementIdOrEl, items, allowEmpty = false, emptyText = '-- Seleccione --') {
+    const select = typeof elementIdOrEl === 'string' ? document.getElementById(elementIdOrEl) : elementIdOrEl;
     if (!select) return;
 
     let html = allowEmpty ? `<option value="ALL">${emptyText}</option>` : '';
-    items.forEach(item => {
-        html += `<option value="${item}">${item}</option>`;
-    });
+    if (Array.isArray(items)) {
+        items.forEach(item => {
+            if (typeof item === 'object' && item !== null) {
+                const val = item.codigo || item.id || item.value || item.nombre || '';
+                const txt = item.nombre || item.label || item.descripcion || val;
+                html += `<option value="${val}">${txt}</option>`;
+            } else if (item !== undefined && item !== null) {
+                html += `<option value="${item}">${item}</option>`;
+            }
+        });
+    }
     select.innerHTML = html;
 }
 
@@ -1089,7 +1209,7 @@ function renderMovimientosTable(movs) {
     }).join('');
 }
 
-function openModalMovimiento(preselectedCode = null) {
+async function openModalMovimiento(preselectedCode = null) {
     const form = document.getElementById('form-movimiento');
     if (form) form.reset();
 
@@ -1102,7 +1222,18 @@ function openModalMovimiento(preselectedCode = null) {
 
     // Precargar sede y tipo de inventario activos
     const movSede = document.getElementById('mov-sede');
-    if (movSede) movSede.value = appState.currentSede;
+    if (movSede) {
+        if (!tienePermiso('ACCESO_MULTI_SEDE')) {
+            const userSede = appState.currentUser?.sede || 'Sede Suroriental';
+            movSede.value = userSede;
+            movSede.disabled = true;
+            movSede.title = `🔒 Sede asignada: ${userSede} (Requiere permiso de Ver Sedes)`;
+        } else {
+            movSede.value = appState.currentSede;
+            movSede.disabled = false;
+            movSede.title = 'Seleccionar Sede';
+        }
+    }
 
     const movTipoInv = document.getElementById('mov-tipo-inventario');
     if (movTipoInv) movTipoInv.value = appState.currentInventario;
@@ -1114,13 +1245,32 @@ function openModalMovimiento(preselectedCode = null) {
         submitBtn.innerHTML = 'Registrar Transacción';
     }
 
+    // Asegurar que los ítems del catálogo maestro estén siempre cargados
+    if (!appState.items || appState.items.length === 0) {
+        try {
+            const res = await fetch(`${API_BASE}/items`);
+            const result = await res.json();
+            if (result.success && Array.isArray(result.data)) {
+                appState.items = result.data;
+            }
+        } catch (err) {
+            console.error('Error al precargar ítems para movimiento:', err);
+        }
+    }
+
     // Llenar selector de ítems activos
     const select = document.getElementById('mov-item-select');
     if (select) {
-        let html = '<option value="">-- Seleccionar Ítem del Catálogo --</option>';
-        appState.items.filter(i => i.estado === 'Activo').forEach(item => {
-            html += `<option value="${item.codigo}">${item.codigo} - ${item.nombre}</option>`;
-        });
+        let html = '<option value="">-- Buscar ítem por código o nombre --</option>';
+        const itemsList = (appState.items || []).filter(i => !i.estado || i.estado.toLowerCase() === 'activo');
+        
+        if (itemsList.length === 0) {
+            html += '<option value="" disabled>⚠️ No hay ítems activos disponibles en el catálogo</option>';
+        } else {
+            itemsList.forEach(item => {
+                html += `<option value="${item.codigo}">${item.codigo} - ${item.nombre} (${item.unidad_medida || 'Unidad'})</option>`;
+            });
+        }
         select.innerHTML = html;
 
         if (preselectedCode) {
@@ -1130,57 +1280,320 @@ function openModalMovimiento(preselectedCode = null) {
     }
 
     handleTipoMovimientoChange(document.getElementById('mov-tipo').value);
+    await actualizarContextoEnMovimiento();
 
     const modalEl = document.getElementById('modalMovimiento');
     const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modal.show();
 }
 
+function fillSelectDirecto(selectEl, options) {
+    if (!selectEl) return;
+    selectEl.innerHTML = options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+}
+
 function handleTipoMovimientoChange(tipo) {
-    const origenSelect = document.getElementById('mov-bodega-origen');
-    const destinoSelect = document.getElementById('mov-bodega-destino');
-    const causalSelect = document.getElementById('mov-causal');
+    const colOrigen = document.getElementById('col-mov-bodega-origen');
+    const colDestino = document.getElementById('col-mov-bodega-destino');
+    const colProyecto = document.getElementById('col-mov-proyecto');
+    const colCausal = document.getElementById('col-mov-causal');
+    const colPersona = document.getElementById('col-mov-persona-recibe');
+    const colDocRef = document.getElementById('col-mov-doc-ref');
     const vencContainer = document.getElementById('mov-vencimiento-container');
 
-    // Reglas de negocio
+    const lblCantidad = document.getElementById('lbl-mov-cantidad');
+    const lblOrigen = document.getElementById('lbl-mov-bodega-origen');
+    const lblDestino = document.getElementById('lbl-mov-bodega-destino');
+    const lblProyecto = document.getElementById('lbl-mov-proyecto');
+    const lblCausal = document.getElementById('lbl-mov-causal');
+    const lblPersona = document.getElementById('lbl-mov-persona-recibe');
+    const lblDocRef = document.getElementById('lbl-mov-doc-ref');
+
+    const origenSelect = document.getElementById('mov-bodega-origen');
+    const destinoSelect = document.getElementById('mov-bodega-destino');
+    const proyectoSelect = document.getElementById('mov-proyecto');
+    const causalSelect = document.getElementById('mov-causal');
+    const personaInput = document.getElementById('mov-persona-recibe');
+    const docRefInput = document.getElementById('mov-doc-ref');
+
+    // Reset required flags
+    if (origenSelect) origenSelect.required = false;
+    if (destinoSelect) destinoSelect.required = false;
+    if (proyectoSelect) proyectoSelect.required = false;
+    if (personaInput) personaInput.required = false;
+    if (causalSelect) causalSelect.required = false;
+
+    // Configuración dinámica estricta según Tipo de Movimiento
     if (tipo === 'ENTRADA') {
-        origenSelect.value = 'ALL';
-        destinoSelect.value = 'CDS';
-        causalSelect.value = 'NUEVO / INICIAL';
+        // 1. ENTRADA MANUAL / PROVEEDOR
+        // En una entrada NO se debe permitir seleccionar bodega de origen (es inventario nuevo que entra de proveedor/externo)
+        if (colOrigen) colOrigen.style.display = 'none';
+        if (origenSelect) origenSelect.value = 'ALL';
+
+        // Bodega Destino: OBLIGATORIA (Dónde entra el material a la operación)
+        if (colDestino) colDestino.style.display = 'block';
+        if (lblDestino) lblDestino.innerHTML = '<i class="bi bi-box-arrow-in-down-right me-1 text-success"></i>Bodega de Destino (Recepción) <span class="text-danger">*</span>';
+        if (destinoSelect) {
+            destinoSelect.required = true;
+            if (!destinoSelect.value || destinoSelect.value === 'ALL') {
+                const firstOpt = Array.from(destinoSelect.options).find(o => o.value && o.value !== 'ALL');
+                destinoSelect.value = firstOpt ? firstOpt.value : 'CDS';
+            }
+        }
+
+        // Proyecto: Oculto para entrada
+        if (colProyecto) colProyecto.style.display = 'none';
+        if (proyectoSelect) proyectoSelect.value = 'ALL';
+
+        // Causal / Motivo de entrada
+        if (colCausal) colCausal.style.display = 'block';
+        if (lblCausal) lblCausal.innerHTML = '<i class="bi bi-info-circle me-1"></i>Motivo de Ingreso';
+        fillSelectDirecto(causalSelect, [
+            'COMPRA / PROVEEDOR',
+            'INVENTARIO INICIAL',
+            'DOTACION / HERRAMIENTAS NUEVAS',
+            'DONACION / OTRO INGRESO'
+        ]);
+
+        // Persona que recibe en bodega
+        if (colPersona) colPersona.style.display = 'block';
+        if (lblPersona) lblPersona.innerHTML = '<i class="bi bi-person-badge me-1"></i>Persona que Recibe en Bodega';
+        if (personaInput) personaInput.placeholder = 'Nombre del almacenista o receptor';
+
+        // Documento
+        if (colDocRef) colDocRef.style.display = 'block';
+        if (lblDocRef) lblDocRef.innerHTML = '<i class="bi bi-receipt me-1"></i>Factura / Remisión de Proveedor';
+        if (docRefInput) docRefInput.placeholder = 'Ej: FACT-9820, REM-1045';
+
+        // Cantidad
+        if (lblCantidad) lblCantidad.innerHTML = 'Cantidad a Ingresar <span class="text-danger">*</span>';
+
     } else if (tipo === 'ENTREGA') {
-        origenSelect.value = 'CDS';
-        destinoSelect.value = 'PROYECTOS';
-        causalSelect.value = 'ALL';
-    } else if (tipo === 'DISPOSICION FINAL') {
-        origenSelect.value = 'CDS';
-        destinoSelect.value = 'DISPOSICION FINAL';
-        causalSelect.value = 'Dañado';
+        // 2. ENTREGA (SALIDA A PROYECTO / OPERACIÓN)
+        // Bodega Origen: OBLIGATORIA (De qué bodega sale el stock)
+        if (colOrigen) colOrigen.style.display = 'block';
+        if (lblOrigen) lblOrigen.innerHTML = '<i class="bi bi-box-arrow-up-right me-1 text-danger"></i>Bodega de Origen (Despacho) <span class="text-danger">*</span>';
+        if (origenSelect) {
+            origenSelect.required = true;
+            if (!origenSelect.value || origenSelect.value === 'ALL') {
+                const firstOpt = Array.from(origenSelect.options).find(o => o.value && o.value !== 'ALL');
+                origenSelect.value = firstOpt ? firstOpt.value : 'CDS';
+            }
+        }
+
+        // Bodega Destino: HABILITADA Y SELECCIONABLE
+        if (colDestino) colDestino.style.display = 'block';
+        if (lblDestino) lblDestino.innerHTML = '<i class="bi bi-box-arrow-in-down-right me-1 text-success"></i>Bodega de Destino / Recepción <span class="text-danger">*</span>';
+        if (destinoSelect) {
+            destinoSelect.required = true;
+            if (!destinoSelect.value || destinoSelect.value === 'ALL') {
+                const firstOpt = Array.from(destinoSelect.options).find(o => o.value && o.value !== 'ALL');
+                destinoSelect.value = firstOpt ? firstOpt.value : 'PROYECTOS';
+            }
+        }
+
+        // Proyecto / Destino: OBLIGATORIO
+        if (colProyecto) colProyecto.style.display = 'block';
+        if (lblProyecto) lblProyecto.innerHTML = '<i class="bi bi-buildings me-1 text-primary"></i>Proyecto / Cuadrilla Destino <span class="text-danger">*</span>';
+        if (proyectoSelect) proyectoSelect.required = true;
+
+        // Causal / Condición
+        if (colCausal) colCausal.style.display = 'block';
+        if (lblCausal) lblCausal.innerHTML = '<i class="bi bi-info-circle me-1"></i>Causal / Uso Operativo';
+        fillSelectDirecto(causalSelect, [
+            'USO EN OBRA / PROYECTO',
+            'DOTACION PERSONAL',
+            'MANTENIMIENTO OPERATIVO',
+            'CONSUMO GENERAL'
+        ]);
+
+        // Persona que recibe: OBLIGATORIO
+        if (colPersona) colPersona.style.display = 'block';
+        if (lblPersona) lblPersona.innerHTML = '<i class="bi bi-person-badge me-1"></i>Persona que Recibe Material <span class="text-danger">*</span>';
+        if (personaInput) {
+            personaInput.required = true;
+            personaInput.placeholder = 'Nombre del técnico / líder de cuadrilla';
+        }
+
+        // Documento
+        if (colDocRef) colDocRef.style.display = 'block';
+        if (lblDocRef) lblDocRef.innerHTML = '<i class="bi bi-receipt me-1"></i>Vale de Salida / Orden de Trabajo';
+        if (docRefInput) docRefInput.placeholder = 'Ej: VALE-1002, OT-403';
+
+        // Cantidad
+        if (lblCantidad) lblCantidad.innerHTML = 'Cantidad a Entregar <span class="text-danger">*</span>';
+
     } else if (tipo === 'DEVOLUCION') {
-        origenSelect.value = 'PROYECTOS';
-        destinoSelect.value = 'CDS';
-        causalSelect.value = 'ALL';
-    } else {
-        origenSelect.value = 'CDS';
-        destinoSelect.value = 'CDS';
+        // 3. DEVOLUCIÓN (REINGRESO DESDE PROYECTO)
+        if (colOrigen) colOrigen.style.display = 'none';
+        if (origenSelect) origenSelect.value = 'PROYECTOS';
+
+        // Bodega Destino: OBLIGATORIA
+        if (colDestino) colDestino.style.display = 'block';
+        if (lblDestino) lblDestino.innerHTML = '<i class="bi bi-box-arrow-in-down-right me-1 text-success"></i>Bodega de Reingreso <span class="text-danger">*</span>';
+        if (destinoSelect) {
+            destinoSelect.required = true;
+            if (!destinoSelect.value || destinoSelect.value === 'ALL') {
+                const firstOpt = Array.from(destinoSelect.options).find(o => o.value && o.value !== 'ALL');
+                destinoSelect.value = firstOpt ? firstOpt.value : 'CDS';
+            }
+        }
+
+        // Proyecto que Devuelve
+        if (colProyecto) colProyecto.style.display = 'block';
+        if (lblProyecto) lblProyecto.innerHTML = '<i class="bi bi-buildings me-1 text-primary"></i>Proyecto / Obra que Devuelve <span class="text-danger">*</span>';
+        if (proyectoSelect) proyectoSelect.required = true;
+
+        // Causal
+        if (colCausal) colCausal.style.display = 'block';
+        if (lblCausal) lblCausal.innerHTML = '<i class="bi bi-info-circle me-1"></i>Motivo de Devolución';
+        fillSelectDirecto(causalSelect, [
+            'SOBRANTE DE OBRA',
+            'CAMBIO DE MATERIAL',
+            'DESPACHO ERRADO',
+            'HERRAMIENTA REINTEGRADA',
+            'OTRA DEVOLUCION'
+        ]);
+
+        // Persona que Devuelve
+        if (colPersona) colPersona.style.display = 'block';
+        if (lblPersona) lblPersona.innerHTML = '<i class="bi bi-person-badge me-1"></i>Persona que Devuelve <span class="text-danger">*</span>';
+        if (personaInput) {
+            personaInput.required = true;
+            personaInput.placeholder = 'Nombre de quien devuelve el material';
+        }
+
+        // Documento
+        if (colDocRef) colDocRef.style.display = 'block';
+        if (lblDocRef) lblDocRef.innerHTML = '<i class="bi bi-receipt me-1"></i>Acta / Remisión de Devolución';
+        if (docRefInput) docRefInput.placeholder = 'Ej: DEV-204';
+
+        if (lblCantidad) lblCantidad.innerHTML = 'Cantidad a Devolver <span class="text-danger">*</span>';
+
+    } else if (tipo === 'DISPOSICION FINAL') {
+        // 4. DISPOSICIÓN FINAL (SCRAP / BAJA)
+        if (colOrigen) colOrigen.style.display = 'block';
+        if (lblOrigen) lblOrigen.innerHTML = '<i class="bi bi-box-arrow-up-right me-1 text-danger"></i>Bodega de Origen (Baja) <span class="text-danger">*</span>';
+        if (origenSelect) {
+            origenSelect.required = true;
+            if (!origenSelect.value || origenSelect.value === 'ALL') {
+                const firstOpt = Array.from(origenSelect.options).find(o => o.value && o.value !== 'ALL');
+                origenSelect.value = firstOpt ? firstOpt.value : 'CDS';
+            }
+        }
+
+        if (colDestino) colDestino.style.display = 'none';
+        if (destinoSelect) destinoSelect.value = 'DISPOSICION FINAL';
+
+        if (colProyecto) colProyecto.style.display = 'none';
+        if (proyectoSelect) proyectoSelect.value = 'ALL';
+
+        if (colCausal) colCausal.style.display = 'block';
+        if (lblCausal) lblCausal.innerHTML = '<i class="bi bi-info-circle me-1"></i>Causal de Descarte / Baja <span class="text-danger">*</span>';
+        if (causalSelect) causalSelect.required = true;
+        fillSelectDirecto(causalSelect, [
+            'DAÑADO / ROTO',
+            'CADUCADO / VENCIDO',
+            'OBSOLETO / SCRAP',
+            'DEFECTUOSO DE FABRICA',
+            'DESGASTE NO REPARABLE'
+        ]);
+
+        if (colPersona) colPersona.style.display = 'none';
+
+        if (colDocRef) colDocRef.style.display = 'block';
+        if (lblDocRef) lblDocRef.innerHTML = '<i class="bi bi-receipt me-1"></i>Acta de Baja / Descarte';
+        if (docRefInput) docRefInput.placeholder = 'Ej: ACTA-BAJA-01';
+
+        if (lblCantidad) lblCantidad.innerHTML = 'Cantidad a Dar de Baja <span class="text-danger">*</span>';
+
+    } else if (tipo === 'AJUSTE POSITIVO') {
+        // 5. AJUSTE POSITIVO (+)
+        if (colOrigen) colOrigen.style.display = 'none';
+        if (origenSelect) origenSelect.value = 'ALL';
+
+        if (colDestino) colDestino.style.display = 'block';
+        if (lblDestino) lblDestino.innerHTML = '<i class="bi bi-box-arrow-in-down-right me-1 text-success"></i>Bodega a Ajustar (+) <span class="text-danger">*</span>';
+        if (destinoSelect) {
+            destinoSelect.required = true;
+            if (!destinoSelect.value || destinoSelect.value === 'ALL') {
+                const firstOpt = Array.from(destinoSelect.options).find(o => o.value && o.value !== 'ALL');
+                destinoSelect.value = firstOpt ? firstOpt.value : 'CDS';
+            }
+        }
+
+        if (colProyecto) colProyecto.style.display = 'none';
+        if (proyectoSelect) proyectoSelect.value = 'ALL';
+
+        if (colCausal) colCausal.style.display = 'block';
+        if (lblCausal) lblCausal.innerHTML = '<i class="bi bi-info-circle me-1"></i>Motivo del Ajuste (+)';
+        fillSelectDirecto(causalSelect, [
+            'CONTEO FISICO / AUDITORIA',
+            'SOBRANTE DETECTADO EN BODEGA',
+            'CORRECCION DE SALDO'
+        ]);
+
+        if (colPersona) colPersona.style.display = 'none';
+
+        if (colDocRef) colDocRef.style.display = 'block';
+        if (lblDocRef) lblDocRef.innerHTML = '<i class="bi bi-receipt me-1"></i>Acta de Conteo / Auditoría';
+        if (docRefInput) docRefInput.placeholder = 'Ej: AUDIT-2026-01';
+
+        if (lblCantidad) lblCantidad.innerHTML = 'Cantidad a Adicionar (+) <span class="text-danger">*</span>';
+
+    } else if (tipo === 'AJUSTE NEGATIVO') {
+        // 6. AJUSTE NEGATIVO (-)
+        if (colOrigen) colOrigen.style.display = 'block';
+        if (lblOrigen) lblOrigen.innerHTML = '<i class="bi bi-box-arrow-up-right me-1 text-danger"></i>Bodega a Ajustar (-) <span class="text-danger">*</span>';
+        if (origenSelect) {
+            origenSelect.required = true;
+            if (!origenSelect.value || origenSelect.value === 'ALL') {
+                const firstOpt = Array.from(origenSelect.options).find(o => o.value && o.value !== 'ALL');
+                origenSelect.value = firstOpt ? firstOpt.value : 'CDS';
+            }
+        }
+
+        if (colDestino) colDestino.style.display = 'none';
+        if (destinoSelect) destinoSelect.value = 'ALL';
+
+        if (colProyecto) colProyecto.style.display = 'none';
+        if (proyectoSelect) proyectoSelect.value = 'ALL';
+
+        if (colCausal) colCausal.style.display = 'block';
+        if (lblCausal) lblCausal.innerHTML = '<i class="bi bi-info-circle me-1"></i>Motivo del Ajuste (-)';
+        fillSelectDirecto(causalSelect, [
+            'CONTEO FISICO / AUDITORIA',
+            'FALTANTE DETECTADO EN BODEGA',
+            'MERMA / EVAPORACION',
+            'CORRECCION DE SALDO'
+        ]);
+
+        if (colPersona) colPersona.style.display = 'none';
+
+        if (colDocRef) colDocRef.style.display = 'block';
+        if (lblDocRef) lblDocRef.innerHTML = '<i class="bi bi-receipt me-1"></i>Acta de Conteo / Auditoría';
+        if (docRefInput) docRefInput.placeholder = 'Ej: AUDIT-2026-01';
+
+        if (lblCantidad) lblCantidad.innerHTML = 'Cantidad a Descontar (-) <span class="text-danger">*</span>';
     }
 
-    // Mostrar campo de fecha de vencimiento si es ENTRADA y el ítem aplica
+    // Fecha de vencimiento solo visible si es ENTRADA y el ítem aplica
     const selectedCode = document.getElementById('mov-item-select')?.value;
-    const item = appState.items.find(i => String(i.codigo) === String(selectedCode));
+    const item = appState.items ? appState.items.find(i => String(i.codigo) === String(selectedCode)) : null;
     if (tipo === 'ENTRADA' && item && item.aplica_vencimiento) {
-        vencContainer.style.display = 'block';
+        if (vencContainer) vencContainer.style.display = 'block';
     } else {
-        vencContainer.style.display = 'none';
+        if (vencContainer) vencContainer.style.display = 'none';
     }
 
     actualizarStockPreviewEnMovimiento();
 }
 
 function handleItemSelectInMovimiento(codigo) {
-    const item = appState.items.find(i => String(i.codigo) === String(codigo));
+    const item = appState.items ? appState.items.find(i => String(i.codigo) === String(codigo)) : null;
     const infoDiv = document.getElementById('mov-item-info');
     const vencContainer = document.getElementById('mov-vencimiento-container');
-    const tipo = document.getElementById('mov-tipo').value;
+    const tipo = document.getElementById('mov-tipo')?.value || 'ENTRADA';
 
     if (!item) {
         if (infoDiv) infoDiv.style.display = 'none';
@@ -1195,9 +1608,9 @@ function handleItemSelectInMovimiento(codigo) {
     infoDiv.style.display = 'block';
 
     if (tipo === 'ENTRADA' && item.aplica_vencimiento) {
-        vencContainer.style.display = 'block';
+        if (vencContainer) vencContainer.style.display = 'block';
     } else {
-        vencContainer.style.display = 'none';
+        if (vencContainer) vencContainer.style.display = 'none';
     }
 
     actualizarStockPreviewEnMovimiento();
@@ -1216,26 +1629,40 @@ async function actualizarContextoEnMovimiento() {
         const dataBod = await resBod.json();
         const dataProy = await resProy.json();
 
-        if (dataBod.success) {
+        if (dataBod.success && Array.isArray(dataBod.data)) {
             const currentOrigen = document.getElementById('mov-bodega-origen')?.value;
             const currentDestino = document.getElementById('mov-bodega-destino')?.value;
-            const bodList = dataBod.data.map(b => b.nombre);
-            fillSelect('mov-bodega-origen', bodList, true, '-- Sin Bodega Origen --');
-            fillSelect('mov-bodega-destino', bodList, true, '-- Sin Bodega Destino --');
-            if (currentOrigen && document.getElementById('mov-bodega-origen')) document.getElementById('mov-bodega-origen').value = currentOrigen;
-            if (currentDestino && document.getElementById('mov-bodega-destino')) document.getElementById('mov-bodega-destino').value = currentDestino;
+            let bodList = dataBod.data.map(b => b.nombre);
+            if (bodList.length === 0) {
+                bodList = ['CDS', 'PROYECTOS'];
+            }
+            fillSelect('mov-bodega-origen', bodList, false);
+            fillSelect('mov-bodega-destino', bodList, false);
+            if (currentOrigen && document.getElementById('mov-bodega-origen') && bodList.includes(currentOrigen)) {
+                document.getElementById('mov-bodega-origen').value = currentOrigen;
+            }
+            if (currentDestino && document.getElementById('mov-bodega-destino') && bodList.includes(currentDestino)) {
+                document.getElementById('mov-bodega-destino').value = currentDestino;
+            }
         }
 
-        if (dataProy.success) {
+        if (dataProy.success && Array.isArray(dataProy.data)) {
             const currentProy = document.getElementById('mov-proyecto')?.value;
-            const proyList = dataProy.data.map(p => p.nombre);
-            fillSelect('mov-proyecto', proyList, true, 'Operación Central / General');
-            if (currentProy && document.getElementById('mov-proyecto')) document.getElementById('mov-proyecto').value = currentProy;
+            let proyList = dataProy.data.map(p => p.nombre);
+            if (proyList.length === 0) {
+                proyList = ['OPERACION'];
+            }
+            fillSelect('mov-proyecto', proyList, false);
+            if (currentProy && document.getElementById('mov-proyecto') && proyList.includes(currentProy)) {
+                document.getElementById('mov-proyecto').value = currentProy;
+            }
         }
     } catch (err) {
         console.warn('Error al actualizar listas contextuales en movimiento:', err);
     }
 
+    const currentTipo = document.getElementById('mov-tipo')?.value || 'ENTRADA';
+    handleTipoMovimientoChange(currentTipo);
     actualizarStockPreviewEnMovimiento();
 }
 
@@ -1299,20 +1726,56 @@ async function submitMovimiento(e) {
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Registrando...';
     }
 
+    let sedeVal = document.getElementById('mov-sede')?.value || appState.currentSede;
+    if (!tienePermiso('ACCESO_MULTI_SEDE')) {
+        sedeVal = appState.currentUser?.sede || 'Sede Suroriental';
+    }
+
+    const tipoMov = document.getElementById('mov-tipo').value;
+    let bOrigen = null;
+    let bDestino = null;
+    let pDestino = null;
+
+    if (tipoMov === 'ENTRADA') {
+        bOrigen = null; // Entrada directa / Compra de nuevo inventario sin bodega de origen
+        bDestino = document.getElementById('mov-bodega-destino')?.value || 'CDS';
+        pDestino = null;
+    } else if (tipoMov === 'ENTREGA') {
+        bOrigen = document.getElementById('mov-bodega-origen')?.value || 'CDS';
+        bDestino = document.getElementById('mov-bodega-destino')?.value || 'PROYECTOS';
+        pDestino = document.getElementById('mov-proyecto')?.value || 'OPERACION';
+    } else if (tipoMov === 'DEVOLUCION') {
+        bOrigen = 'PROYECTOS';
+        bDestino = document.getElementById('mov-bodega-destino')?.value || 'CDS';
+        pDestino = document.getElementById('mov-proyecto')?.value || 'OPERACION';
+    } else if (tipoMov === 'DISPOSICION FINAL') {
+        bOrigen = document.getElementById('mov-bodega-origen')?.value || 'CDS';
+        bDestino = 'DISPOSICION FINAL';
+        pDestino = null;
+    } else if (tipoMov === 'AJUSTE POSITIVO') {
+        bOrigen = null;
+        bDestino = document.getElementById('mov-bodega-destino')?.value || 'CDS';
+        pDestino = null;
+    } else if (tipoMov === 'AJUSTE NEGATIVO') {
+        bOrigen = document.getElementById('mov-bodega-origen')?.value || 'CDS';
+        bDestino = null;
+        pDestino = null;
+    }
+
     const payload = {
-        sede: document.getElementById('mov-sede')?.value || appState.currentSede,
+        sede: sedeVal,
         tipo_inventario: document.getElementById('mov-tipo-inventario')?.value || appState.currentInventario,
-        tipo_movimiento: document.getElementById('mov-tipo').value,
+        tipo_movimiento: tipoMov,
         codigo_item: parseInt(document.getElementById('mov-item-select').value, 10),
         cantidad: parseFloat(document.getElementById('mov-cantidad').value),
-        bodega_origen: document.getElementById('mov-bodega-origen').value === 'ALL' ? null : document.getElementById('mov-bodega-origen').value,
-        bodega_destino: document.getElementById('mov-bodega-destino').value === 'ALL' ? null : document.getElementById('mov-bodega-destino').value,
-        causal_condicion: document.getElementById('mov-causal').value === 'ALL' ? null : document.getElementById('mov-causal').value,
-        proyecto_destino: document.getElementById('mov-proyecto').value === 'ALL' ? null : document.getElementById('mov-proyecto').value,
-        responsable: document.getElementById('mov-responsable').value,
-        persona_recibe_devuelve: document.getElementById('mov-persona-recibe').value || null,
-        documento_referencia: document.getElementById('mov-doc-ref').value || 'MANUAL',
-        observaciones: document.getElementById('mov-observaciones').value || null,
+        bodega_origen: bOrigen,
+        bodega_destino: bDestino,
+        causal_condicion: document.getElementById('mov-causal')?.value || null,
+        proyecto_destino: pDestino,
+        responsable: document.getElementById('mov-responsable')?.value || 'Administrador CDS',
+        persona_recibe_devuelve: document.getElementById('mov-persona-recibe')?.value || null,
+        documento_referencia: document.getElementById('mov-doc-ref')?.value || 'MANUAL',
+        observaciones: document.getElementById('mov-observaciones')?.value || null,
         fecha_vencimiento_lote: document.getElementById('mov-fecha-vencimiento')?.value || null
     };
 
@@ -1555,7 +2018,18 @@ function openModalNuevoItem() {
     if (form) form.reset();
 
     const sedeSelect = document.getElementById('item-sede');
-    if (sedeSelect) sedeSelect.value = appState.currentSede;
+    if (sedeSelect) {
+        if (!tienePermiso('ACCESO_MULTI_SEDE')) {
+            const userSede = appState.currentUser?.sede || 'Sede Suroriental';
+            sedeSelect.value = userSede;
+            sedeSelect.disabled = true;
+            sedeSelect.title = `🔒 Sede asignada: ${userSede} (Requiere permiso de Ver Sedes)`;
+        } else {
+            sedeSelect.value = appState.currentSede;
+            sedeSelect.disabled = false;
+            sedeSelect.title = 'Seleccionar Sede';
+        }
+    }
 
     const tipoInvSelect = document.getElementById('item-tipo-inventario');
     if (tipoInvSelect) tipoInvSelect.value = appState.currentInventario;
@@ -1596,7 +2070,18 @@ function editarItem(codigo) {
 
     // Sede y Tipo de Inventario
     const sedeSelect = document.getElementById('item-sede');
-    if (sedeSelect) sedeSelect.value = item.sede || appState.currentSede;
+    if (sedeSelect) {
+        if (!tienePermiso('ACCESO_MULTI_SEDE')) {
+            const userSede = appState.currentUser?.sede || 'Sede Suroriental';
+            sedeSelect.value = userSede;
+            sedeSelect.disabled = true;
+            sedeSelect.title = `🔒 Sede asignada: ${userSede} (Requiere permiso de Ver Sedes)`;
+        } else {
+            sedeSelect.value = item.sede || appState.currentSede;
+            sedeSelect.disabled = false;
+            sedeSelect.title = 'Seleccionar Sede';
+        }
+    }
 
     const tipoInvSelect = document.getElementById('item-tipo-inventario');
     if (tipoInvSelect) tipoInvSelect.value = item.tipo_inventario || appState.currentInventario;
@@ -1663,9 +2148,14 @@ async function submitItem(e) {
     const codigo = parseInt(codigoRaw, 10);
     const isEdit = document.getElementById('item-codigo').readOnly;
 
+    let sedeVal = document.getElementById('item-sede')?.value || appState.currentSede;
+    if (!tienePermiso('ACCESO_MULTI_SEDE')) {
+        sedeVal = appState.currentUser?.sede || 'Sede Suroriental';
+    }
+
     const payload = {
         codigo,
-        sede: document.getElementById('item-sede')?.value || appState.currentSede,
+        sede: sedeVal,
         tipo_inventario: document.getElementById('item-tipo-inventario')?.value || appState.currentInventario,
         nombre: document.getElementById('item-nombre').value.trim().toUpperCase(),
         categoria: document.getElementById('item-categoria').value,
@@ -2495,94 +2985,153 @@ async function loadBodegasYProyectos() {
 
         if (dataBod.success) {
             appState.bodegas = dataBod.data;
-            const tbody = document.getElementById('table-bodegas-body');
-            if (tbody) {
-                if (dataBod.data.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted">No se encontraron bodegas para los filtros seleccionados.</td></tr>`;
-                } else {
-                    tbody.innerHTML = dataBod.data.map(b => {
-                        const esCentral = b.es_central === 1 || b.codigo === 'BOD-001';
-                        return `
-                        <tr>
-                            <td><span class="badge bg-light text-primary border font-monospace fw-bold">${b.codigo}</span></td>
-                            <td>
-                                <div class="fw-bold d-flex align-items-center flex-wrap gap-1">
-                                    <span>${b.nombre}</span>
-                                    ${esCentral ? '<span class="badge bg-primary shadow-sm small" style="font-size: 0.72rem;"><i class="bi bi-star-fill text-warning me-1"></i>Central</span>' : ''}
-                                </div>
-                                <small class="text-muted">${b.ubicacion || ''}</small>
-                            </td>
-                            <td>
-                                <div class="small fw-semibold text-dark">${b.sede || 'Global'}</div>
-                                <span class="badge bg-info bg-opacity-10 text-info border">${b.tipo_inventario || 'CDS'}</span>
-                            </td>
-                            <td>${b.responsable || '-'}</td>
-                            <td class="text-center">
-                                <span class="badge ${b.estado === 'Activa' ? 'bg-success' : 'bg-secondary'}">${b.estado}</span>
-                            </td>
-                            <td class="text-center">
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-primary btn-sm py-1 px-2" onclick="editarBodega('${b.codigo}')" title="Modificar Bodega">
-                                        <i class="bi bi-pencil-square"></i>
-                                    </button>
-                                    ${esCentral ? `
-                                        <button class="btn btn-outline-secondary btn-sm py-1 px-2" disabled title="La Bodega Central no se puede eliminar (Solo modificar)">
-                                            <i class="bi bi-lock-fill"></i>
-                                        </button>
-                                    ` : `
-                                        <button class="btn btn-outline-danger btn-sm py-1 px-2" onclick="abrirModalEliminarBodega('${b.codigo}')" title="Eliminar Bodega">
-                                            <i class="bi bi-trash3"></i>
-                                        </button>
-                                    `}
-                                </div>
-                            </td>
-                        </tr>
-                    `;
-                    }).join('');
-                }
-            }
+            const badgeEl = document.getElementById('badge-count-bodegas');
+            if (badgeEl) badgeEl.textContent = dataBod.data.length;
+            renderBodegasTable(dataBod.data);
         }
 
         if (dataProy.success) {
             appState.proyectos = dataProy.data;
-            const tbody = document.getElementById('table-proyectos-body');
-            if (tbody) {
-                if (dataProy.data.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted">No se encontraron proyectos para los filtros seleccionados.</td></tr>`;
-                } else {
-                    tbody.innerHTML = dataProy.data.map(p => `
-                        <tr>
-                            <td><span class="badge bg-light text-secondary border font-monospace">#${p.id}</span></td>
-                            <td>
-                                <div class="fw-bold">${p.nombre}</div>
-                                <small class="text-muted">${p.observaciones || ''}</small>
-                            </td>
-                            <td>
-                                <div class="small fw-semibold text-dark">${p.sede || 'Global'}</div>
-                                <span class="badge bg-warning bg-opacity-10 text-dark border">${p.tipo_inventario || 'CDS'}</span>
-                            </td>
-                            <td>${p.responsable || '-'}</td>
-                            <td class="text-center">
-                                <span class="badge ${p.estado === 'Activo' ? 'bg-success' : 'bg-secondary'}">${p.estado}</span>
-                            </td>
-                            <td class="text-center">
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-primary btn-sm py-1 px-2" onclick="editarProyecto(${p.id})" title="Modificar Proyecto">
-                                        <i class="bi bi-pencil-square"></i>
-                                    </button>
-                                    <button class="btn btn-outline-danger btn-sm py-1 px-2" onclick="abrirModalEliminarProyecto(${p.id})" title="Eliminar Proyecto">
-                                        <i class="bi bi-trash3"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                    `).join('');
-                }
-            }
+            const badgeEl = document.getElementById('badge-count-proyectos');
+            if (badgeEl) badgeEl.textContent = dataProy.data.length;
+            renderProyectosTable(dataProy.data);
         }
+
+        // Cargar Categorías y Ubicaciones del Inventario
+        await loadCategorias();
+        await loadUbicaciones();
     } catch (err) {
-        console.error('Error al cargar bodegas y proyectos:', err);
+        console.error('Error al cargar bodegas, proyectos, categorías y ubicaciones:', err);
     }
+}
+
+function renderBodegasTable(bodegas) {
+    const tbody = document.getElementById('table-bodegas-body');
+    if (!tbody) return;
+
+    if (!bodegas || bodegas.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-muted">No se encontraron bodegas para los filtros seleccionados.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = bodegas.map(b => {
+        const esCentral = b.es_central === 1 || b.codigo === 'BOD-001';
+        return `
+            <tr>
+                <td><span class="badge bg-light text-primary border font-monospace fw-bold fs-6">${b.codigo}</span></td>
+                <td>
+                    <div class="fw-bold text-dark d-flex align-items-center flex-wrap gap-1">
+                        <span>${b.nombre}</span>
+                        ${esCentral ? '<span class="badge bg-primary shadow-sm small" style="font-size: 0.72rem;"><i class="bi bi-star-fill text-warning me-1"></i>Central</span>' : ''}
+                    </div>
+                    ${b.observaciones ? `<small class="text-muted">${b.observaciones}</small>` : ''}
+                </td>
+                <td><i class="bi bi-geo-alt text-muted me-1"></i>${b.ubicacion || 'No especificada'}</td>
+                <td>
+                    <div class="fw-semibold text-dark"><i class="bi bi-geo-alt-fill text-danger me-1"></i>${b.sede || 'Global'}</div>
+                </td>
+                <td>
+                    <span class="badge bg-info bg-opacity-10 text-info border">${b.tipo_inventario || 'CDS'}</span>
+                </td>
+                <td>${b.responsable || '<span class="text-muted">-</span>'}</td>
+                <td class="text-center">
+                    <span class="badge ${b.estado === 'Activa' ? 'bg-success' : 'bg-secondary'} px-2 py-1">${b.estado}</span>
+                </td>
+                <td class="text-center">
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-primary btn-sm py-1 px-2 shadow-xs" onclick="editarBodega('${b.codigo}')" title="Modificar Bodega">
+                            <i class="bi bi-pencil-square"></i>
+                        </button>
+                        ${esCentral ? `
+                            <button class="btn btn-outline-secondary btn-sm py-1 px-2" disabled title="La Bodega Central no se puede eliminar (Solo modificar)">
+                                <i class="bi bi-lock-fill"></i>
+                            </button>
+                        ` : `
+                            <button class="btn btn-outline-danger btn-sm py-1 px-2 shadow-xs" onclick="abrirModalEliminarBodega('${b.codigo}')" title="Eliminar Bodega">
+                                <i class="bi bi-trash3"></i>
+                            </button>
+                        `}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function filtrarTablaBodegasUI(query) {
+    const q = (query || '').toLowerCase().trim();
+    if (!appState.bodegas) return;
+    if (!q) {
+        renderBodegasTable(appState.bodegas);
+        return;
+    }
+    const filtrados = appState.bodegas.filter(b => 
+        (b.codigo && b.codigo.toLowerCase().includes(q)) ||
+        (b.nombre && b.nombre.toLowerCase().includes(q)) ||
+        (b.ubicacion && b.ubicacion.toLowerCase().includes(q)) ||
+        (b.responsable && b.responsable.toLowerCase().includes(q)) ||
+        (b.sede && b.sede.toLowerCase().includes(q))
+    );
+    renderBodegasTable(filtrados);
+}
+
+function renderProyectosTable(proyectos) {
+    const tbody = document.getElementById('table-proyectos-body');
+    if (!tbody) return;
+
+    if (!proyectos || proyectos.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-muted">No se encontraron proyectos o destinos finales para los filtros seleccionados.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = proyectos.map(p => `
+        <tr>
+            <td><span class="badge bg-light text-secondary border font-monospace fw-bold">#${p.id}</span></td>
+            <td>
+                <div class="fw-bold text-dark">${p.nombre}</div>
+            </td>
+            <td>
+                <small class="text-muted">${p.observaciones || '-'}</small>
+            </td>
+            <td>
+                <div class="fw-semibold text-dark"><i class="bi bi-geo-alt-fill text-danger me-1"></i>${p.sede || 'Global'}</div>
+            </td>
+            <td>
+                <span class="badge bg-warning bg-opacity-10 text-dark border">${p.tipo_inventario || 'CDS'}</span>
+            </td>
+            <td>${p.responsable || '<span class="text-muted">-</span>'}</td>
+            <td class="text-center">
+                <span class="badge ${p.estado === 'Activo' ? 'bg-success' : 'bg-secondary'} px-2 py-1">${p.estado}</span>
+            </td>
+            <td class="text-center">
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary btn-sm py-1 px-2 shadow-xs" onclick="editarProyecto(${p.id})" title="Modificar Proyecto">
+                        <i class="bi bi-pencil-square"></i>
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm py-1 px-2 shadow-xs" onclick="abrirModalEliminarProyecto(${p.id})" title="Eliminar Proyecto">
+                        <i class="bi bi-trash3"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function filtrarTablaProyectosUI(query) {
+    const q = (query || '').toLowerCase().trim();
+    if (!appState.proyectos) return;
+    if (!q) {
+        renderProyectosTable(appState.proyectos);
+        return;
+    }
+    const filtrados = appState.proyectos.filter(p => 
+        String(p.id).includes(q) ||
+        (p.nombre && p.nombre.toLowerCase().includes(q)) ||
+        (p.observaciones && p.observaciones.toLowerCase().includes(q)) ||
+        (p.responsable && p.responsable.toLowerCase().includes(q)) ||
+        (p.sede && p.sede.toLowerCase().includes(q))
+    );
+    renderProyectosTable(filtrados);
 }
 
 async function openModalNuevaBodega() {
@@ -2592,7 +3141,18 @@ async function openModalNuevaBodega() {
     
     // Setear Sede y Tipo de Inventario por defecto al contexto actual
     const sedeSelect = document.getElementById('bod-sede');
-    if (sedeSelect) sedeSelect.value = appState.currentSede;
+    if (sedeSelect) {
+        if (!tienePermiso('ACCESO_MULTI_SEDE')) {
+            const userSede = appState.currentUser?.sede || 'Sede Suroriental';
+            sedeSelect.value = userSede;
+            sedeSelect.disabled = true;
+            sedeSelect.title = `🔒 Sede asignada: ${userSede} (Requiere permiso de Ver Sedes)`;
+        } else {
+            sedeSelect.value = appState.currentSede;
+            sedeSelect.disabled = false;
+            sedeSelect.title = 'Seleccionar Sede';
+        }
+    }
 
     const invSelect = document.getElementById('bod-tipo-inventario');
     if (invSelect) invSelect.value = appState.currentInventario;
@@ -2640,7 +3200,18 @@ function editarBodega(codigo) {
     document.getElementById('bod-obs').value = bodega.observaciones || '';
 
     const sedeSelect = document.getElementById('bod-sede');
-    if (sedeSelect) sedeSelect.value = bodega.sede || appState.currentSede;
+    if (sedeSelect) {
+        if (!tienePermiso('ACCESO_MULTI_SEDE')) {
+            const userSede = appState.currentUser?.sede || 'Sede Suroriental';
+            sedeSelect.value = userSede;
+            sedeSelect.disabled = true;
+            sedeSelect.title = `🔒 Sede asignada: ${userSede} (Requiere permiso de Ver Sedes)`;
+        } else {
+            sedeSelect.value = bodega.sede || appState.currentSede;
+            sedeSelect.disabled = false;
+            sedeSelect.title = 'Seleccionar Sede';
+        }
+    }
 
     const invSelect = document.getElementById('bod-tipo-inventario');
     if (invSelect) invSelect.value = bodega.tipo_inventario || appState.currentInventario;
@@ -2668,6 +3239,12 @@ function editarBodega(codigo) {
 async function submitBodega(e) {
     e.preventDefault();
     const isEdit = document.getElementById('bod-is-edit').value === '1';
+
+    let sedeVal = document.getElementById('bod-sede')?.value || appState.currentSede;
+    if (!tienePermiso('ACCESO_MULTI_SEDE')) {
+        sedeVal = appState.currentUser?.sede || 'Sede Suroriental';
+    }
+
     const payload = {
         isEdit,
         codigo: document.getElementById('bod-codigo').value.trim().toUpperCase(),
@@ -2676,7 +3253,7 @@ async function submitBodega(e) {
         responsable: document.getElementById('bod-responsable').value,
         estado: document.getElementById('bod-estado').value,
         observaciones: document.getElementById('bod-obs').value,
-        sede: document.getElementById('bod-sede')?.value || appState.currentSede,
+        sede: sedeVal,
         tipo_inventario: document.getElementById('bod-tipo-inventario')?.value || appState.currentInventario
     };
 
@@ -2773,7 +3350,18 @@ function openModalNuevoProyecto() {
     document.getElementById('modalProyectoTitle').innerHTML = '<i class="bi bi-cone-striped text-warning me-2"></i>Nuevo Frente / Proyecto';
 
     const sedeSelect = document.getElementById('proy-sede');
-    if (sedeSelect) sedeSelect.value = appState.currentSede;
+    if (sedeSelect) {
+        if (!tienePermiso('ACCESO_MULTI_SEDE')) {
+            const userSede = appState.currentUser?.sede || 'Sede Suroriental';
+            sedeSelect.value = userSede;
+            sedeSelect.disabled = true;
+            sedeSelect.title = `🔒 Sede asignada: ${userSede} (Requiere permiso de Ver Sedes)`;
+        } else {
+            sedeSelect.value = appState.currentSede;
+            sedeSelect.disabled = false;
+            sedeSelect.title = 'Seleccionar Sede';
+        }
+    }
 
     const invSelect = document.getElementById('proy-tipo-inventario');
     if (invSelect) invSelect.value = appState.currentInventario;
@@ -2796,7 +3384,18 @@ function editarProyecto(id) {
     document.getElementById('proy-obs').value = proy.observaciones || '';
 
     const sedeSelect = document.getElementById('proy-sede');
-    if (sedeSelect) sedeSelect.value = proy.sede || appState.currentSede;
+    if (sedeSelect) {
+        if (!tienePermiso('ACCESO_MULTI_SEDE')) {
+            const userSede = appState.currentUser?.sede || 'Sede Suroriental';
+            sedeSelect.value = userSede;
+            sedeSelect.disabled = true;
+            sedeSelect.title = `🔒 Sede asignada: ${userSede} (Requiere permiso de Ver Sedes)`;
+        } else {
+            sedeSelect.value = proy.sede || appState.currentSede;
+            sedeSelect.disabled = false;
+            sedeSelect.title = 'Seleccionar Sede';
+        }
+    }
 
     const invSelect = document.getElementById('proy-tipo-inventario');
     if (invSelect) invSelect.value = proy.tipo_inventario || appState.currentInventario;
@@ -2810,13 +3409,19 @@ function editarProyecto(id) {
 
 async function submitProyecto(e) {
     e.preventDefault();
+
+    let sedeVal = document.getElementById('proy-sede')?.value || appState.currentSede;
+    if (!tienePermiso('ACCESO_MULTI_SEDE')) {
+        sedeVal = appState.currentUser?.sede || 'Sede Suroriental';
+    }
+
     const payload = {
         id: document.getElementById('proy-id').value || null,
         nombre: document.getElementById('proy-nombre').value.trim(),
         responsable: document.getElementById('proy-responsable').value,
         estado: document.getElementById('proy-estado').value,
         observaciones: document.getElementById('proy-obs').value,
-        sede: document.getElementById('proy-sede')?.value || appState.currentSede,
+        sede: sedeVal,
         tipo_inventario: document.getElementById('proy-tipo-inventario')?.value || appState.currentInventario
     };
 
@@ -2897,6 +3502,424 @@ async function ejecutarEliminarProyecto() {
         if (btn) {
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-trash3-fill me-1"></i> Confirmar y Eliminar Proyecto';
+        }
+    }
+}
+
+// ==============================================================
+// 8.3. GESTIÓN DE CATEGORÍAS DE INVENTARIO
+// ==============================================================
+async function loadCategorias() {
+    try {
+        const res = await fetch(`${API_BASE}/categorias`);
+        const result = await res.json();
+        if (result.success) {
+            appState.categoriasList = result.data;
+            const badgeEl = document.getElementById('badge-count-categorias');
+            if (badgeEl) badgeEl.textContent = result.data.length;
+            renderCategoriasTable(result.data);
+        }
+    } catch (err) {
+        console.error('Error al cargar categorías:', err);
+    }
+}
+
+function renderCategoriasTable(categorias) {
+    const tbody = document.getElementById('table-categorias-body');
+    if (!tbody) return;
+
+    if (!categorias || categorias.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-muted">No hay categorías configuradas.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = categorias.map((c, index) => {
+        const safeName = String(c.nombre || '').replace(/'/g, "\\'");
+        return `
+            <tr>
+                <td><span class="badge bg-light text-secondary border font-monospace fw-bold">#${c.orden || (index + 1)}</span></td>
+                <td>
+                    <div class="fw-bold text-dark"><i class="bi bi-tag-fill text-success me-1"></i>${c.nombre}</div>
+                </td>
+                <td><small class="text-muted">${c.descripcion || 'Sin descripción'}</small></td>
+                <td class="text-center">
+                    <span class="badge ${c.total_items > 0 ? 'bg-primary-subtle text-primary border border-primary-subtle' : 'bg-secondary-subtle text-muted border'} px-2.5 py-1">
+                        <i class="bi bi-box-seam me-1"></i>${c.total_items || 0} ítems
+                    </span>
+                </td>
+                <td class="text-center">
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-primary btn-sm py-1 px-2 shadow-xs" onclick="editarCategoria(${c.id}, '${safeName}', ${c.orden || 0})" title="Modificar Categoría">
+                            <i class="bi bi-pencil-square"></i>
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm py-1 px-2 shadow-xs" onclick="abrirModalEliminarCategoria(${c.id}, '${safeName}', ${c.total_items || 0})" title="Eliminar Categoría">
+                            <i class="bi bi-trash3"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function filtrarTablaCategoriasUI(query) {
+    const q = (query || '').toLowerCase().trim();
+    if (!appState.categoriasList) return;
+    if (!q) {
+        renderCategoriasTable(appState.categoriasList);
+        return;
+    }
+    const filtrados = appState.categoriasList.filter(c => 
+        (c.nombre && c.nombre.toLowerCase().includes(q)) ||
+        (c.descripcion && c.descripcion.toLowerCase().includes(q)) ||
+        String(c.orden).includes(q)
+    );
+    renderCategoriasTable(filtrados);
+}
+
+function openModalNuevaCategoria() {
+    document.getElementById('form-categoria')?.reset();
+    document.getElementById('cat-id').value = '';
+    document.getElementById('modalCategoriaTitle').innerHTML = '<i class="bi bi-tags-fill me-2"></i>Nueva Categoría de Materiales';
+    
+    // Sugerir siguiente orden
+    const list = appState.categoriasList || [];
+    let maxOrd = 0;
+    list.forEach(c => { if (c.orden && c.orden > maxOrd) maxOrd = c.orden; });
+    document.getElementById('cat-orden').value = maxOrd + 1;
+
+    const modalEl = document.getElementById('modalNuevaCategoria');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+function editarCategoria(id, nombre, orden) {
+    document.getElementById('form-categoria')?.reset();
+    document.getElementById('cat-id').value = id;
+    document.getElementById('cat-nombre').value = nombre;
+    document.getElementById('cat-orden').value = orden || '';
+    document.getElementById('modalCategoriaTitle').innerHTML = `<i class="bi bi-pencil-square me-2"></i>Modificar Categoría (${nombre})`;
+
+    const modalEl = document.getElementById('modalNuevaCategoria');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+async function submitCategoria(e) {
+    e.preventDefault();
+    const id = document.getElementById('cat-id').value;
+    const nombre = document.getElementById('cat-nombre').value.trim().toUpperCase();
+    const orden = document.getElementById('cat-orden').value;
+
+    if (!nombre) {
+        showToast('El nombre de la categoría es obligatorio.', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('btn-guardar-categoria');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Guardando...';
+    }
+
+    try {
+        const url = id ? `${API_BASE}/categorias/${id}` : `${API_BASE}/categorias`;
+        const method = id ? 'PUT' : 'POST';
+
+        const res = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nombre, orden: parseInt(orden, 10) || undefined })
+        });
+
+        const result = await res.json();
+        if (!result.success) {
+            showToast(`⚠️ ${result.error}`, 'danger');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Guardar Categoría';
+            }
+            return;
+        }
+
+        closeModal('modalNuevaCategoria');
+        showToast(`✅ ${result.message}`, 'success');
+
+        await loadConfig();
+        await loadCategorias();
+        if (typeof loadItems === 'function') loadItems();
+        if (typeof loadInventario === 'function') loadInventario();
+    } catch (err) {
+        showToast(`Error al guardar categoría: ${err.message}`, 'danger');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Guardar Categoría';
+        }
+    }
+}
+
+function abrirModalEliminarCategoria(id, nombre, totalItems) {
+    document.getElementById('del-cat-id-input').value = id;
+    document.getElementById('del-cat-nombre').textContent = nombre;
+    document.getElementById('del-cat-items').textContent = `${totalItems} ítem(s)`;
+
+    const btn = document.getElementById('btn-confirmar-eliminar-cat');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-trash3-fill me-1"></i> Confirmar y Eliminar';
+    }
+
+    const modalEl = document.getElementById('modalEliminarCategoria');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+async function ejecutarEliminarCategoria() {
+    const id = document.getElementById('del-cat-id-input').value;
+    if (!id) return;
+
+    const btn = document.getElementById('btn-confirmar-eliminar-cat');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Eliminando...';
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/categorias/${id}`, {
+            method: 'DELETE'
+        });
+
+        const result = await res.json();
+        if (!result.success) {
+            showToast(`⚠️ ${result.error}`, 'danger');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-trash3-fill me-1"></i> Confirmar y Eliminar';
+            }
+            return;
+        }
+
+        closeModal('modalEliminarCategoria');
+        showToast(`✅ ${result.message}`, 'success');
+
+        await loadConfig();
+        await loadCategorias();
+        if (typeof loadItems === 'function') loadItems();
+        if (typeof loadInventario === 'function') loadInventario();
+    } catch (err) {
+        showToast(`Error al eliminar categoría: ${err.message}`, 'danger');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-trash3-fill me-1"></i> Confirmar y Eliminar';
+        }
+    }
+}
+
+// ==============================================================
+// 8.4. GESTIÓN DE UBICACIONES FÍSICAS (CDS)
+// ==============================================================
+async function loadUbicaciones() {
+    try {
+        const res = await fetch(`${API_BASE}/ubicaciones`);
+        const result = await res.json();
+        if (result.success) {
+            appState.ubicacionesList = result.data;
+            const badgeEl = document.getElementById('badge-count-ubicaciones');
+            if (badgeEl) badgeEl.textContent = result.data.length;
+            renderUbicacionesTable(result.data);
+        }
+    } catch (err) {
+        console.error('Error al cargar ubicaciones:', err);
+    }
+}
+
+function renderUbicacionesTable(ubicaciones) {
+    const tbody = document.getElementById('table-ubicaciones-body');
+    if (!tbody) return;
+
+    if (!ubicaciones || ubicaciones.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-muted">No hay ubicaciones configuradas.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = ubicaciones.map((u, index) => {
+        const safeName = String(u.nombre || '').replace(/'/g, "\\'");
+        return `
+            <tr>
+                <td><span class="badge bg-light text-secondary border font-monospace fw-bold">#${u.orden || (index + 1)}</span></td>
+                <td>
+                    <div class="fw-bold text-dark"><i class="bi bi-geo-alt-fill text-info me-1"></i>${u.nombre}</div>
+                </td>
+                <td class="text-center">
+                    <span class="badge ${u.total_items > 0 ? 'bg-info-subtle text-info-emphasis border border-info-subtle' : 'bg-secondary-subtle text-muted border'} px-2.5 py-1">
+                        <i class="bi bi-box-seam me-1"></i>${u.total_items || 0} ítems
+                    </span>
+                </td>
+                <td class="text-center">
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-primary btn-sm py-1 px-2 shadow-xs" onclick="editarUbicacion(${u.id}, '${safeName}', ${u.orden || 0})" title="Modificar Ubicación">
+                            <i class="bi bi-pencil-square"></i>
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm py-1 px-2 shadow-xs" onclick="abrirModalEliminarUbicacion(${u.id}, '${safeName}', ${u.total_items || 0})" title="Eliminar Ubicación">
+                            <i class="bi bi-trash3"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function filtrarTablaUbicacionesUI(query) {
+    const q = (query || '').toLowerCase().trim();
+    if (!appState.ubicacionesList) return;
+    if (!q) {
+        renderUbicacionesTable(appState.ubicacionesList);
+        return;
+    }
+    const filtrados = appState.ubicacionesList.filter(u => 
+        (u.nombre && u.nombre.toLowerCase().includes(q)) ||
+        String(u.orden).includes(q)
+    );
+    renderUbicacionesTable(filtrados);
+}
+
+function openModalNuevaUbicacion() {
+    document.getElementById('form-ubicacion')?.reset();
+    document.getElementById('ubi-id').value = '';
+    document.getElementById('modalUbicacionTitle').innerHTML = '<i class="bi bi-geo-fill me-2"></i>Nueva Ubicación / Posición Física';
+    
+    // Sugerir siguiente orden
+    const list = appState.ubicacionesList || [];
+    let maxOrd = 0;
+    list.forEach(u => { if (u.orden && u.orden > maxOrd) maxOrd = u.orden; });
+    document.getElementById('ubi-orden').value = maxOrd + 1;
+
+    const modalEl = document.getElementById('modalNuevaUbicacion');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+function editarUbicacion(id, nombre, orden) {
+    document.getElementById('form-ubicacion')?.reset();
+    document.getElementById('ubi-id').value = id;
+    document.getElementById('ubi-nombre').value = nombre;
+    document.getElementById('ubi-orden').value = orden || '';
+    document.getElementById('modalUbicacionTitle').innerHTML = `<i class="bi bi-pencil-square me-2"></i>Modificar Ubicación (${nombre})`;
+
+    const modalEl = document.getElementById('modalNuevaUbicacion');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+async function submitUbicacion(e) {
+    e.preventDefault();
+    const id = document.getElementById('ubi-id').value;
+    const nombre = document.getElementById('ubi-nombre').value.trim().toUpperCase();
+    const orden = document.getElementById('ubi-orden').value;
+
+    if (!nombre) {
+        showToast('El código o nombre de la ubicación es obligatorio.', 'warning');
+        return;
+    }
+
+    const btn = document.getElementById('btn-guardar-ubicacion');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Guardando...';
+    }
+
+    try {
+        const url = id ? `${API_BASE}/ubicaciones/${id}` : `${API_BASE}/ubicaciones`;
+        const method = id ? 'PUT' : 'POST';
+
+        const res = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nombre, orden: parseInt(orden, 10) || undefined })
+        });
+
+        const result = await res.json();
+        if (!result.success) {
+            showToast(`⚠️ ${result.error}`, 'danger');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Guardar Ubicación';
+            }
+            return;
+        }
+
+        closeModal('modalNuevaUbicacion');
+        showToast(`✅ ${result.message}`, 'success');
+
+        await loadConfig();
+        await loadUbicaciones();
+        if (typeof loadItems === 'function') loadItems();
+        if (typeof loadInventario === 'function') loadInventario();
+    } catch (err) {
+        showToast(`Error al guardar ubicación: ${err.message}`, 'danger');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Guardar Ubicación';
+        }
+    }
+}
+
+function abrirModalEliminarUbicacion(id, nombre, totalItems) {
+    document.getElementById('del-ubi-id-input').value = id;
+    document.getElementById('del-ubi-nombre').textContent = nombre;
+    document.getElementById('del-ubi-items').textContent = `${totalItems} ítem(s)`;
+
+    const btn = document.getElementById('btn-confirmar-eliminar-ubi');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-trash3-fill me-1"></i> Confirmar y Eliminar';
+    }
+
+    const modalEl = document.getElementById('modalEliminarUbicacion');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+async function ejecutarEliminarUbicacion() {
+    const id = document.getElementById('del-ubi-id-input').value;
+    if (!id) return;
+
+    const btn = document.getElementById('btn-confirmar-eliminar-ubi');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Eliminando...';
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/ubicaciones/${id}`, {
+            method: 'DELETE'
+        });
+
+        const result = await res.json();
+        if (!result.success) {
+            showToast(`⚠️ ${result.error}`, 'danger');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-trash3-fill me-1"></i> Confirmar y Eliminar';
+            }
+            return;
+        }
+
+        closeModal('modalEliminarUbicacion');
+        showToast(`✅ ${result.message}`, 'success');
+
+        await loadConfig();
+        await loadUbicaciones();
+        if (typeof loadItems === 'function') loadItems();
+        if (typeof loadInventario === 'function') loadInventario();
+    } catch (err) {
+        showToast(`Error al eliminar ubicación: ${err.message}`, 'danger');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-trash3-fill me-1"></i> Confirmar y Eliminar';
         }
     }
 }
@@ -3029,15 +4052,26 @@ function triggerBlobDownload(blob, filename) {
     }
 }
 
-// Guardar libro de Excel vía Blob binario
+// Guardar libro de Excel vía XLSX.writeFile y Blob binario
 function saveWorkbookWithBlob(workbook, fileName) {
     try {
+        if (typeof XLSX !== 'undefined' && typeof XLSX.writeFile === 'function') {
+            XLSX.writeFile(workbook, fileName);
+            return;
+        }
         const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
         const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         triggerBlobDownload(blob, fileName);
     } catch (err) {
-        // Fallback a writeFile si existiera soporte directo
-        XLSX.writeFile(workbook, fileName);
+        console.warn('Fallback triggerBlobDownload tras error en writeFile:', err);
+        try {
+            const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            triggerBlobDownload(blob, fileName);
+        } catch (e2) {
+            console.error('Error total al exportar Excel:', e2);
+            showToast('Error al descargar el archivo Excel: ' + (e2.message || err.message), 'danger');
+        }
     }
 }
 
@@ -3095,199 +4129,819 @@ function exportToExcelTable(data, columns, sheetName, fileName) {
     showToast(`Archivo Excel exportado exitosamente: ${fullFileName}`, 'success');
 }
 
-// 1. Exportar Inventario Físico CDS
+// ==============================================================
+// 11. SISTEMA INTEGRAL DE REPORTES GERENCIALES CON FILTRADO PREVIO
+// ==============================================================
+
+// Estado del último reporte filtrado para exportación o previsualización
+let reporteFiltradoActivo = {
+    tipo: 'MOVIMIENTOS',
+    data: [],
+    columns: [],
+    title: 'Reporte de Movimientos',
+    sheetName: 'Movimientos',
+    filename: 'Libro_Movimientos'
+};
+
+// 1. Inicialización de selectores de filtrado rápido y modal
+function initFiltrosReportes() {
+    // A. Fechas por defecto (Mes actual) si están vacías
+    const now = new Date();
+    const primerDiaMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const hoyStr = now.toISOString().split('T')[0];
+
+    const qDesde = document.getElementById('rep-quick-fecha-desde');
+    const qHasta = document.getElementById('rep-quick-fecha-hasta');
+    if (qDesde && !qDesde.value) qDesde.value = primerDiaMes;
+    if (qHasta && !qHasta.value) qHasta.value = hoyStr;
+
+    // B. Llenar categorías en filtro rápido y modal
+    const categorias = (appState.config && appState.config.categorias && appState.config.categorias.length > 0)
+        ? appState.config.categorias.map(c => typeof c === 'string' ? c : c.nombre)
+        : Array.from(new Set((appState.items || []).map(i => i.categoria).filter(Boolean)));
+
+    const qCat = document.getElementById('rep-quick-categoria');
+    if (qCat) {
+        let html = '<option value="TODAS">-- Todas las Categorías --</option>';
+        categorias.forEach(cat => {
+            html += `<option value="${cat}">${cat}</option>`;
+        });
+        qCat.innerHTML = html;
+    }
+
+    const mCat = document.getElementById('modal-filtro-categoria');
+    if (mCat) {
+        let html = '<option value="TODAS">-- Todas las Categorías --</option>';
+        categorias.forEach(cat => {
+            html += `<option value="${cat}">${cat}</option>`;
+        });
+        mCat.innerHTML = html;
+    }
+
+    // C. Llenar ubicaciones en filtro rápido y modal
+    const ubicaciones = (appState.config && appState.config.ubicaciones && appState.config.ubicaciones.length > 0)
+        ? appState.config.ubicaciones.map(u => typeof u === 'string' ? u : u.nombre)
+        : Array.from(new Set((appState.items || []).map(i => i.ubicacion_cds).filter(Boolean)));
+
+    const qUbi = document.getElementById('rep-quick-ubicacion');
+    if (qUbi) {
+        let html = '<option value="TODAS">-- Todas las Ubicaciones --</option>';
+        ubicaciones.forEach(ubi => {
+            html += `<option value="${ubi}">${ubi}</option>`;
+        });
+        qUbi.innerHTML = html;
+    }
+
+    const mUbi = document.getElementById('modal-filtro-ubicacion');
+    if (mUbi) {
+        let html = '<option value="TODAS">-- Todas las Ubicaciones --</option>';
+        ubicaciones.forEach(ubi => {
+            html += `<option value="${ubi}">${ubi}</option>`;
+        });
+        mUbi.innerHTML = html;
+    }
+
+    // D. Llenar Sedes en modal
+    const sedes = (appState.config && appState.config.sedes && appState.config.sedes.length > 0)
+        ? appState.config.sedes.map(s => typeof s === 'string' ? s : s.nombre)
+        : ['Sede Suroriental', 'Sede Medellín'];
+
+    const mSede = document.getElementById('modal-filtro-sede');
+    if (mSede) {
+        if (!tienePermiso('ACCESO_MULTI_SEDE')) {
+            const userSede = appState.currentUser?.sede || 'Sede Suroriental';
+            mSede.innerHTML = `<option value="${userSede}">${userSede}</option>`;
+            mSede.value = userSede;
+            mSede.disabled = true;
+            mSede.title = `🔒 Sede asignada: ${userSede} (Requiere permiso de Ver Sedes)`;
+        } else {
+            let html = '<option value="TODAS">-- Todas las Sedes --</option>';
+            sedes.forEach(s => {
+                const isSelected = s === appState.currentSede ? 'selected' : '';
+                html += `<option value="${s}" ${isSelected}>${s}</option>`;
+            });
+            mSede.innerHTML = html;
+            mSede.disabled = false;
+            mSede.title = 'Filtrar por Sede';
+        }
+    }
+
+    // E. Llenar Tipos de Inventario en modal
+    const tiposInv = (appState.config && appState.config.tipos_inventario && appState.config.tipos_inventario.length > 0)
+        ? appState.config.tipos_inventario
+        : [{ codigo: 'CDS', nombre: 'Inventario CDS' }, { codigo: 'MOVILIDAD', nombre: 'Inventario Movilidad' }];
+
+    const mInv = document.getElementById('modal-filtro-tipo-inv');
+    if (mInv) {
+        let html = '<option value="TODOS">-- Todos los Inventarios --</option>';
+        tiposInv.forEach(t => {
+            const cod = t.codigo || t;
+            const nom = t.nombre || cod;
+            const isSelected = cod === appState.currentInventario ? 'selected' : '';
+            html += `<option value="${cod}" ${isSelected}>${nom}</option>`;
+        });
+        mInv.innerHTML = html;
+    }
+
+    // F. Llenar Bodegas en modal
+    const mBod = document.getElementById('modal-filtro-bodega');
+    if (mBod && appState.bodegas) {
+        let html = '<option value="TODAS">-- Todas las Bodegas --</option>';
+        appState.bodegas.forEach(b => {
+            html += `<option value="${b.codigo}">${b.codigo} - ${b.nombre} (${b.sede || 'Global'})</option>`;
+        });
+        mBod.innerHTML = html;
+    }
+
+    // G. Llenar Proyectos en modal
+    const mProy = document.getElementById('modal-filtro-proyecto');
+    if (mProy && appState.proyectos) {
+        let html = '<option value="TODOS">-- Todos los Proyectos --</option>';
+        appState.proyectos.forEach(p => {
+            html += `<option value="${p.nombre}">${p.nombre} (${p.sede || 'Global'})</option>`;
+        });
+        mProy.innerHTML = html;
+    }
+}
+
+// 2. Helpers para rangos de fecha rápidos
+function calculateDatePreset(preset) {
+    const now = new Date();
+    const hoy = now.toISOString().split('T')[0];
+
+    if (preset === 'HOY') {
+        return { desde: hoy, hasta: hoy };
+    }
+    if (preset === '7DIAS') {
+        const d7 = new Date();
+        d7.setDate(d7.getDate() - 7);
+        return { desde: d7.toISOString().split('T')[0], hasta: hoy };
+    }
+    if (preset === 'MES') {
+        const dMes = new Date(now.getFullYear(), now.getMonth(), 1);
+        return { desde: dMes.toISOString().split('T')[0], hasta: hoy };
+    }
+    if (preset === 'MES_ANT') {
+        const primDiaMesAnt = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const ultDiaMesAnt = new Date(now.getFullYear(), now.getMonth(), 0);
+        return { desde: primDiaMesAnt.toISOString().split('T')[0], hasta: ultDiaMesAnt.toISOString().split('T')[0] };
+    }
+    if (preset === 'TODO') {
+        return { desde: '', hasta: '' };
+    }
+    return { desde: '', hasta: '' };
+}
+
+function setQuickDateRange(preset) {
+    const range = calculateDatePreset(preset);
+    const dEl = document.getElementById('rep-quick-fecha-desde');
+    const hEl = document.getElementById('rep-quick-fecha-hasta');
+    if (dEl) dEl.value = range.desde;
+    if (hEl) hEl.value = range.hasta;
+    actualizarPrevisualizacionReporte();
+}
+
+function setModalDateRange(preset) {
+    const range = calculateDatePreset(preset);
+    const dEl = document.getElementById('modal-filtro-fecha-desde');
+    const hEl = document.getElementById('modal-filtro-fecha-hasta');
+    if (dEl) dEl.value = range.desde;
+    if (hEl) hEl.value = range.hasta;
+    ejecutarFiltroReporteModal();
+}
+
+// 3. Abrir el Modal de Filtros Previo a la Generación
+function openModalFiltroReporte(tipoDefault = 'MOVIMIENTOS') {
+    initFiltrosReportes();
+
+    // Seleccionar el radio button correspondiente
+    const mapRadios = {
+        'MOVIMIENTOS': 'rep-tipo-movs',
+        'BALANCE': 'rep-tipo-balance',
+        'STOCK_CRITICO': 'rep-tipo-critico',
+        'VENCIMIENTOS': 'rep-tipo-venc',
+        'CATALOGO': 'rep-tipo-cat'
+    };
+
+    const targetRadioId = mapRadios[tipoDefault] || 'rep-tipo-mov';
+    const radioEl = document.getElementById(targetRadioId);
+    if (radioEl) radioEl.checked = true;
+
+    // Fechas por defecto si están vacías
+    const dEl = document.getElementById('modal-filtro-fecha-desde');
+    const hEl = document.getElementById('modal-filtro-fecha-hasta');
+    if (dEl && !dEl.value) {
+        const now = new Date();
+        dEl.value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    }
+    if (hEl && !hEl.value) {
+        hEl.value = new Date().toISOString().split('T')[0];
+    }
+
+    onCambioTipoReporteModal();
+
+    const modalEl = document.getElementById('modalFiltroReporte');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+}
+
+// 4. Cambio de tipo de reporte dentro del Modal
+function onCambioTipoReporteModal() {
+    const selectedRadio = document.querySelector('input[name="rep-tipo-modal"]:checked');
+    const tipo = selectedRadio ? selectedRadio.value : 'MOVIMIENTOS';
+
+    // Ajustar visibilidad de filtros según el reporte seleccionado
+    const gTipoMov = document.getElementById('group-filtro-tipo-mov');
+    const gBodega = document.getElementById('group-filtro-bodega');
+    const gProyecto = document.getElementById('group-filtro-proyecto');
+    const gEstadoVenc = document.getElementById('group-filtro-estado-venc');
+    const gEstadoStock = document.getElementById('group-filtro-estado-stock');
+    const gFechaDesde = document.getElementById('group-filtro-fechas-desde');
+    const gFechaHasta = document.getElementById('group-filtro-fechas-hasta');
+
+    if (gTipoMov) gTipoMov.style.display = (tipo === 'MOVIMIENTOS') ? 'block' : 'none';
+    if (gBodega) gBodega.style.display = (tipo === 'MOVIMIENTOS' || tipo === 'VENCIMIENTOS') ? 'block' : 'none';
+    if (gProyecto) gProyecto.style.display = (tipo === 'MOVIMIENTOS') ? 'block' : 'none';
+    if (gEstadoVenc) gEstadoVenc.style.display = (tipo === 'VENCIMIENTOS') ? 'block' : 'none';
+    if (gEstadoStock) gEstadoStock.style.display = (tipo === 'BALANCE' || tipo === 'STOCK_CRITICO') ? 'block' : 'none';
+    
+    // El catálogo maestro no depende de fechas de movimientos
+    if (gFechaDesde) gFechaDesde.style.display = (tipo === 'CATALOGO') ? 'none' : 'block';
+    if (gFechaHasta) gFechaHasta.style.display = (tipo === 'CATALOGO') ? 'none' : 'block';
+
+    ejecutarFiltroReporteModal();
+}
+
+// 5. Restablecer filtros del modal
+function resetearFiltrosModalReporte() {
+    const now = new Date();
+    const dEl = document.getElementById('modal-filtro-fecha-desde');
+    const hEl = document.getElementById('modal-filtro-fecha-hasta');
+    if (dEl) dEl.value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    if (hEl) hEl.value = now.toISOString().split('T')[0];
+
+    const mSede = document.getElementById('modal-filtro-sede');
+    if (mSede) {
+        if (!tienePermiso('ACCESO_MULTI_SEDE')) {
+            const userSede = appState.currentUser?.sede || 'Sede Suroriental';
+            mSede.value = userSede;
+            mSede.disabled = true;
+        } else {
+            mSede.value = appState.currentSede || 'TODAS';
+            mSede.disabled = false;
+        }
+    }
+
+    const mInv = document.getElementById('modal-filtro-tipo-inv');
+    if (mInv) mInv.value = appState.currentInventario || 'TODOS';
+
+    const mCat = document.getElementById('modal-filtro-categoria');
+    if (mCat) mCat.value = 'TODAS';
+
+    const mUbi = document.getElementById('modal-filtro-ubicacion');
+    if (mUbi) mUbi.value = 'TODAS';
+
+    const mMov = document.getElementById('modal-filtro-tipo-mov');
+    if (mMov) mMov.value = 'TODOS';
+
+    const mBod = document.getElementById('modal-filtro-bodega');
+    if (mBod) mBod.value = 'TODAS';
+
+    const mProy = document.getElementById('modal-filtro-proyecto');
+    if (mProy) mProy.value = 'TODOS';
+
+    const mVenc = document.getElementById('modal-filtro-estado-venc');
+    if (mVenc) mVenc.value = 'TODOS';
+
+    const mStock = document.getElementById('modal-filtro-estado-stock');
+    if (mStock) mStock.value = 'TODOS';
+
+    const mSearch = document.getElementById('modal-filtro-search');
+    if (mSearch) mSearch.value = '';
+
+    ejecutarFiltroReporteModal();
+}
+
+// 6. Ejecutar consulta de filtrado en tiempo real dentro del Modal
+async function ejecutarFiltroReporteModal() {
+    const selectedRadio = document.querySelector('input[name="rep-tipo-modal"]:checked');
+    const tipo = selectedRadio ? selectedRadio.value : 'MOVIMIENTOS';
+
+    let sedeFiltro = document.getElementById('modal-filtro-sede')?.value || 'TODAS';
+    if (!tienePermiso('ACCESO_MULTI_SEDE')) {
+        sedeFiltro = appState.currentUser?.sede || 'Sede Suroriental';
+    }
+
+    const payload = {
+        tipo_reporte: tipo,
+        fecha_desde: document.getElementById('modal-filtro-fecha-desde')?.value || '',
+        fecha_hasta: document.getElementById('modal-filtro-fecha-hasta')?.value || '',
+        sede: sedeFiltro,
+        tipo_inventario: document.getElementById('modal-filtro-tipo-inv')?.value || 'TODOS',
+        categoria: document.getElementById('modal-filtro-categoria')?.value || 'TODAS',
+        ubicacion: document.getElementById('modal-filtro-ubicacion')?.value || 'TODAS',
+        bodega: document.getElementById('modal-filtro-bodega')?.value || 'TODAS',
+        proyecto: document.getElementById('modal-filtro-proyecto')?.value || 'TODOS',
+        tipo_movimiento: document.getElementById('modal-filtro-tipo-mov')?.value || 'TODOS',
+        estado_stock: document.getElementById('modal-filtro-estado-stock')?.value || 'TODOS',
+        estado_vencimiento: document.getElementById('modal-filtro-estado-venc')?.value || 'TODOS',
+        search: document.getElementById('modal-filtro-search')?.value?.trim() || ''
+    };
+
+    const badgeCount = document.getElementById('modal-filtro-count-badge');
+    const summaryText = document.getElementById('modal-filtro-summary-text');
+    if (badgeCount) badgeCount.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span> Consultando...`;
+
+    try {
+        const res = await fetch(`${API_BASE}/reportes/filtrar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+
+        if (!result.success) {
+            if (badgeCount) badgeCount.textContent = '0 registros';
+            if (summaryText) summaryText.textContent = result.error || 'Error al filtrar';
+            return;
+        }
+
+        const data = result.data || [];
+        const total = result.total !== undefined ? result.total : data.length;
+
+        if (badgeCount) badgeCount.textContent = `${total} registros encontrados`;
+        if (summaryText) summaryText.textContent = `Filtros activos listos para exportar`;
+
+        // Generar definición de columnas y renderizar vista previa
+        const columnDefs = obtenerDefinicionColumnasReporte(tipo);
+        reporteFiltradoActivo = {
+            tipo,
+            data,
+            columns: columnDefs.columns,
+            title: columnDefs.title,
+            sheetName: columnDefs.sheetName,
+            filename: columnDefs.filename
+        };
+
+        renderTablaPreviewModal(data, columnDefs.columns);
+    } catch (err) {
+        console.error('Error al filtrar reporte modal:', err);
+        if (badgeCount) badgeCount.textContent = '0 registros';
+        if (summaryText) summaryText.textContent = 'Error al consultar datos: ' + err.message;
+    }
+}
+
+// 7. Definición de Columnas y Metadatos por Tipo de Reporte
+function obtenerDefinicionColumnasReporte(tipo) {
+    if (tipo === 'MOVIMIENTOS') {
+        return {
+            title: 'Libro de Movimientos',
+            sheetName: 'Movimientos',
+            filename: 'Libro_Movimientos_Filtrado',
+            columns: [
+                { header: 'Código Ítem', key: 'codigo_item', type: 'number' },
+                { header: 'Nombre del Ítem', key: 'nombre_item' },
+                { header: 'N° Movimiento', key: 'n_movimiento' },
+                { header: 'Fecha', key: 'fecha' },
+                { header: 'Hora', key: 'hora' },
+                { header: 'Tipo Movimiento', key: 'tipo_movimiento' },
+                { header: 'Cantidad', key: 'cantidad', type: 'number' },
+                { header: 'Unidad', key: 'unidad' },
+                { header: 'Sede', key: 'sede' },
+                { header: 'Inventario', key: 'tipo_inventario' },
+                { header: 'Bodega Origen', key: 'bodega_origen', formatter: v => v || '-' },
+                { header: 'Bodega Destino', key: 'bodega_destino', formatter: v => v || '-' },
+                { header: 'Causal / Proyecto', key: 'causal_condicion', formatter: (v, r) => v || r.proyecto_destino || '-' },
+                { header: 'Ubicación CDS', key: 'ubicacion_cds', formatter: v => v || '-' },
+                { header: 'Responsable', key: 'responsable', formatter: v => v || '-' },
+                { header: 'Persona Recibe / Devuelve', key: 'persona_recibe_devuelve', formatter: v => v || '-' },
+                { header: 'Doc. Referencia', key: 'documento_referencia', formatter: v => v || '-' },
+                { header: 'Vencimiento Lote', key: 'fecha_vencimiento_lote', formatter: v => v || '-' },
+                { header: 'Observaciones', key: 'observaciones', formatter: v => v || '-' }
+            ]
+        };
+    }
+
+    if (tipo === 'BALANCE') {
+        return {
+            title: 'Balance General de Inventario Físico',
+            sheetName: 'Balance Stock',
+            filename: 'Balance_Stock_Filtrado',
+            columns: [
+                { header: 'Código Ítem', key: 'codigo', type: 'number' },
+                { header: 'Nombre del Ítem / Material', key: 'nombre' },
+                { header: 'Categoría', key: 'categoria' },
+                { header: 'Subcategoría', key: 'subcategoria' },
+                { header: 'Unidad de Medida', key: 'unidad_medida' },
+                { header: 'Ubicación CDS', key: 'ubicacion_cds' },
+                { header: 'Sede', key: 'sede' },
+                { header: 'Inventario', key: 'tipo_inventario' },
+                { header: 'Entradas (+)', key: 'entradas', type: 'number' },
+                { header: 'Devoluciones (+)', key: 'devoluciones', type: 'number' },
+                { header: 'Traslados In (+)', key: 'entregas_recibidas', type: 'number' },
+                { header: 'Ajustes Pos (+)', key: 'ajustes_pos', type: 'number' },
+                { header: 'Entregas / Salidas (-)', key: 'entregas_enviadas', type: 'number' },
+                { header: 'Bajas / Disp. Final (-)', key: 'disp_final', type: 'number' },
+                { header: 'Ajustes Neg (-)', key: 'ajustes_neg', type: 'number' },
+                { header: 'Existencia Actual', key: 'existencia', type: 'number' },
+                { header: 'Stock Mínimo', key: 'stock_minimo', type: 'number' },
+                { header: 'Estado del Stock', key: 'estado_stock' },
+                { header: 'Aplica Vencimiento', key: 'aplica_vencimiento', formatter: v => v ? 'SÍ' : 'NO' }
+            ]
+        };
+    }
+
+    if (tipo === 'STOCK_CRITICO') {
+        return {
+            title: 'Reporte de Stock Crítico / Bajo',
+            sheetName: 'Stock Crítico',
+            filename: 'Reporte_Stock_Critico_Filtrado',
+            columns: [
+                { header: 'Código Ítem', key: 'codigo', type: 'number' },
+                { header: 'Nombre del Ítem / Material', key: 'nombre' },
+                { header: 'Categoría', key: 'categoria' },
+                { header: 'Ubicación CDS', key: 'ubicacion_cds' },
+                { header: 'Sede', key: 'sede' },
+                { header: 'Inventario', key: 'tipo_inventario' },
+                { header: 'Existencia Actual', key: 'existencia', type: 'number' },
+                { header: 'Stock Mínimo', key: 'stock_minimo', type: 'number' },
+                { header: 'Déficit / Faltante', key: 'deficit', formatter: (v, r) => Math.max(0, (r.stock_minimo || 0) - (r.existencia || 0)), type: 'number' },
+                { header: 'Unidad de Medida', key: 'unidad_medida' },
+                { header: 'Estado de Alerta', key: 'estado_stock' }
+            ]
+        };
+    }
+
+    if (tipo === 'VENCIMIENTOS') {
+        return {
+            title: 'Control de Lotes y Vencimientos',
+            sheetName: 'Lotes y Vencimientos',
+            filename: 'Control_Vencimientos_Filtrado',
+            columns: [
+                { header: 'Código Ítem', key: 'codigo_item', type: 'number' },
+                { header: 'Nombre del Ítem / Material', key: 'nombre_item' },
+                { header: 'Sede', key: 'sede' },
+                { header: 'Inventario', key: 'tipo_inventario' },
+                { header: 'Bodega', key: 'bodega' },
+                { header: 'Ubicación CDS', key: 'ubicacion_cds' },
+                { header: 'Fecha Ingreso', key: 'fecha_ingreso' },
+                { header: 'Fecha Vencimiento', key: 'fecha_vencimiento' },
+                { header: 'Días Restantes', key: 'dias_restantes', type: 'number' },
+                { header: 'Cant. Inicial', key: 'cant_inicial', type: 'number' },
+                { header: 'Cant. Disponible', key: 'cant_disponible', type: 'number' },
+                { header: 'Unidad', key: 'unidad_medida' },
+                { header: 'Estado Caducidad', key: 'estado_actualizado' },
+                { header: 'Acción Recomendada', key: 'accion', formatter: (v, r) => r.dias_restantes <= 0 ? 'DAR DE BAJA (SCRAP)' : (r.dias_restantes <= 30 ? 'PRIORIZAR SALIDA' : 'CONSERVACIÓN') },
+                { header: 'N° Mov. Origen', key: 'n_movimiento_origen' },
+                { header: 'Observaciones', key: 'observaciones', formatter: v => v || '-' }
+            ]
+        };
+    }
+
+    // Default: CATALOGO
+    return {
+        title: 'Catálogo Maestro de Ítems',
+        sheetName: 'Catálogo Maestro',
+        filename: 'Catalogo_Maestro_Filtrado',
+        columns: [
+            { header: 'Código Ítem', key: 'codigo', type: 'number' },
+            { header: 'Nombre del Ítem / Descripción', key: 'nombre' },
+            { header: 'Categoría', key: 'categoria' },
+            { header: 'Subcategoría', key: 'subcategoria' },
+            { header: 'Unidad de Medida', key: 'unidad_medida' },
+            { header: 'Marca', key: 'marca', formatter: v => v || '-' },
+            { header: 'Referencia', key: 'referencia', formatter: v => v || '-' },
+            { header: 'Ubicación CDS', key: 'ubicacion_cds' },
+            { header: 'Sede', key: 'sede' },
+            { header: 'Inventario', key: 'tipo_inventario' },
+            { header: 'Stock Mínimo', key: 'stock_minimo', type: 'number' },
+            { header: 'Aplica Vencimiento', key: 'aplica_vencimiento', formatter: v => v ? 'SÍ' : 'NO' },
+            { header: 'Estado', key: 'estado' },
+            { header: 'Fecha Registro', key: 'fecha_registro' },
+            { header: 'Observaciones', key: 'observaciones', formatter: v => v || '-' }
+        ]
+    };
+}
+
+// 8. Renderizar tabla de previsualización en el Modal
+function renderTablaPreviewModal(data, columns) {
+    const thead = document.getElementById('thead-modal-filtro-preview');
+    const tbody = document.getElementById('tbody-modal-filtro-preview');
+    if (!thead || !tbody) return;
+
+    // Encabezados de las columnas
+    thead.innerHTML = `<tr>${columns.slice(0, 8).map(c => `<th>${c.header}</th>`).join('')}</tr>`;
+
+    if (!data || data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${Math.min(columns.length, 8)}" class="text-center py-3 text-muted">No se encontraron registros con los filtros seleccionados.</td></tr>`;
+        return;
+    }
+
+    // Renderizar las primeras 30 filas para velocidad
+    const previewRows = data.slice(0, 30);
+    tbody.innerHTML = previewRows.map(row => {
+        const cells = columns.slice(0, 8).map(col => {
+            let val = row[col.key];
+            if (val === undefined || val === null) val = '';
+            if (col.formatter) val = col.formatter(val, row);
+            return `<td>${val}</td>`;
+        }).join('');
+        return `<tr>${cells}</tr>`;
+    }).join('');
+
+    if (data.length > 30) {
+        tbody.innerHTML += `<tr><td colspan="${Math.min(columns.length, 8)}" class="text-center py-2 text-primary fw-semibold bg-light">... Mostrando 30 de ${data.length} registros (El Excel contendrá el 100% de los datos)</td></tr>`;
+    }
+}
+
+// 9. Descargar Excel directamente desde el Modal de Filtro
+function descargarExcelDesdeModalFiltro() {
+    if (!reporteFiltradoActivo || !reporteFiltradoActivo.data || reporteFiltradoActivo.data.length === 0) {
+        showToast('⚠️ No hay registros que coincidan con los filtros seleccionados para descargar.', 'warning');
+        return;
+    }
+
+    exportToExcelTable(
+        reporteFiltradoActivo.data,
+        reporteFiltradoActivo.columns,
+        reporteFiltradoActivo.sheetName,
+        reporteFiltradoActivo.filename
+    );
+}
+
+// 10. Mostrar resultados en el visualizador interactivo en pantalla desde el Modal
+function mostrarResultadosEnPantallaDesdeModal() {
+    if (!reporteFiltradoActivo || !reporteFiltradoActivo.data) {
+        showToast('No hay datos filtrados para mostrar.', 'warning');
+        return;
+    }
+
+    closeModal('modalFiltroReporte');
+    renderReporteLive(reporteFiltradoActivo);
+}
+
+// 11. Renderizar tabla interactiva en pantalla (reporte-live-container)
+function renderReporteLive(reporteObj) {
+    const container = document.getElementById('reporte-live-container');
+    const titleEl = document.getElementById('reporte-live-title');
+    const subtitleEl = document.getElementById('reporte-live-subtitle');
+    const badgeEl = document.getElementById('reporte-live-badge-count');
+    const thead = document.getElementById('thead-reporte-live');
+    const tbody = document.getElementById('tbody-reporte-live');
+
+    if (!container || !thead || !tbody) return;
+
+    if (titleEl) titleEl.innerHTML = `<i class="bi bi-table text-primary me-2"></i>${reporteObj.title}`;
+    if (subtitleEl) subtitleEl.textContent = `Generado el ${new Date().toLocaleString('es-ES')} con los filtros seleccionados`;
+    if (badgeEl) badgeEl.textContent = `${reporteObj.data.length} registros`;
+
+    // Encabezados
+    thead.innerHTML = `<tr>${reporteObj.columns.map(c => `<th>${c.header}</th>`).join('')}</tr>`;
+
+    if (reporteObj.data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${reporteObj.columns.length}" class="text-center py-4 text-muted">No se encontraron registros para los filtros aplicados.</td></tr>`;
+    } else {
+        tbody.innerHTML = reporteObj.data.map(row => {
+            const cells = reporteObj.columns.map(col => {
+                let val = row[col.key];
+                if (val === undefined || val === null) val = '';
+                if (col.formatter) val = col.formatter(val, row);
+                const isNum = col.type === 'number' || typeof val === 'number';
+                return `<td class="${isNum ? 'text-end font-monospace' : ''}">${val}</td>`;
+            }).join('');
+            return `<tr>${cells}</tr>`;
+        }).join('');
+    }
+
+    container.style.display = 'block';
+    container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// 12. Exportar la tabla actualmente mostrada en pantalla
+function exportarReporteLiveActual() {
+    if (!reporteFiltradoActivo || !reporteFiltradoActivo.data || reporteFiltradoActivo.data.length === 0) {
+        showToast('No hay datos en pantalla para exportar.', 'warning');
+        return;
+    }
+    exportToExcelTable(
+        reporteFiltradoActivo.data,
+        reporteFiltradoActivo.columns,
+        reporteFiltradoActivo.sheetName,
+        reporteFiltradoActivo.filename
+    );
+}
+
+// 13. Cerrar visualizador de reporte en vivo
+function cerrarVisualizadorReporteLive() {
+    const container = document.getElementById('reporte-live-container');
+    if (container) container.style.display = 'none';
+}
+
+// 14. Limpiar filtros rápidos de la barra superior en reportes
+function limpiarFiltrosRapidosReportes() {
+    const dEl = document.getElementById('rep-quick-fecha-desde');
+    const hEl = document.getElementById('rep-quick-fecha-hasta');
+    const cEl = document.getElementById('rep-quick-categoria');
+    const uEl = document.getElementById('rep-quick-ubicacion');
+    const mEl = document.getElementById('rep-quick-tipo-mov');
+
+    if (dEl) dEl.value = '';
+    if (hEl) hEl.value = '';
+    if (cEl) cEl.value = 'TODAS';
+    if (uEl) uEl.value = 'TODAS';
+    if (mEl) mEl.value = 'TODOS';
+
+    showToast('Filtros rápidos restablecidos.', 'info');
+    cerrarVisualizadorReporteLive();
+}
+
+// 15. Aplicar filtros rápidos y mostrar resultados directamente en pantalla
+async function aplicarFiltrosYMostrarEnPantalla(tipo = 'MOVIMIENTOS') {
+    const payload = {
+        tipo_reporte: tipo,
+        fecha_desde: document.getElementById('rep-quick-fecha-desde')?.value || '',
+        fecha_hasta: document.getElementById('rep-quick-fecha-hasta')?.value || '',
+        categoria: document.getElementById('rep-quick-categoria')?.value || 'TODAS',
+        ubicacion: document.getElementById('rep-quick-ubicacion')?.value || 'TODAS',
+        tipo_movimiento: document.getElementById('rep-quick-tipo-mov')?.value || 'TODOS',
+        sede: appState.currentSede,
+        tipo_inventario: appState.currentInventario
+    };
+
+    try {
+        showToast('Consultando registros filtrados...', 'info');
+        const res = await fetch(`${API_BASE}/reportes/filtrar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+
+        if (!result.success) {
+            showToast('⚠️ Error: ' + result.error, 'danger');
+            return;
+        }
+
+        const columnDefs = obtenerDefinicionColumnasReporte(tipo);
+        reporteFiltradoActivo = {
+            tipo,
+            data: result.data || [],
+            columns: columnDefs.columns,
+            title: columnDefs.title,
+            sheetName: columnDefs.sheetName,
+            filename: columnDefs.filename
+        };
+
+        renderReporteLive(reporteFiltradoActivo);
+    } catch (err) {
+        showToast('Error al consultar reporte: ' + err.message, 'danger');
+    }
+}
+
+function actualizarPrevisualizacionReporte() {
+    const container = document.getElementById('reporte-live-container');
+    if (container && container.style.display !== 'none') {
+        aplicarFiltrosYMostrarEnPantalla(reporteFiltradoActivo.tipo || 'MOVIMIENTOS');
+    }
+}
+
+// 16. Métodos de Descarga Excel con Filtros Rápidos Aplicados
+async function exportInventarioExcelFiltrado() {
+    await exportarReporteConFiltrosRapidos('BALANCE');
+}
+
+async function exportReporteStockBajoExcelFiltrado() {
+    await exportarReporteConFiltrosRapidos('STOCK_CRITICO');
+}
+
+async function exportReporteVencidosExcelFiltrado() {
+    await exportarReporteConFiltrosRapidos('VENCIMIENTOS');
+}
+
+async function exportMovimientosExcelFiltrado() {
+    await exportarReporteConFiltrosRapidos('MOVIMIENTOS');
+}
+
+async function exportCatalogoExcelFiltrado() {
+    await exportarReporteConFiltrosRapidos('CATALOGO');
+}
+
+async function exportarReporteConFiltrosRapidos(tipo) {
+    const payload = {
+        tipo_reporte: tipo,
+        fecha_desde: document.getElementById('rep-quick-fecha-desde')?.value || '',
+        fecha_hasta: document.getElementById('rep-quick-fecha-hasta')?.value || '',
+        categoria: document.getElementById('rep-quick-categoria')?.value || 'TODAS',
+        ubicacion: document.getElementById('rep-quick-ubicacion')?.value || 'TODAS',
+        tipo_movimiento: document.getElementById('rep-quick-tipo-mov')?.value || 'TODOS',
+        sede: appState.currentSede,
+        tipo_inventario: appState.currentInventario
+    };
+
+    try {
+        showToast('Generando reporte filtrado para Excel...', 'info');
+        const res = await fetch(`${API_BASE}/reportes/filtrar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+
+        if (!result.success || !result.data || result.data.length === 0) {
+            showToast('⚠️ No se encontraron registros con los filtros activos para exportar.', 'warning');
+            return;
+        }
+
+        const columnDefs = obtenerDefinicionColumnasReporte(tipo);
+        exportToExcelTable(result.data, columnDefs.columns, columnDefs.sheetName, columnDefs.filename);
+    } catch (err) {
+        showToast('Error al exportar reporte: ' + err.message, 'danger');
+    }
+}
+
+// 17. Métodos directos de exportación desde vistas principales
+async function exportMovimientosExcel() {
+    try {
+        if (appState.movimientos && appState.movimientos.length > 0) {
+            const columnDefs = obtenerDefinicionColumnasReporte('MOVIMIENTOS');
+            exportToExcelTable(appState.movimientos, columnDefs.columns, 'Movimientos', 'Libro_Movimientos_General');
+        } else {
+            await exportarReporteConFiltrosRapidos('MOVIMIENTOS');
+        }
+    } catch (err) {
+        console.error('Error al exportar movimientos:', err);
+        showToast('Error al exportar movimientos: ' + err.message, 'danger');
+    }
+}
+
 function exportInventarioExcel() {
-    if (!appState.inventario || appState.inventario.length === 0) {
-        showToast('No hay datos de inventario para exportar.', 'warning');
-        return;
+    try {
+        if (!appState.inventario || appState.inventario.length === 0) {
+            showToast('No hay datos de inventario cargados para exportar.', 'warning');
+            return;
+        }
+        const columnDefs = obtenerDefinicionColumnasReporte('BALANCE');
+        exportToExcelTable(appState.inventario, columnDefs.columns, 'Inventario', 'Balance_Inventario_CDS');
+    } catch (err) {
+        console.error('Error al exportar inventario:', err);
+        showToast('Error al exportar inventario: ' + err.message, 'danger');
     }
-    const cols = [
-        { header: 'Código Ítem', key: 'codigo', formatter: (v, r) => r.codigo || r.codigo_item, type: 'number' },
-        { header: 'Nombre del Ítem / Material', key: 'nombre' },
-        { header: 'Categoría', key: 'categoria' },
-        { header: 'Subcategoría', key: 'subcategoria' },
-        { header: 'Unidad de Medida', key: 'unidad_medida' },
-        { header: 'Ubicación CDS', key: 'ubicacion_cds' },
-        { header: 'Entradas (+)', key: 'entradas', type: 'number' },
-        { header: 'Devoluciones (+)', key: 'devoluciones', type: 'number' },
-        { header: 'Entregas Recibidas (+)', key: 'entregas_recibidas', type: 'number' },
-        { header: 'Ajustes Positivos (+)', key: 'ajustes_pos', type: 'number' },
-        { header: 'Entregas Enviadas (-)', key: 'entregas_enviadas', type: 'number' },
-        { header: 'Bajas / Disp. Final (-)', key: 'disp_final', type: 'number' },
-        { header: 'Ajustes Negativos (-)', key: 'ajustes_neg', type: 'number' },
-        { header: 'Existencia Actual CDS', key: 'existencia', type: 'number' },
-        { header: 'Stock Mínimo', key: 'stock_minimo', type: 'number' },
-        { header: 'Estado del Stock', key: 'estado_stock' },
-        { header: 'Aplica Vencimiento', key: 'aplica_vencimiento', formatter: v => v ? 'SÍ' : 'NO' }
-    ];
-    exportToExcelTable(appState.inventario, cols, 'Inventario CDS', 'Balance_Inventario_CDS');
 }
 
-// 2. Exportar Historial de Movimientos
-function exportMovimientosExcel() {
-    if (!appState.movimientos || appState.movimientos.length === 0) {
-        showToast('No hay movimientos registrados para exportar.', 'warning');
-        return;
-    }
-    const cols = [
-        { header: 'Código Ítem', key: 'codigo_item', formatter: (v, r) => r.codigo_item || r.codigo, type: 'number' },
-        { header: 'Nombre del Ítem', key: 'nombre_item' },
-        { header: 'N° Movimiento', key: 'n_movimiento' },
-        { header: 'Fecha', key: 'fecha' },
-        { header: 'Hora', key: 'hora' },
-        { header: 'Tipo Movimiento', key: 'tipo_movimiento' },
-        { header: 'Cantidad', key: 'cantidad', type: 'number' },
-        { header: 'Unidad', key: 'unidad' },
-        { header: 'Bodega Origen', key: 'bodega_origen', formatter: v => v || '-' },
-        { header: 'Bodega Destino', key: 'bodega_destino', formatter: v => v || '-' },
-        { header: 'Causal / Condición', key: 'causal_condicion', formatter: v => v || '-' },
-        { header: 'Ubicación CDS', key: 'ubicacion_cds', formatter: v => v || '-' },
-        { header: 'Proyecto Destino', key: 'proyecto_destino', formatter: v => v || '-' },
-        { header: 'Responsable', key: 'responsable', formatter: v => v || '-' },
-        { header: 'Persona Recibe / Devuelve', key: 'persona_recibe_devuelve', formatter: v => v || '-' },
-        { header: 'Documento Referencia', key: 'documento_referencia', formatter: v => v || '-' },
-        { header: 'Vencimiento Lote', key: 'fecha_vencimiento_lote', formatter: v => v || '-' },
-        { header: 'Observaciones', key: 'observaciones', formatter: v => v || '-' }
-    ];
-    exportToExcelTable(appState.movimientos, cols, 'Movimientos', 'Libro_Diario_Movimientos');
-}
-
-// 3. Exportar Catálogo Maestro
 function exportCatalogoExcel() {
-    if (!appState.items || appState.items.length === 0) {
-        showToast('No hay ítems en el catálogo para exportar.', 'warning');
-        return;
+    try {
+        if (!appState.items || appState.items.length === 0) {
+            showToast('No hay ítems en el catálogo para exportar.', 'warning');
+            return;
+        }
+        const columnDefs = obtenerDefinicionColumnasReporte('CATALOGO');
+        exportToExcelTable(appState.items, columnDefs.columns, 'Catalogo', 'Catalogo_Maestro_Items');
+    } catch (err) {
+        console.error('Error al exportar catálogo:', err);
+        showToast('Error al exportar catálogo: ' + err.message, 'danger');
     }
-    const cols = [
-        { header: 'Código Ítem', key: 'codigo', formatter: (v, r) => r.codigo || r.codigo_item, type: 'number' },
-        { header: 'Nombre del Ítem', key: 'nombre' },
-        { header: 'Categoría', key: 'categoria' },
-        { header: 'Subcategoría', key: 'subcategoria' },
-        { header: 'Unidad de Medida', key: 'unidad_medida' },
-        { header: 'Marca', key: 'marca' },
-        { header: 'Referencia', key: 'referencia' },
-        { header: 'Ubicación CDS', key: 'ubicacion_cds' },
-        { header: 'Aplica Vencimiento', key: 'aplica_vencimiento', formatter: v => v ? 'SÍ' : 'NO' },
-        { header: 'Stock Mínimo', key: 'stock_minimo', type: 'number' },
-        { header: 'Estado', key: 'estado' },
-        { header: 'Fecha Registro', key: 'fecha_registro' },
-        { header: 'Observaciones', key: 'observaciones' }
-    ];
-    exportToExcelTable(appState.items, cols, 'Catálogo Maestro', 'Catalogo_Maestro_Items');
 }
 
-// 4. Exportar Lotes y Vencimientos
 function exportVencimientosExcel() {
-    if (!appState.vencimientos || appState.vencimientos.length === 0) {
-        showToast('No hay lotes de vencimiento registrados.', 'warning');
-        return;
+    try {
+        if (!appState.vencimientos || appState.vencimientos.length === 0) {
+            showToast('No hay registros de vencimientos para exportar.', 'warning');
+            return;
+        }
+        const columnDefs = obtenerDefinicionColumnasReporte('VENCIMIENTOS');
+        exportToExcelTable(appState.vencimientos, columnDefs.columns, 'Vencimientos', 'Control_Lotes_Vencimientos');
+    } catch (err) {
+        console.error('Error al exportar vencimientos:', err);
+        showToast('Error al exportar vencimientos: ' + err.message, 'danger');
     }
-    const cols = [
-        { header: 'Código Ítem', key: 'codigo_item', formatter: (v, r) => r.codigo_item || r.codigo, type: 'number' },
-        { header: 'Nombre del Ítem', key: 'nombre_item' },
-        { header: 'Bodega', key: 'bodega' },
-        { header: 'Ubicación CDS', key: 'ubicacion_cds' },
-        { header: 'Fecha Ingreso', key: 'fecha_ingreso' },
-        { header: 'Fecha Vencimiento', key: 'fecha_vencimiento' },
-        { header: 'Días Restantes', key: 'dias_restantes', type: 'number' },
-        { header: 'Cant. Inicial', key: 'cant_inicial', type: 'number' },
-        { header: 'Cant. Disponible', key: 'cant_disponible', type: 'number' },
-        { header: 'Unidad', key: 'unidad_medida' },
-        { header: 'Estado Caducidad', key: 'estado_actualizado' },
-        { header: 'N° Movimiento Origen', key: 'n_movimiento_origen' },
-        { header: 'Observaciones', key: 'observaciones' }
-    ];
-    exportToExcelTable(appState.vencimientos, cols, 'Control Vencimientos', 'Control_Lotes_Vencimientos');
 }
 
-// 5. Exportar Kardex del Ítem Seleccionado
 function exportKardexActualExcel() {
-    if (!currentKardexData || !currentKardexData.kardex || currentKardexData.kardex.length === 0) {
-        showToast('Seleccione un ítem con movimientos en el Kardex para exportar.', 'warning');
-        return;
+    try {
+        if (!currentKardexData || !currentKardexData.kardex || currentKardexData.kardex.length === 0) {
+            showToast('⚠️ Seleccione un ítem con movimientos en el Kardex para exportar.', 'warning');
+            return;
+        }
+        const { item, kardex } = currentKardexData;
+        const columns = [
+            { header: 'Código', key: 'codigo_item', formatter: () => item.codigo },
+            { header: 'Ítem / Material', key: 'nombre_item', formatter: () => item.nombre },
+            { header: 'N° Movimiento', key: 'n_movimiento' },
+            { header: 'Fecha', key: 'fecha' },
+            { header: 'Hora', key: 'hora' },
+            { header: 'Tipo Movimiento', key: 'tipo_movimiento' },
+            { header: 'Bodega Origen', key: 'bodega_origen', formatter: v => v || '-' },
+            { header: 'Bodega Destino', key: 'bodega_destino', formatter: v => v || '-' },
+            { header: 'Responsable', key: 'responsable', formatter: (v, r) => v || r.persona_recibe_devuelve || '-' },
+            { header: 'Entrada (+)', key: 'entrada', type: 'number' },
+            { header: 'Salida (-)', key: 'salida', type: 'number' },
+            { header: 'Saldo Físico Acumulado', key: 'saldo_acumulado', type: 'number' }
+        ];
+        exportToExcelTable(kardex, columns, `Kardex_${item.codigo}`, `Kardex_Item_${item.codigo}`);
+    } catch (err) {
+        console.error('Error al exportar kardex:', err);
+        showToast('Error al exportar kardex: ' + err.message, 'danger');
     }
-    const { item, kardex, saldo_final } = currentKardexData;
-    const cols = [
-        { header: 'Código Ítem', key: 'codigo_item', formatter: () => item.codigo, type: 'number' },
-        { header: 'Nombre del Ítem', key: 'nombre_item', formatter: () => item.nombre },
-        { header: 'Categoría', key: 'categoria', formatter: () => item.categoria },
-        { header: 'Ubicación CDS', key: 'ubicacion_cds', formatter: () => item.ubicacion_cds },
-        { header: 'N° Movimiento', key: 'n_movimiento' },
-        { header: 'Fecha', key: 'fecha' },
-        { header: 'Hora', key: 'hora' },
-        { header: 'Tipo Movimiento', key: 'tipo_movimiento' },
-        { header: 'Bodega Origen', key: 'bodega_origen', formatter: v => v || '-' },
-        { header: 'Bodega Destino', key: 'bodega_destino', formatter: v => v || '-' },
-        { header: 'Responsable / Recibe', key: 'responsable', formatter: (v, r) => r.responsable || r.persona_recibe_devuelve || '-' },
-        { header: 'Causal / Proyecto', key: 'causal_condicion', formatter: (v, r) => r.causal_condicion || r.proyecto_destino || '-' },
-        { header: 'Doc. Referencia', key: 'documento_referencia', formatter: v => v || '-' },
-        { header: 'Entrada (+)', key: 'entrada', type: 'number' },
-        { header: 'Salida (-)', key: 'salida', type: 'number' },
-        { header: 'Saldo Físico Acumulado', key: 'saldo_acumulado', type: 'number' },
-        { header: 'Unidad de Medida', key: 'unidad', formatter: () => item.unidad_medida }
-    ];
-    exportToExcelTable(kardex, cols, `Kardex ${item.codigo}`, `Kardex_Item_${item.codigo}_${item.nombre.replace(/[^a-zA-Z0-9]/g, '_')}`);
-}
-
-// 6. Reportes Especiales: Stock Crítico / Bajo
-function exportReporteStockBajoExcel() {
-    if (!appState.inventario || appState.inventario.length === 0) {
-        showToast('No hay datos de inventario cargados.', 'warning');
-        return;
-    }
-    const itemsCriticos = appState.inventario.filter(i => 
-        i.estado_stock === 'STOCK BAJO' || 
-        i.estado_stock === 'SIN EXISTENCIAS' || 
-        i.estado_stock === 'ERROR: SOBREGIRO' ||
-        i.existencia <= i.stock_minimo
-    );
-
-    if (itemsCriticos.length === 0) {
-        showToast('¡Excelente! No hay ítems en condición crítica o bajo stock.', 'info');
-        return;
-    }
-
-    const cols = [
-        { header: 'Código Ítem', key: 'codigo', formatter: (v, r) => r.codigo || r.codigo_item, type: 'number' },
-        { header: 'Nombre del Ítem / Material', key: 'nombre' },
-        { header: 'Categoría', key: 'categoria' },
-        { header: 'Ubicación CDS', key: 'ubicacion_cds' },
-        { header: 'Existencia Actual', key: 'existencia', type: 'number' },
-        { header: 'Stock Mínimo Requerido', key: 'stock_minimo', type: 'number' },
-        { header: 'Unidad de Medida', key: 'unidad_medida' },
-        { header: 'Déficit / Faltante', key: 'deficit', formatter: (v, r) => Math.max(0, r.stock_minimo - r.existencia) },
-        { header: 'Estado Alerta', key: 'estado_stock' }
-    ];
-    exportToExcelTable(itemsCriticos, cols, 'Stock Crítico', 'Reporte_Stock_Critico_Bajo');
-}
-
-// 7. Reportes Especiales: Vencidos y por Vencer
-function exportReporteVencidosExcel() {
-    if (!appState.vencimientos || appState.vencimientos.length === 0) {
-        showToast('No hay lotes con vencimiento registrados.', 'warning');
-        return;
-    }
-    const lotesAlerta = appState.vencimientos.filter(l => 
-        l.estado_actualizado === '¡VENCIDO!' || 
-        l.estado_actualizado === 'PROXIMO A VENCER' ||
-        l.dias_restantes <= 30
-    );
-
-    const dataToExport = lotesAlerta.length > 0 ? lotesAlerta : appState.vencimientos;
-
-    const cols = [
-        { header: 'Código Ítem', key: 'codigo_item', formatter: (v, r) => r.codigo_item || r.codigo, type: 'number' },
-        { header: 'Nombre del Ítem / Material', key: 'nombre_item' },
-        { header: 'Bodega', key: 'bodega' },
-        { header: 'Ubicación CDS', key: 'ubicacion_cds' },
-        { header: 'Fecha Vencimiento', key: 'fecha_vencimiento' },
-        { header: 'Días Restantes', key: 'dias_restantes', type: 'number' },
-        { header: 'Cantidad Disponible', key: 'cant_disponible', type: 'number' },
-        { header: 'Unidad de Medida', key: 'unidad_medida' },
-        { header: 'Estado Alerta', key: 'estado_actualizado' },
-        { header: 'Acción Sugerida', key: 'accion', formatter: (v, r) => r.dias_restantes <= 0 ? 'DAR DE BAJA INMEDIATA (SCRAP)' : 'PRIORIZAR SALIDA / USO OPERATIVO' }
-    ];
-    exportToExcelTable(dataToExport, cols, 'Alerta Vencimientos', 'Reporte_Lotes_Vencidos_Alerta');
 }
 
 // ==============================================================

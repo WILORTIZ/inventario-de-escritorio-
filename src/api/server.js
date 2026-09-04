@@ -353,6 +353,94 @@ function ensureDatabaseSchema() {
                 }
             });
         });
+
+        // Tabla de Permisos del Sistema
+        db.run(`
+            CREATE TABLE IF NOT EXISTS permisos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                codigo TEXT UNIQUE NOT NULL,
+                nombre TEXT NOT NULL,
+                descripcion TEXT DEFAULT '',
+                categoria TEXT DEFAULT 'GENERAL',
+                estado TEXT DEFAULT 'Activo',
+                fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `, () => {
+            db.get(`SELECT COUNT(*) as count FROM permisos`, (err, row) => {
+                if (!err && (!row || row.count === 0)) {
+                    const defaultPermisos = [
+                        ['ACCESO_MULTI_SEDE', 'Acceso Multi-Sedes (Ver Todas las Sedes)', 'Permite alternar entre sedes y realizar transacciones en cualquier sede.', 'SEDES'],
+                        ['CREAR_ITEMS', 'Creación de Ítems', 'Permite registrar nuevos productos en el catálogo maestro.', 'CATALOGO'],
+                        ['GESTIONAR_TRASLADOS', 'Aprobación de Traslados', 'Permite emitir, aceptar o rechazar traslados entre bodegas centrales.', 'TRASLADOS'],
+                        ['ELIMINAR_MOVIMIENTOS', 'Eliminar / Deshacer Movimientos', 'Permite anular transacciones del libro diario de movimientos.', 'MOVIMIENTOS'],
+                        ['EXPORTAR_BACKUPS', 'Copias de Seguridad (Backups)', 'Permite exportar y restaurar la base de datos SQLite y respaldos.', 'SISTEMA'],
+                        ['ADMINISTRAR_BODEGAS', 'Configurar Bodegas y Proyectos', 'Permite crear y gestionar bodegas satélites y frentes de obra.', 'BODEGAS']
+                    ];
+                    const stmt = db.prepare(`INSERT OR IGNORE INTO permisos (codigo, nombre, descripcion, categoria) VALUES (?, ?, ?, ?)`);
+                    defaultPermisos.forEach(p => stmt.run(p));
+                    stmt.finalize();
+                }
+            });
+        });
+
+        // Tabla de Causales y Motivos de Movimiento
+        db.run(`
+            CREATE TABLE IF NOT EXISTS causales_movimientos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tipo_movimiento TEXT NOT NULL,
+                nombre TEXT NOT NULL,
+                descripcion TEXT DEFAULT '',
+                estado TEXT DEFAULT 'Activo',
+                orden INTEGER DEFAULT 0,
+                fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `, () => {
+            db.get(`SELECT COUNT(*) as count FROM causales_movimientos`, (err, row) => {
+                if (!err && (!row || row.count === 0)) {
+                    const defaultCausales = [
+                        // ENTRADA
+                        ['ENTRADA', 'COMPRA / PROVEEDOR', 'Ingreso por compra a proveedor', 'Activo', 1],
+                        ['ENTRADA', 'INVENTARIO INICIAL', 'Cargue inicial o conteo de arranque', 'Activo', 2],
+                        ['ENTRADA', 'DOTACION / HERRAMIENTAS NUEVAS', 'Ingreso de dotación o herramientas nuevas', 'Activo', 3],
+                        ['ENTRADA', 'DONACION / OTRO INGRESO', 'Otros ingresos y donaciones', 'Activo', 4],
+
+                        // ENTREGA
+                        ['ENTREGA', 'USO EN OBRA / PROYECTO', 'Despacho para ejecución de obra o proyecto', 'Activo', 1],
+                        ['ENTREGA', 'DOTACION PERSONAL', 'Entrega de dotación a personal', 'Activo', 2],
+                        ['ENTREGA', 'MANTENIMIENTO OPERATIVO', 'Uso en mantenimiento correctivo o preventivo', 'Activo', 3],
+                        ['ENTREGA', 'CONSUMO GENERAL', 'Consumo operativo general', 'Activo', 4],
+
+                        // DEVOLUCION
+                        ['DEVOLUCION', 'SOBRANTE DE OBRA', 'Material sobrante devuelto por proyecto', 'Activo', 1],
+                        ['DEVOLUCION', 'CAMBIO DE MATERIAL', 'Devolución por cambio de referencia', 'Activo', 2],
+                        ['DEVOLUCION', 'DESPACHO ERRADO', 'Retorno por error en despacho inicial', 'Activo', 3],
+                        ['DEVOLUCION', 'HERRAMIENTA REINTEGRADA', 'Reintegro de herramienta al almacén', 'Activo', 4],
+                        ['DEVOLUCION', 'OTRA DEVOLUCION', 'Otras causales de devolución', 'Activo', 5],
+
+                        // DISPOSICION FINAL
+                        ['DISPOSICION FINAL', 'DAÑADO / ROTO', 'Baja por daño físico o rotura', 'Activo', 1],
+                        ['DISPOSICION FINAL', 'CADUCADO / VENCIDO', 'Baja por fecha de vencimiento cumplida', 'Activo', 2],
+                        ['DISPOSICION FINAL', 'OBSOLETO / SCRAP', 'Material en desuso o scrap', 'Activo', 3],
+                        ['DISPOSICION FINAL', 'DEFECTUOSO DE FABRICA', 'Falla de fabricación irreparable', 'Activo', 4],
+                        ['DISPOSICION FINAL', 'DESGASTE NO REPARABLE', 'Fin de vida útil por desgaste', 'Activo', 5],
+
+                        // AJUSTE POSITIVO
+                        ['AJUSTE POSITIVO', 'CONTEO FISICO / AUDITORIA', 'Ajuste positivo por auditoría física', 'Activo', 1],
+                        ['AJUSTE POSITIVO', 'SOBRANTE DETECTADO EN BODEGA', 'Sobrante no registrado', 'Activo', 2],
+                        ['AJUSTE POSITIVO', 'CORRECCION DE SALDO', 'Corrección contable de saldo', 'Activo', 3],
+
+                        // AJUSTE NEGATIVO
+                        ['AJUSTE NEGATIVO', 'CONTEO FISICO / AUDITORIA', 'Ajuste negativo por auditoría física', 'Activo', 1],
+                        ['AJUSTE NEGATIVO', 'FALTANTE DETECTADO EN BODEGA', 'Faltante no justificado', 'Activo', 2],
+                        ['AJUSTE NEGATIVO', 'MERMA / EVAPORACION', 'Pérdida natural por evaporación o merma', 'Activo', 3],
+                        ['AJUSTE NEGATIVO', 'CORRECCION DE SALDO', 'Corrección contable de saldo', 'Activo', 4]
+                    ];
+                    const stmt = db.prepare(`INSERT INTO causales_movimientos (tipo_movimiento, nombre, descripcion, estado, orden) VALUES (?, ?, ?, ?, ?)`);
+                    defaultCausales.forEach(c => stmt.run(c));
+                    stmt.finalize();
+                }
+            });
+        });
     });
 }
 
@@ -660,6 +748,112 @@ app.get('/api/tipos-inventario', async (req, res) => {
     try {
         const tipos = await dbAll(`SELECT * FROM tipos_inventario ORDER BY id ASC`);
         res.json({ success: true, data: tipos });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ==========================================
+// ENDPOINTS DE CAUSALES Y MOTIVOS DE MOVIMIENTO
+// ==========================================
+app.get('/api/causales', async (req, res) => {
+    try {
+        const { tipo_movimiento, estado } = req.query;
+        let query = `SELECT * FROM causales_movimientos WHERE 1=1`;
+        const params = [];
+        if (tipo_movimiento && tipo_movimiento !== 'ALL') {
+            query += ` AND tipo_movimiento = ?`;
+            params.push(tipo_movimiento);
+        }
+        if (estado && estado !== 'ALL') {
+            query += ` AND estado = ?`;
+            params.push(estado);
+        }
+        query += ` ORDER BY tipo_movimiento ASC, orden ASC, id ASC`;
+        const causales = await dbAll(query, params);
+        res.json({ success: true, count: causales.length, data: causales });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/causales', async (req, res) => {
+    try {
+        const { tipo_movimiento, nombre, descripcion, orden, estado } = req.body;
+        if (!tipo_movimiento || !nombre) {
+            return res.status(400).json({ success: false, error: 'El tipo de movimiento y el nombre de la causal son requeridos.' });
+        }
+        const ordVal = parseInt(orden || 1, 10);
+        const estVal = estado || 'Activo';
+        await dbRun(`
+            INSERT INTO causales_movimientos (tipo_movimiento, nombre, descripcion, orden, estado)
+            VALUES (?, ?, ?, ?, ?)
+        `, [tipo_movimiento.trim().toUpperCase(), nombre.trim().toUpperCase(), (descripcion || '').trim(), ordVal, estVal]);
+        res.json({ success: true, message: 'Causal / Motivo registrado correctamente.' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.put('/api/causales/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { tipo_movimiento, nombre, descripcion, orden, estado } = req.body;
+        const existing = await dbGet(`SELECT * FROM causales_movimientos WHERE id = ?`, [id]);
+        if (!existing) {
+            return res.status(404).json({ success: false, error: 'La causal no existe.' });
+        }
+        await dbRun(`
+            UPDATE causales_movimientos 
+            SET tipo_movimiento = ?, nombre = ?, descripcion = ?, orden = ?, estado = ?
+            WHERE id = ?
+        `, [
+            (tipo_movimiento || existing.tipo_movimiento).trim().toUpperCase(),
+            (nombre || existing.nombre).trim().toUpperCase(),
+            (descripcion !== undefined ? descripcion : existing.descripcion).trim(),
+            orden !== undefined ? parseInt(orden, 10) : existing.orden,
+            estado || existing.estado,
+            id
+        ]);
+        res.json({ success: true, message: 'Causal / Motivo actualizado correctamente.' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.delete('/api/causales/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await dbRun(`DELETE FROM causales_movimientos WHERE id = ?`, [id]);
+        res.json({ success: true, message: 'Causal / Motivo eliminado exitosamente.' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ==========================================
+// ENDPOINTS DE PERMISOS DEL SISTEMA
+// ==========================================
+app.get('/api/permisos', async (req, res) => {
+    try {
+        const permisos = await dbAll(`SELECT * FROM permisos WHERE estado = 'Activo' ORDER BY id ASC`);
+        res.json({ success: true, count: permisos.length, data: permisos });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.post('/api/permisos', async (req, res) => {
+    try {
+        const { codigo, nombre, descripcion, categoria } = req.body;
+        if (!codigo || !nombre) {
+            return res.status(400).json({ success: false, error: 'Código y nombre de permiso son requeridos.' });
+        }
+        await dbRun(`
+            INSERT INTO permisos (codigo, nombre, descripcion, categoria)
+            VALUES (?, ?, ?, ?)
+        `, [codigo.trim().toUpperCase(), nombre.trim(), (descripcion || '').trim(), (categoria || 'GENERAL').trim().toUpperCase()]);
+        res.json({ success: true, message: 'Permiso creado exitosamente.' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -2447,6 +2641,9 @@ app.get('/api/config', async (req, res) => {
         itemUbicaciones.forEach(u => setUbicaciones.add(u));
         let ubicaciones = Array.from(setUbicaciones).filter(Boolean);
 
+        const causales_movimientos = await dbAll(`SELECT * FROM causales_movimientos WHERE estado = 'Activo' ORDER BY tipo_movimiento ASC, orden ASC`);
+        const permisos = await dbAll(`SELECT * FROM permisos WHERE estado = 'Activo' ORDER BY id ASC`);
+
         res.json({
             success: true,
             data: {
@@ -2457,7 +2654,9 @@ app.get('/api/config', async (req, res) => {
                 ubicaciones,
                 causales,
                 bodegas,
-                proyectos
+                proyectos,
+                causales_movimientos,
+                permisos
             }
         });
     } catch (err) {

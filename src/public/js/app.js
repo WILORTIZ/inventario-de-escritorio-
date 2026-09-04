@@ -888,6 +888,8 @@ async function loadConfig() {
             appState.config = result.data;
             appState.sedes = result.data.sedes;
             appState.tipos_inventario = result.data.tipos_inventario;
+            appState.causales_movimientos = result.data.causales_movimientos || [];
+            appState.permisos = result.data.permisos || [];
             populateSelectOptions();
         }
     } catch (err) {
@@ -1287,6 +1289,25 @@ async function openModalMovimiento(preselectedCode = null) {
     modal.show();
 }
 
+function getCausalesParaTipoMovimiento(tipo) {
+    if (appState.config && Array.isArray(appState.config.causales_movimientos) && appState.config.causales_movimientos.length > 0) {
+        const causales = appState.config.causales_movimientos
+            .filter(c => c.tipo_movimiento === tipo && (c.estado === 'Activo' || !c.estado))
+            .sort((a, b) => (a.orden || 0) - (b.orden || 0))
+            .map(c => c.nombre);
+        if (causales.length > 0) return causales;
+    }
+    const fallbacks = {
+        'ENTRADA': ['COMPRA / PROVEEDOR', 'INVENTARIO INICIAL', 'DOTACION / HERRAMIENTAS NUEVAS', 'DONACION / OTRO INGRESO'],
+        'ENTREGA': ['USO EN OBRA / PROYECTO', 'DOTACION PERSONAL', 'MANTENIMIENTO OPERATIVO', 'CONSUMO GENERAL'],
+        'DEVOLUCION': ['SOBRANTE DE OBRA', 'CAMBIO DE MATERIAL', 'DESPACHO ERRADO', 'HERRAMIENTA REINTEGRADA', 'OTRA DEVOLUCION'],
+        'DISPOSICION FINAL': ['DAÑADO / ROTO', 'CADUCADO / VENCIDO', 'OBSOLETO / SCRAP', 'DEFECTUOSO DE FABRICA', 'DESGASTE NO REPARABLE'],
+        'AJUSTE POSITIVO': ['CONTEO FISICO / AUDITORIA', 'SOBRANTE DETECTADO EN BODEGA', 'CORRECCION DE SALDO'],
+        'AJUSTE NEGATIVO': ['CONTEO FISICO / AUDITORIA', 'FALTANTE DETECTADO EN BODEGA', 'MERMA / EVAPORACION', 'CORRECCION DE SALDO']
+    };
+    return fallbacks[tipo] || [];
+}
+
 function fillSelectDirecto(selectEl, options) {
     if (!selectEl) return;
     selectEl.innerHTML = options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
@@ -1348,12 +1369,7 @@ function handleTipoMovimientoChange(tipo) {
         // Causal / Motivo de entrada
         if (colCausal) colCausal.style.display = 'block';
         if (lblCausal) lblCausal.innerHTML = '<i class="bi bi-info-circle me-1"></i>Motivo de Ingreso';
-        fillSelectDirecto(causalSelect, [
-            'COMPRA / PROVEEDOR',
-            'INVENTARIO INICIAL',
-            'DOTACION / HERRAMIENTAS NUEVAS',
-            'DONACION / OTRO INGRESO'
-        ]);
+        fillSelectDirecto(causalSelect, getCausalesParaTipoMovimiento('ENTRADA'));
 
         // Persona que recibe en bodega
         if (colPersona) colPersona.style.display = 'block';
@@ -1400,12 +1416,7 @@ function handleTipoMovimientoChange(tipo) {
         // Causal / Condición
         if (colCausal) colCausal.style.display = 'block';
         if (lblCausal) lblCausal.innerHTML = '<i class="bi bi-info-circle me-1"></i>Causal / Uso Operativo';
-        fillSelectDirecto(causalSelect, [
-            'USO EN OBRA / PROYECTO',
-            'DOTACION PERSONAL',
-            'MANTENIMIENTO OPERATIVO',
-            'CONSUMO GENERAL'
-        ]);
+        fillSelectDirecto(causalSelect, getCausalesParaTipoMovimiento('ENTREGA'));
 
         // Persona que recibe: OBLIGATORIO
         if (colPersona) colPersona.style.display = 'block';
@@ -1447,13 +1458,7 @@ function handleTipoMovimientoChange(tipo) {
         // Causal
         if (colCausal) colCausal.style.display = 'block';
         if (lblCausal) lblCausal.innerHTML = '<i class="bi bi-info-circle me-1"></i>Motivo de Devolución';
-        fillSelectDirecto(causalSelect, [
-            'SOBRANTE DE OBRA',
-            'CAMBIO DE MATERIAL',
-            'DESPACHO ERRADO',
-            'HERRAMIENTA REINTEGRADA',
-            'OTRA DEVOLUCION'
-        ]);
+        fillSelectDirecto(causalSelect, getCausalesParaTipoMovimiento('DEVOLUCION'));
 
         // Persona que Devuelve
         if (colPersona) colPersona.style.display = 'block';
@@ -1491,13 +1496,7 @@ function handleTipoMovimientoChange(tipo) {
         if (colCausal) colCausal.style.display = 'block';
         if (lblCausal) lblCausal.innerHTML = '<i class="bi bi-info-circle me-1"></i>Causal de Descarte / Baja <span class="text-danger">*</span>';
         if (causalSelect) causalSelect.required = true;
-        fillSelectDirecto(causalSelect, [
-            'DAÑADO / ROTO',
-            'CADUCADO / VENCIDO',
-            'OBSOLETO / SCRAP',
-            'DEFECTUOSO DE FABRICA',
-            'DESGASTE NO REPARABLE'
-        ]);
+        fillSelectDirecto(causalSelect, getCausalesParaTipoMovimiento('DISPOSICION FINAL'));
 
         if (colPersona) colPersona.style.display = 'none';
 
@@ -1527,11 +1526,7 @@ function handleTipoMovimientoChange(tipo) {
 
         if (colCausal) colCausal.style.display = 'block';
         if (lblCausal) lblCausal.innerHTML = '<i class="bi bi-info-circle me-1"></i>Motivo del Ajuste (+)';
-        fillSelectDirecto(causalSelect, [
-            'CONTEO FISICO / AUDITORIA',
-            'SOBRANTE DETECTADO EN BODEGA',
-            'CORRECCION DE SALDO'
-        ]);
+        fillSelectDirecto(causalSelect, getCausalesParaTipoMovimiento('AJUSTE POSITIVO'));
 
         if (colPersona) colPersona.style.display = 'none';
 
@@ -1561,12 +1556,7 @@ function handleTipoMovimientoChange(tipo) {
 
         if (colCausal) colCausal.style.display = 'block';
         if (lblCausal) lblCausal.innerHTML = '<i class="bi bi-info-circle me-1"></i>Motivo del Ajuste (-)';
-        fillSelectDirecto(causalSelect, [
-            'CONTEO FISICO / AUDITORIA',
-            'FALTANTE DETECTADO EN BODEGA',
-            'MERMA / EVAPORACION',
-            'CORRECCION DE SALDO'
-        ]);
+        fillSelectDirecto(causalSelect, getCausalesParaTipoMovimiento('AJUSTE NEGATIVO'));
 
         if (colPersona) colPersona.style.display = 'none';
 

@@ -221,6 +221,16 @@ function cerrarSesionPorInactividad() {
     localStorage.removeItem('inventario_user');
     localStorage.removeItem('inventario_last_activity');
 
+    // Resetear vistas activas y hash a inicio para proteger vistas administrativas
+    appState.currentView = 'inicio';
+    try { window.location.hash = 'inicio'; } catch(e) {}
+    document.querySelectorAll('.app-view').forEach(view => view.style.display = 'none');
+    const viewInicio = document.getElementById('view-inicio');
+    if (viewInicio) viewInicio.style.display = 'block';
+
+    const adminSection = document.getElementById('sidebar-section-admin');
+    if (adminSection) adminSection.style.display = 'none';
+
     const loginScreen = document.getElementById('login-screen');
     if (loginScreen) loginScreen.style.display = 'flex';
 
@@ -272,6 +282,19 @@ function checkAuth() {
         }
     }
 
+    // Proteger vistas administrativas si el usuario actual no es Administrador
+    const isSuperAdmin = (user.rol === 'ADMINISTRADOR') || (user.cedula === '1130683079') || (user.cedula === '123456') || (user.cedula === 'admin');
+    if (!isSuperAdmin) {
+        const hash = (window.location.hash || '').replace('#', '');
+        if (hash === 'usuarios' || hash === 'database' || appState.currentView === 'usuarios' || appState.currentView === 'database') {
+            appState.currentView = 'inicio';
+            try { window.location.hash = 'inicio'; } catch(e) {}
+            document.querySelectorAll('.app-view').forEach(v => v.style.display = 'none');
+            const vInicio = document.getElementById('view-inicio');
+            if (vInicio) vInicio.style.display = 'block';
+        }
+    }
+
     localStorage.setItem('inventario_last_activity', Date.now().toString());
     if (loginScreen) loginScreen.style.display = 'none';
     actualizarWidgetUsuario(user);
@@ -310,6 +333,18 @@ function actualizarWidgetUsuario(user) {
     const adminSection = document.getElementById('sidebar-section-admin');
     if (adminSection) {
         adminSection.style.display = isSuperAdmin ? 'block' : 'none';
+    }
+
+    // Si el usuario no es Super Administrador, asegurar que las vistas administrativas no estén visibles en el DOM
+    if (!isSuperAdmin) {
+        const viewUsr = document.getElementById('view-usuarios');
+        const viewDb = document.getElementById('view-database');
+        if (viewUsr && viewUsr.style.display === 'block') {
+            navigate('inicio');
+        }
+        if (viewDb && viewDb.style.display === 'block') {
+            navigate('inicio');
+        }
     }
 }
 
@@ -378,6 +413,10 @@ async function ejecutarLogin(e) {
             const loginScreen = document.getElementById('login-screen');
             if (loginScreen) loginScreen.style.display = 'none';
 
+            // Siempre restablecer a la vista de Inicio para evitar que un usuario no-admin herede vistas del admin previo
+            navigate('inicio');
+            try { window.location.hash = 'inicio'; } catch(e) {}
+
             actualizarWidgetUsuario(result.user);
             actualizarBadgesContexto();
             await recargarDatosContexto();
@@ -407,19 +446,34 @@ function cerrarSesion() {
     appState.currentUser = null;
     localStorage.removeItem('inventario_user');
     localStorage.removeItem('inventario_last_activity');
-    const loginScreen = document.getElementById('login-screen');
-    if (loginScreen) loginScreen.style.display = 'flex';
-    
+
+    // 1. Resetear vistas activas y hash a inicio
+    appState.currentView = 'inicio';
+    try { window.location.hash = 'inicio'; } catch(e) {}
+    document.querySelectorAll('.app-view').forEach(view => view.style.display = 'none');
+    const viewInicio = document.getElementById('view-inicio');
+    if (viewInicio) viewInicio.style.display = 'block';
+
+    // 2. Ocultar sección de administración del sidebar
     const adminSection = document.getElementById('sidebar-section-admin');
     if (adminSection) {
         adminSection.style.display = 'none';
     }
+
+    // 3. Limpiar formularios y alertas de login
+    const loginUsername = document.getElementById('login-username');
+    const loginPassword = document.getElementById('login-password');
+    if (loginPassword) loginPassword.value = '';
 
     const alertBox = document.getElementById('login-alert');
     if (alertBox) {
         alertBox.style.display = 'none';
         alertBox.className = 'alert alert-danger py-2 small';
     }
+
+    const loginScreen = document.getElementById('login-screen');
+    if (loginScreen) loginScreen.style.display = 'flex';
+
     showToast('🔒 Sesión cerrada exitosamente.', 'info');
 }
 

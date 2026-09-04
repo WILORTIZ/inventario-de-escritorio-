@@ -182,6 +182,16 @@ function tienePermiso(codigoPermiso) {
     return extras.includes(codigoPermiso);
 }
 
+function getNombreUsuarioActual() {
+    const user = appState.currentUser;
+    if (!user) return 'Administrador CDS';
+    const nombreCompleto = `${user.nombre || ''} ${user.apellido || ''}`.trim();
+    if (nombreCompleto) return nombreCompleto;
+    if (user.username) return user.username;
+    if (user.cedula) return user.cedula;
+    return 'Administrador CDS';
+}
+
 function registrarActividadUsuario() {
     const now = Date.now();
     // Throttle para no saturar localStorage en cada milisegundo de movimiento de mouse
@@ -1307,6 +1317,12 @@ async function openModalMovimiento(preselectedCode = null) {
     const movTipoInv = document.getElementById('mov-tipo-inventario');
     if (movTipoInv) movTipoInv.value = appState.currentInventario;
 
+    // Auto-asignar el responsable de la transacción con el usuario activo en sesión
+    const respInput = document.getElementById('mov-responsable');
+    if (respInput) {
+        respInput.value = getNombreUsuarioActual();
+    }
+
     // Asegurar botón habilitado
     const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
     if (submitBtn) {
@@ -1829,7 +1845,7 @@ async function submitMovimiento(e) {
         bodega_destino: bDestino,
         causal_condicion: document.getElementById('mov-causal')?.value || null,
         proyecto_destino: pDestino,
-        responsable: document.getElementById('mov-responsable')?.value || 'Administrador CDS',
+        responsable: document.getElementById('mov-responsable')?.value?.trim() || getNombreUsuarioActual(),
         persona_recibe_devuelve: document.getElementById('mov-persona-recibe')?.value || null,
         documento_referencia: document.getElementById('mov-doc-ref')?.value || 'MANUAL',
         observaciones: document.getElementById('mov-observaciones')?.value || null,
@@ -2334,6 +2350,13 @@ function openModalBajasVencidos() {
 
     const modalEl = document.getElementById('modalBajasVencidos');
     const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+
+    // Auto-asignar responsable de la baja con el usuario activo
+    const respBajas = document.getElementById('bajas-responsable');
+    if (respBajas) {
+        respBajas.value = getNombreUsuarioActual();
+    }
+
     modal.show();
 }
 
@@ -2357,7 +2380,7 @@ async function ejecutarBajasMasivas() {
     try {
         const payload = {
             lotesIds: checked,
-            responsable: document.getElementById('bajas-responsable').value,
+            responsable: document.getElementById('bajas-responsable')?.value?.trim() || getNombreUsuarioActual(),
             observaciones: document.getElementById('bajas-obs').value
         };
 
@@ -2717,6 +2740,12 @@ async function openModalNuevoTraslado() {
     const infoDiv = document.getElementById('tras-item-info');
     if (infoDiv) infoDiv.style.display = 'none';
 
+    // Auto-asignar solicitante/emisor del traslado con el usuario activo
+    const solicitanteInput = document.getElementById('tras-solicitante');
+    if (solicitanteInput) {
+        solicitanteInput.value = getNombreUsuarioActual();
+    }
+
     const btnSubmit = document.getElementById('btn-submit-traslado');
     if (btnSubmit) {
         btnSubmit.disabled = false;
@@ -2809,7 +2838,7 @@ async function submitNuevoTraslado(e) {
     const [sede_destino, tipo_inventario_destino] = destinoRaw.split('|');
     const codigo_item = parseInt(document.getElementById('tras-item-select').value, 10);
     const cantidad = parseFloat(document.getElementById('tras-cantidad').value);
-    const responsable_solicita = document.getElementById('tras-solicitante').value.trim();
+    const responsable_solicita = document.getElementById('tras-solicitante')?.value?.trim() || getNombreUsuarioActual();
     const documento_referencia = document.getElementById('tras-doc-ref').value.trim();
     const observaciones = document.getElementById('tras-observaciones').value.trim();
 
@@ -2876,7 +2905,7 @@ function abrirModalAceptarTraslado(id) {
     document.getElementById('aceptar-tras-emisor').textContent = traslado.responsable_solicita;
 
     const respInput = document.getElementById('aceptar-tras-responsable');
-    if (respInput) respInput.value = '';
+    if (respInput) respInput.value = getNombreUsuarioActual();
 
     const modalEl = document.getElementById('modalAceptarTraslado');
     const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
@@ -2887,7 +2916,7 @@ async function ejecutarAceptarTraslado(e) {
     e.preventDefault();
 
     const id = document.getElementById('aceptar-tras-id').value;
-    const responsable_recibe = document.getElementById('aceptar-tras-responsable').value.trim();
+    const responsable_recibe = document.getElementById('aceptar-tras-responsable')?.value?.trim() || getNombreUsuarioActual();
 
     if (!responsable_recibe) {
         showToast('⚠️ Ingrese el nombre del responsable que recibe el material.', 'warning');
@@ -2944,6 +2973,9 @@ function abrirModalRechazarTraslado(id) {
     const motivoInput = document.getElementById('rechazar-tras-motivo');
     if (motivoInput) motivoInput.value = '';
 
+    const respInput = document.getElementById('rechazar-tras-responsable');
+    if (respInput) respInput.value = getNombreUsuarioActual();
+
     const modalEl = document.getElementById('modalRechazarTraslado');
     const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modal.show();
@@ -2954,7 +2986,7 @@ async function ejecutarRechazarTraslado(e) {
 
     const id = document.getElementById('rechazar-tras-id').value;
     const motivo_rechazo = document.getElementById('rechazar-tras-motivo').value.trim();
-    const responsable_recibe = document.getElementById('rechazar-tras-responsable').value.trim();
+    const responsable_recibe = document.getElementById('rechazar-tras-responsable')?.value?.trim() || getNombreUsuarioActual();
 
     if (!motivo_rechazo) {
         showToast('⚠️ Debe indicar el motivo del rechazo del traslado.', 'warning');
@@ -3234,6 +3266,9 @@ async function openModalNuevaBodega() {
     const invSelect = document.getElementById('bod-tipo-inventario');
     if (invSelect) invSelect.value = appState.currentInventario;
 
+    const bodResp = document.getElementById('bod-responsable');
+    if (bodResp) bodResp.value = getNombreUsuarioActual();
+
     const btn = document.getElementById('btn-guardar-bodega');
     if (btn) btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Guardar Bodega';
 
@@ -3447,6 +3482,9 @@ function openModalNuevoProyecto() {
 
     const invSelect = document.getElementById('proy-tipo-inventario');
     if (invSelect) invSelect.value = appState.currentInventario;
+
+    const proyResp = document.getElementById('proy-responsable');
+    if (proyResp) proyResp.value = getNombreUsuarioActual();
 
     const modalEl = document.getElementById('modalNuevoProyecto');
     const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
@@ -5024,6 +5062,294 @@ function exportKardexActualExcel() {
         console.error('Error al exportar kardex:', err);
         showToast('Error al exportar kardex: ' + err.message, 'danger');
     }
+}
+
+// 18. Motor de Impresión Profesional y Generación de PDF Limpio
+function imprimirReporteHTML(titulo, subtitulo, columns, data, metadata = {}) {
+    if (!data || data.length === 0) {
+        showToast('⚠️ No hay registros para imprimir con los filtros seleccionados.', 'warning');
+        return;
+    }
+
+    const fechaGen = new Date().toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
+    const usuarioGen = getNombreUsuarioActual();
+    const sede = metadata.sede || appState.currentSede || 'Sede Suroriental';
+    const tipoInv = metadata.tipo_inventario || appState.currentInventario || 'CDS';
+
+    // Generar filas de tabla
+    const theadHTML = `<tr>${columns.map(c => `<th>${c.header}</th>`).join('')}</tr>`;
+    const tbodyHTML = data.map((row) => {
+        const cells = columns.map(col => {
+            let val = row[col.key];
+            if (val === undefined || val === null) val = '';
+            if (col.formatter) val = col.formatter(val, row);
+            const isNum = col.type === 'number' || typeof val === 'number';
+            return `<td class="${isNum ? 'num' : ''}">${val}</td>`;
+        }).join('');
+        return `<tr>${cells}</tr>`;
+    }).join('');
+
+    const printWindow = window.open('', '_blank', 'width=1150,height=850');
+    if (!printWindow) {
+        showToast('⚠️ El navegador bloqueó la ventana emergente de impresión. Por favor habilite los pop-ups para esta aplicación.', 'warning');
+        return;
+    }
+
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <title>${titulo} - INVENTARIO CDS</title>
+        <style>
+            @page {
+                size: letter landscape;
+                margin: 10mm;
+            }
+            body {
+                font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+                font-size: 9pt;
+                color: #1a1a1a;
+                margin: 0;
+                padding: 15px;
+                background: #fff;
+            }
+            .header-box {
+                border-bottom: 2px solid #0d6efd;
+                padding-bottom: 10px;
+                margin-bottom: 10px;
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+            }
+            .title-main {
+                font-size: 15pt;
+                font-weight: bold;
+                color: #0b5ed7;
+                margin: 0;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            .subtitle {
+                font-size: 11pt;
+                font-weight: bold;
+                color: #212529;
+                margin: 3px 0 0 0;
+            }
+            .meta-info {
+                font-size: 8pt;
+                color: #495057;
+                text-align: right;
+                line-height: 1.35;
+            }
+            .filter-badge-bar {
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                padding: 5px 10px;
+                font-size: 8pt;
+                border-radius: 4px;
+                margin-bottom: 10px;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+            .filter-item {
+                display: inline-flex;
+                gap: 4px;
+            }
+            .filter-item strong {
+                color: #0d6efd;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 25px;
+                font-size: 8pt;
+            }
+            th {
+                background-color: #f1f4f9;
+                color: #000;
+                border: 1px solid #bcc3cc;
+                padding: 5px 6px;
+                font-weight: bold;
+                text-align: left;
+            }
+            td {
+                border: 1px solid #dcdfe3;
+                padding: 4px 6px;
+                vertical-align: middle;
+            }
+            tr:nth-child(even) {
+                background-color: #fbfcfd;
+            }
+            td.num {
+                text-align: right;
+                font-family: 'Consolas', monospace;
+                font-weight: 500;
+            }
+            .signatures-box {
+                margin-top: 30px;
+                display: flex;
+                justify-content: space-between;
+                page-break-inside: avoid;
+                gap: 20px;
+            }
+            .sign-line {
+                width: 30%;
+                border-top: 1px solid #333;
+                padding-top: 5px;
+                text-align: center;
+                font-size: 8pt;
+                color: #333;
+            }
+            .footer-info {
+                margin-top: 15px;
+                border-top: 1px solid #eee;
+                padding-top: 6px;
+                font-size: 7.5pt;
+                color: #888;
+                display: flex;
+                justify-content: space-between;
+            }
+            @media print {
+                body { padding: 0; }
+                .no-print { display: none !important; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="no-print" style="margin-bottom: 15px; background: #e7f1ff; border: 1px solid #b6d4fe; padding: 10px 15px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 9pt; color: #084298;"><strong>Vista previa de impresión lista.</strong> Puede imprimir en papel o guardar como PDF en orientación horizontal.</span>
+            <button onclick="window.print()" style="background: #0d6efd; color: #fff; border: none; padding: 7px 18px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 9pt;">🖨️ Imprimir / Guardar PDF</button>
+        </div>
+
+        <div class="header-box">
+            <div>
+                <h1 class="title-main">INVENTARIO CDS</h1>
+                <div class="subtitle">${titulo}</div>
+                <div style="font-size: 8.5pt; color: #6c757d; margin-top: 2px;">${subtitulo || 'Sistema de Control Físico, Trazabilidad y Auditoría de Inventarios'}</div>
+            </div>
+            <div class="meta-info">
+                <div><strong>Sede Operativa:</strong> ${sede}</div>
+                <div><strong>Inventario:</strong> ${tipoInv}</div>
+                <div><strong>Responsable Emisor:</strong> ${usuarioGen}</div>
+                <div><strong>Fecha de Emisión:</strong> ${fechaGen}</div>
+                <div><strong>Total Registros:</strong> ${data.length}</div>
+            </div>
+        </div>
+
+        ${metadata.filtrosTexto ? `
+        <div class="filter-badge-bar">
+            ${metadata.filtrosTexto}
+        </div>
+        ` : ''}
+
+        <table>
+            <thead>${theadHTML}</thead>
+            <tbody>${tbodyHTML}</tbody>
+        </table>
+
+        <div class="signatures-box">
+            <div class="sign-line">
+                <strong>Responsable de Entrega / Despacho</strong><br>
+                Nombre y Firma
+            </div>
+            <div class="sign-line">
+                <strong>Responsable de Recepción / Almacén</strong><br>
+                Nombre y Firma
+            </div>
+            <div class="sign-line">
+                <strong>Auditoría / Control Interno</strong><br>
+                Nombre y Firma
+            </div>
+        </div>
+
+        <div class="footer-info">
+            <span>INVENTARIO CDS • Documento Oficial de Control y Auditoría</span>
+            <span>Página Oficial • Registros Verificados</span>
+        </div>
+
+        <script>
+            window.onload = function() {
+                setTimeout(function() {
+                    window.print();
+                }, 350);
+            };
+        </script>
+    </body>
+    </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+}
+
+function imprimirReporteFiltradoModal() {
+    if (!reporteFiltradoActivo || !reporteFiltradoActivo.data || reporteFiltradoActivo.data.length === 0) {
+        showToast('⚠️ No hay registros con los filtros seleccionados para imprimir.', 'warning');
+        return;
+    }
+
+    const dDesde = document.getElementById('modal-filtro-fecha-desde')?.value || '';
+    const dHasta = document.getElementById('modal-filtro-fecha-hasta')?.value || '';
+    const sede = document.getElementById('modal-filtro-sede')?.value || 'TODAS';
+    const inv = document.getElementById('modal-filtro-tipo-inv')?.value || 'TODOS';
+    const cat = document.getElementById('modal-filtro-categoria')?.value || 'TODAS';
+    const ubi = document.getElementById('modal-filtro-ubicacion')?.value || 'TODAS';
+    const tMov = document.getElementById('modal-filtro-tipo-mov')?.value || 'TODOS';
+    const bod = document.getElementById('modal-filtro-bodega')?.value || 'TODAS';
+
+    let filtrosTexto = '';
+    if (dDesde || dHasta) filtrosTexto += `<div class="filter-item"><strong>Rango Fechas:</strong> ${dDesde || 'Inicio'} a ${dHasta || 'Hoy'}</div>`;
+    if (sede && sede !== 'TODAS') filtrosTexto += `<div class="filter-item"><strong>Sede:</strong> ${sede}</div>`;
+    if (inv && inv !== 'TODOS') filtrosTexto += `<div class="filter-item"><strong>Inventario:</strong> ${inv}</div>`;
+    if (cat && cat !== 'TODAS') filtrosTexto += `<div class="filter-item"><strong>Categoría:</strong> ${cat}</div>`;
+    if (ubi && ubi !== 'TODAS') filtrosTexto += `<div class="filter-item"><strong>Ubicación:</strong> ${ubi}</div>`;
+    if (tMov && tMov !== 'TODOS') filtrosTexto += `<div class="filter-item"><strong>Tipo Mov:</strong> ${tMov}</div>`;
+    if (bod && bod !== 'TODAS') filtrosTexto += `<div class="filter-item"><strong>Bodega:</strong> ${bod}</div>`;
+
+    imprimirReporteHTML(
+        reporteFiltradoActivo.title,
+        `Reporte Filtrado Oficial • Generado en tiempo real`,
+        reporteFiltradoActivo.columns,
+        reporteFiltradoActivo.data,
+        { sede, tipo_inventario: inv, filtrosTexto }
+    );
+}
+
+function imprimirReporteLiveActual() {
+    imprimirReporteFiltradoModal();
+}
+
+function imprimirKardexActual() {
+    if (!currentKardexData || !currentKardexData.kardex || currentKardexData.kardex.length === 0) {
+        showToast('⚠️ Seleccione un ítem con movimientos en el Kardex para imprimir.', 'warning');
+        return;
+    }
+    const { item, kardex, saldo_final } = currentKardexData;
+    const columns = [
+        { header: 'N° Mov.', key: 'n_movimiento' },
+        { header: 'Fecha', key: 'fecha' },
+        { header: 'Hora', key: 'hora' },
+        { header: 'Tipo Movimiento', key: 'tipo_movimiento' },
+        { header: 'Origen', key: 'bodega_origen', formatter: v => v || '-' },
+        { header: 'Destino / Proyecto', key: 'bodega_destino', formatter: (v, r) => v || r.proyecto_destino || '-' },
+        { header: 'Responsable', key: 'responsable', formatter: (v, r) => v || r.persona_recibe_devuelve || '-' },
+        { header: 'Doc. Referencia', key: 'documento_referencia', formatter: v => v || '-' },
+        { header: 'Entrada (+)', key: 'entrada', type: 'number' },
+        { header: 'Salida (-)', key: 'salida', type: 'number' },
+        { header: 'Saldo Físico', key: 'saldo_acumulado', type: 'number' }
+    ];
+
+    const subtitulo = `Ítem: ${item.codigo} - ${item.nombre} | Categoría: ${item.categoria || 'General'} | Ubicación: ${item.ubicacion_cds || 'A1'}`;
+    const metadata = {
+        sede: item.sede || appState.currentSede,
+        tipo_inventario: item.tipo_inventario || appState.currentInventario,
+        filtrosTexto: `<div class="filter-item"><strong>Código:</strong> ${item.codigo}</div><div class="filter-item"><strong>Ítem:</strong> ${item.nombre}</div><div class="filter-item"><strong>Ubicación:</strong> ${item.ubicacion_cds || 'A1'}</div><div class="filter-item"><strong>Saldo Actual CDS:</strong> ${saldo_final} ${item.unidad_medida || 'Unidad'}</div>`
+    };
+
+    imprimirReporteHTML(`KARDEX INDIVIDUAL • ÍTEM ${item.codigo}`, subtitulo, columns, kardex, metadata);
 }
 
 // ==============================================================

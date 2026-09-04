@@ -2810,8 +2810,14 @@ app.post('/api/reportes/filtrar', async (req, res) => {
                 params.push(ubicacion, ubicacion);
             }
             if (tipo_movimiento && tipo_movimiento !== 'TODOS' && tipo_movimiento !== 'ALL') {
-                query += ` AND m.tipo_movimiento = ?`;
-                params.push(tipo_movimiento);
+                if (tipo_movimiento === 'TRASLADO') {
+                    query += ` AND (m.tipo_movimiento = 'SALIDA POR TRASLADO' OR m.tipo_movimiento = 'ENTRADA POR TRASLADO')`;
+                } else if (tipo_movimiento === 'BAJA' || tipo_movimiento === 'DISPOSICION FINAL') {
+                    query += ` AND (m.tipo_movimiento = 'DISPOSICION FINAL')`;
+                } else {
+                    query += ` AND m.tipo_movimiento = ?`;
+                    params.push(tipo_movimiento);
+                }
             }
             if (bodega && bodega !== 'TODAS' && bodega !== 'ALL') {
                 query += ` AND (m.bodega_origen = ? OR m.bodega_destino = ?)`;
@@ -2821,19 +2827,19 @@ app.post('/api/reportes/filtrar', async (req, res) => {
                 query += ` AND m.proyecto_destino = ?`;
                 params.push(proyecto);
             }
-            if (fecha_desde) {
+            if (fecha_desde && typeof fecha_desde === 'string' && fecha_desde.trim()) {
                 query += ` AND m.fecha >= ?`;
-                params.push(fecha_desde);
+                params.push(fecha_desde.trim());
             }
-            if (fecha_hasta) {
+            if (fecha_hasta && typeof fecha_hasta === 'string' && fecha_hasta.trim()) {
                 query += ` AND m.fecha <= ?`;
-                params.push(fecha_hasta);
+                params.push(fecha_hasta.trim());
             }
-            if (codigo_item) {
+            if (codigo_item && codigo_item !== 'TODOS' && codigo_item !== 'ALL' && !isNaN(parseInt(codigo_item, 10))) {
                 query += ` AND m.codigo_item = ?`;
                 params.push(parseInt(codigo_item, 10));
             }
-            if (search && search.trim()) {
+            if (search && typeof search === 'string' && search.trim()) {
                 const s = `%${search.trim()}%`;
                 query += ` AND (m.n_movimiento LIKE ? OR CAST(m.codigo_item AS TEXT) LIKE ? OR m.nombre_item LIKE ? OR m.responsable LIKE ? OR m.persona_recibe_devuelve LIKE ? OR m.documento_referencia LIKE ?)`;
                 params.push(s, s, s, s, s, s);
@@ -2864,11 +2870,11 @@ app.post('/api/reportes/filtrar', async (req, res) => {
                 query += ` AND ubicacion_cds = ?`;
                 params.push(ubicacion);
             }
-            if (codigo_item) {
+            if (codigo_item && codigo_item !== 'TODOS' && codigo_item !== 'ALL' && !isNaN(parseInt(codigo_item, 10))) {
                 query += ` AND codigo = ?`;
                 params.push(parseInt(codigo_item, 10));
             }
-            if (search && search.trim()) {
+            if (search && typeof search === 'string' && search.trim()) {
                 const s = `%${search.trim()}%`;
                 query += ` AND (CAST(codigo AS TEXT) LIKE ? OR nombre LIKE ? OR marca LIKE ? OR referencia LIKE ?)`;
                 params.push(s, s, s, s);
@@ -2887,12 +2893,15 @@ app.post('/api/reportes/filtrar', async (req, res) => {
                 movFilter += ` AND tipo_inventario = ?`;
                 movParams.push(tipo_inventario);
             }
-            if (fecha_hasta) {
+            if (fecha_hasta && typeof fecha_hasta === 'string' && fecha_hasta.trim()) {
                 movFilter += ` AND fecha <= ?`;
-                movParams.push(fecha_hasta);
+                movParams.push(fecha_hasta.trim());
             }
 
             const movimientos = await dbAll(`SELECT * FROM movimientos ${movFilter}`, movParams);
+
+            const esBodegaEspecifica = bodega && bodega !== 'TODAS' && bodega !== 'ALL';
+            const bodegaFiltro = esBodegaEspecifica ? bodega : 'CDS';
 
             const movByItem = {};
             movimientos.forEach(m => {
@@ -2908,14 +2917,14 @@ app.post('/api/reportes/filtrar', async (req, res) => {
                     };
                 }
                 const b = movByItem[m.codigo_item];
-                if (m.tipo_movimiento === 'ENTRADA' && (m.bodega_destino === 'CDS' || !m.bodega_destino)) b.entradas += m.cantidad;
-                if (m.tipo_movimiento === 'DEVOLUCION' && m.bodega_destino === 'CDS') b.devoluciones += m.cantidad;
-                if (m.tipo_movimiento === 'ENTRADA POR TRASLADO' && m.bodega_destino === 'CDS') b.entregas_recibidas += m.cantidad;
-                if (m.tipo_movimiento === 'AJUSTE POSITIVO' && (m.bodega_destino === 'CDS' || !m.bodega_destino)) b.ajustes_pos += m.cantidad;
-                if (m.tipo_movimiento === 'ENTREGA' && (m.bodega_origen === 'CDS' || !m.bodega_origen)) b.entregas_enviadas += m.cantidad;
-                if (m.tipo_movimiento === 'DISPOSICION FINAL' && (m.bodega_origen === 'CDS' || !m.bodega_origen)) b.disp_final += m.cantidad;
-                if (m.tipo_movimiento === 'SALIDA POR TRASLADO' && (m.bodega_origen === 'CDS' || !m.bodega_origen)) b.entregas_enviadas += m.cantidad;
-                if (m.tipo_movimiento === 'AJUSTE NEGATIVO' && (m.bodega_origen === 'CDS' || !m.bodega_origen)) b.ajustes_neg += m.cantidad;
+                if (m.tipo_movimiento === 'ENTRADA' && (m.bodega_destino === bodegaFiltro || (!m.bodega_destino && bodegaFiltro === 'CDS'))) b.entradas += m.cantidad;
+                if (m.tipo_movimiento === 'DEVOLUCION' && m.bodega_destino === bodegaFiltro) b.devoluciones += m.cantidad;
+                if (m.tipo_movimiento === 'ENTRADA POR TRASLADO' && m.bodega_destino === bodegaFiltro) b.entregas_recibidas += m.cantidad;
+                if (m.tipo_movimiento === 'AJUSTE POSITIVO' && (m.bodega_destino === bodegaFiltro || (!m.bodega_destino && bodegaFiltro === 'CDS'))) b.ajustes_pos += m.cantidad;
+                if (m.tipo_movimiento === 'ENTREGA' && (m.bodega_origen === bodegaFiltro || (!m.bodega_origen && bodegaFiltro === 'CDS'))) b.entregas_enviadas += m.cantidad;
+                if (m.tipo_movimiento === 'DISPOSICION FINAL' && (m.bodega_origen === bodegaFiltro || (!m.bodega_origen && bodegaFiltro === 'CDS'))) b.disp_final += m.cantidad;
+                if (m.tipo_movimiento === 'SALIDA POR TRASLADO' && (m.bodega_origen === bodegaFiltro || (!m.bodega_origen && bodegaFiltro === 'CDS'))) b.entregas_enviadas += m.cantidad;
+                if (m.tipo_movimiento === 'AJUSTE NEGATIVO' && (m.bodega_origen === bodegaFiltro || (!m.bodega_origen && bodegaFiltro === 'CDS'))) b.ajustes_neg += m.cantidad;
             });
 
             let balance = items.map(item => {
@@ -2971,7 +2980,7 @@ app.post('/api/reportes/filtrar', async (req, res) => {
 
         if (tipo_reporte === 'VENCIMIENTOS') {
             let query = `
-                SELECT cv.*, i.categoria, i.unidad_medida as item_unidad
+                SELECT cv.*, i.categoria, i.unidad_medida as item_unidad, i.ubicacion_cds
                 FROM control_vencimientos cv
                 LEFT JOIN items i ON cv.codigo_item = i.codigo
                 WHERE cv.cant_disponible > 0
@@ -2990,15 +2999,27 @@ app.post('/api/reportes/filtrar', async (req, res) => {
                 query += ` AND i.categoria = ?`;
                 params.push(categoria);
             }
+            if (ubicacion && ubicacion !== 'TODAS' && ubicacion !== 'ALL') {
+                query += ` AND (i.ubicacion_cds = ?)`;
+                params.push(ubicacion);
+            }
             if (bodega && bodega !== 'TODAS' && bodega !== 'ALL') {
                 query += ` AND cv.bodega = ?`;
                 params.push(bodega);
             }
-            if (fecha_hasta) {
-                query += ` AND cv.fecha_vencimiento <= ?`;
-                params.push(fecha_hasta);
+            if (fecha_desde && typeof fecha_desde === 'string' && fecha_desde.trim()) {
+                query += ` AND cv.fecha_vencimiento >= ?`;
+                params.push(fecha_desde.trim());
             }
-            if (search && search.trim()) {
+            if (fecha_hasta && typeof fecha_hasta === 'string' && fecha_hasta.trim()) {
+                query += ` AND cv.fecha_vencimiento <= ?`;
+                params.push(fecha_hasta.trim());
+            }
+            if (codigo_item && codigo_item !== 'TODOS' && codigo_item !== 'ALL' && !isNaN(parseInt(codigo_item, 10))) {
+                query += ` AND cv.codigo_item = ?`;
+                params.push(parseInt(codigo_item, 10));
+            }
+            if (search && typeof search === 'string' && search.trim()) {
                 const s = `%${search.trim()}%`;
                 query += ` AND (CAST(cv.codigo_item AS TEXT) LIKE ? OR cv.nombre_item LIKE ? OR cv.n_movimiento_origen LIKE ?)`;
                 params.push(s, s, s);
@@ -3053,7 +3074,11 @@ app.post('/api/reportes/filtrar', async (req, res) => {
                 query += ` AND ubicacion_cds = ?`;
                 params.push(ubicacion);
             }
-            if (search && search.trim()) {
+            if (codigo_item && codigo_item !== 'TODOS' && codigo_item !== 'ALL' && !isNaN(parseInt(codigo_item, 10))) {
+                query += ` AND codigo = ?`;
+                params.push(parseInt(codigo_item, 10));
+            }
+            if (search && typeof search === 'string' && search.trim()) {
                 const s = `%${search.trim()}%`;
                 query += ` AND (CAST(codigo AS TEXT) LIKE ? OR nombre LIKE ? OR marca LIKE ? OR referencia LIKE ?)`;
                 params.push(s, s, s, s);

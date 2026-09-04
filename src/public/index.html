@@ -1078,6 +1078,9 @@
                                 </div>
                                 <div class="d-flex align-items-center gap-2 flex-wrap">
                                     <span class="badge bg-primary fs-6 px-3 py-1.5" id="reporte-live-badge-count">0 registros</span>
+                                    <button class="btn btn-outline-dark btn-sm fw-bold shadow-sm" onclick="imprimirReporteLiveActual()">
+                                        <i class="bi bi-printer-fill me-1"></i> Imprimir Reporte
+                                    </button>
                                     <button class="btn btn-success btn-sm fw-bold shadow-sm" onclick="exportarReporteLiveActual()">
                                         <i class="bi bi-file-earmark-excel-fill me-1"></i> Exportar Esta Tabla (.xlsx)
                                     </button>
@@ -1106,12 +1109,12 @@
                                         <option value="">-- Seleccionar Ítem del Catálogo --</option>
                                     </select>
                                 </div>
-                                <div class="col-12 col-md-6 d-flex align-items-end gap-2">
-                                    <button class="btn btn-success btn-sm d-flex align-items-center fw-semibold" id="btn-export-kardex" onclick="exportKardexActualExcel()">
+                                <div class="col-12 col-md-6 d-flex align-items-end gap-2 flex-wrap">
+                                    <button class="btn btn-success btn-sm d-flex align-items-center fw-semibold shadow-sm" id="btn-export-kardex" onclick="exportKardexActualExcel()">
                                         <i class="bi bi-file-earmark-excel-fill me-1"></i> Exportar Kardex (.xlsx)
                                     </button>
-                                    <button class="btn btn-outline-secondary btn-sm d-flex align-items-center" onclick="window.print()">
-                                        <i class="bi bi-printer me-1"></i> Imprimir
+                                    <button class="btn btn-outline-primary btn-sm d-flex align-items-center fw-bold shadow-sm" onclick="imprimirKardexActual()">
+                                        <i class="bi bi-printer-fill me-1"></i> Imprimir Kardex Oficial
                                     </button>
                                 </div>
                             </div>
@@ -1717,7 +1720,7 @@
 
                             <div class="col-12 col-md-6" id="col-mov-responsable">
                                 <label class="form-label fw-bold small"><i class="bi bi-shield-check me-1"></i>Responsable Transacción <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="mov-responsable" value="Administrador CDS" required>
+                                <input type="text" class="form-control" id="mov-responsable" placeholder="Responsable de la transacción" required>
                             </div>
 
                             <div class="col-12" id="col-mov-observaciones">
@@ -1768,7 +1771,7 @@
                     <div class="row g-3 mt-2">
                         <div class="col-12 col-md-6">
                             <label class="form-label fw-bold small">Responsable de la Baja</label>
-                            <input type="text" class="form-control form-control-sm" id="bajas-responsable" value="Administrador CDS">
+                            <input type="text" class="form-control form-control-sm" id="bajas-responsable" placeholder="Responsable de la baja">
                         </div>
                         <div class="col-12 col-md-6">
                             <label class="form-label fw-bold small">Observaciones Generales</label>
@@ -2823,9 +2826,12 @@
                     <button type="button" class="btn btn-outline-secondary btn-sm px-3" onclick="resetearFiltrosModalReporte()">
                         <i class="bi bi-arrow-counterclockwise me-1"></i> Restablecer Filtros
                     </button>
-                    <div class="d-flex align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
                         <button type="button" class="btn btn-outline-primary btn-sm px-3 fw-bold" onclick="mostrarResultadosEnPantallaDesdeModal()">
-                            <i class="bi bi-display me-1"></i> Ver en Pantalla Completa
+                            <i class="bi bi-display me-1"></i> Ver en Pantalla
+                        </button>
+                        <button type="button" class="btn btn-outline-dark btn-sm px-3 fw-bold shadow-sm" onclick="imprimirReporteFiltradoModal()">
+                            <i class="bi bi-printer-fill me-1"></i> Imprimir Reporte
                         </button>
                         <button type="button" class="btn btn-success btn-sm px-4 fw-bold text-white shadow-sm" id="btn-exportar-modal-filtro" onclick="descargarExcelDesdeModalFiltro()">
                             <i class="bi bi-file-earmark-excel-fill me-1"></i> Descargar Excel (.xlsx) Filtrado

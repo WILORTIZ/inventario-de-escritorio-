@@ -3539,8 +3539,8 @@ app.post('/api/database/import-excel-items', async (req, res) => {
 });
 
 // Manejador 404 para rutas API no encontradas (garantiza JSON siempre y nunca HTML en /api)
-app.all('/api/*', (req, res) => {
-    res.status(404).json({ success: false, error: `Ruta API no encontrada: ${req.method} ${req.url}` });
+app.use('/api', (req, res) => {
+    res.status(404).json({ success: false, error: `Ruta API no encontrada: ${req.method} ${req.originalUrl || req.url}` });
 });
 
 // Servir la interfaz SPA
@@ -3548,9 +3548,17 @@ app.use((req, res) => {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     console.log(`=======================================================`);
     console.log(`🚀 SERVIDOR INVENTARIO INICIADO EXITOSAMENTE`);
     console.log(`🌐 URL: http://localhost:${PORT}`);
     console.log(`=======================================================`);
+});
+
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.warn(`[Servidor] El puerto ${PORT} ya está en uso por otra instancia.`);
+    } else {
+        console.error('[Error de Servidor Express]:', err);
+    }
 });

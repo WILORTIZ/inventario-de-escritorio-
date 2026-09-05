@@ -89,10 +89,22 @@ async function createWindow() {
         });
     });
 
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+        console.warn(`[Electron] Esperando servidor HTTP en ${validatedURL}: ${errorDescription}. Reintentando...`);
+        setTimeout(() => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.loadURL('http://localhost:3000');
+            }
+        }, 800);
+    });
+
     mainWindow.loadURL('http://localhost:3000');
 
     mainWindow.on('closed', () => {
         mainWindow = null;
+        if (process.platform !== 'darwin') {
+            app.quit();
+        }
     });
 }
 
@@ -104,6 +116,7 @@ if (!gotTheLock) {
     app.on('second-instance', () => {
         if (mainWindow) {
             if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
             mainWindow.focus();
         }
     });

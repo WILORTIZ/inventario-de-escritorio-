@@ -3538,6 +3538,11 @@ app.post('/api/database/import-excel-items', async (req, res) => {
     }
 });
 
+// Manejador 404 para rutas API no encontradas (garantiza JSON siempre y nunca HTML en /api)
+app.all('/api/*', (req, res) => {
+    res.status(404).json({ success: false, error: `Ruta API no encontrada: ${req.method} ${req.url}` });
+});
+
 // Servir la interfaz SPA
 app.use((req, res) => {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));

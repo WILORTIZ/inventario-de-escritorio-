@@ -5,6 +5,20 @@
 
 const API_BASE = '/api';
 
+// Helper seguro para consumir la API y evitar caídas por respuestas no JSON o versiones antiguas
+async function safeFetchJSON(url, options = {}) {
+    const res = await fetch(url, options);
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+        const text = await res.text();
+        if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+            throw new Error('La versión en ejecución del servidor se encuentra desactualizada. Cierra la aplicación e inicia la nueva versión actualizada.');
+        }
+        throw new Error(`Respuesta no válida del servidor (${res.status}): ${text.substring(0, 100)}`);
+    }
+    return await res.json();
+}
+
 // ==============================================================
 // GESTIÓN DE NOTIFICACIONES TOAST Y MODALES SIN BLOQUEOS
 // ==============================================================
@@ -4054,8 +4068,7 @@ async function loadKardexItem(codigo) {
     }
 
     try {
-        const res = await fetch(`${API_BASE}/reportes/kardex/${codigo}`);
-        const result = await res.json();
+        const result = await safeFetchJSON(`${API_BASE}/reportes/kardex/${codigo}`);
         if (!result.success) return;
 
         const { item, kardex, saldo_final } = result;
@@ -4573,12 +4586,11 @@ async function ejecutarFiltroReporteModal() {
     if (badgeCount) badgeCount.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span> Consultando...`;
 
     try {
-        const res = await fetch(`${API_BASE}/reportes/filtrar`, {
+        const result = await safeFetchJSON(`${API_BASE}/reportes/filtrar`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        const result = await res.json();
 
         if (!result.success) {
             if (badgeCount) badgeCount.textContent = '0 registros';
@@ -4890,12 +4902,11 @@ async function aplicarFiltrosYMostrarEnPantalla(tipo = 'MOVIMIENTOS') {
 
     try {
         showToast('Consultando registros filtrados...', 'info');
-        const res = await fetch(`${API_BASE}/reportes/filtrar`, {
+        const result = await safeFetchJSON(`${API_BASE}/reportes/filtrar`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        const result = await res.json();
 
         if (!result.success) {
             showToast('⚠️ Error: ' + result.error, 'danger');
@@ -4960,12 +4971,11 @@ async function exportarReporteConFiltrosRapidos(tipo) {
 
     try {
         showToast('Generando reporte filtrado para Excel...', 'info');
-        const res = await fetch(`${API_BASE}/reportes/filtrar`, {
+        const result = await safeFetchJSON(`${API_BASE}/reportes/filtrar`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        const result = await res.json();
 
         if (!result.success || !result.data || result.data.length === 0) {
             showToast('⚠️ No se encontraron registros con los filtros activos para exportar.', 'warning');

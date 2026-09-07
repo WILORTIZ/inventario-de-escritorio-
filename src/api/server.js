@@ -499,22 +499,12 @@ async function runDatabaseMigrations() {
             }
         }
 
-        // Usuarios iniciales (Preservando usuarios existentes)
-        const adminRow = await dbGet(`SELECT * FROM usuarios WHERE cedula = '123456' OR cedula = 'admin' OR LOWER(username) = 'administrador'`);
-        if (!adminRow) {
+        // Usuarios iniciales (Solo si la base de datos está completamente vacía)
+        const userCountRow = await dbGet(`SELECT COUNT(*) as count FROM usuarios`);
+        if (!userCountRow || userCountRow.count === 0) {
             await dbRun(`
                 INSERT INTO usuarios (cedula, username, password, nombre, apellido, correo, sede, rol, estado, permisos, permisos_adicionales)
-                VALUES ('123456', 'administrador', '123456', 'Administrador', 'General', 'admin@inventario.com', 'Sede Suroriental', 'ADMINISTRADOR', 'Activo', 'ALL', '[]')
-            `);
-        } else if (!adminRow.cedula || adminRow.cedula === 'admin') {
-            await dbRun(`UPDATE usuarios SET cedula = '123456', apellido = 'General', correo = 'admin@inventario.com', sede = 'Sede Suroriental', permisos_adicionales = '[]' WHERE id = ?`, [adminRow.id]);
-        }
-
-        const gioRow = await dbGet(`SELECT * FROM usuarios WHERE cedula = '1130683079'`);
-        if (!gioRow) {
-            await dbRun(`
-                INSERT INTO usuarios (cedula, username, password, nombre, apellido, correo, sede, rol, estado, permisos, permisos_adicionales)
-                VALUES ('1130683079', 'gio', '8080809', 'Giobani', 'Lopez', 'cawy9499@gmail.com', 'Sede Suroriental', 'ADMINISTRADOR DE SEDE', 'Activo', 'SEDE_ALL', '[]')
+                VALUES ('1130683079', 'gio', '8080809', 'Giobani', 'Lopez', 'cawy9499@gmail.com', 'Sede Suroriental', 'ADMINISTRADOR', 'Activo', 'ALL', '[]')
             `);
         }
 
@@ -788,6 +778,45 @@ app.put('/api/usuarios/:id/permisos', async (req, res) => {
 
         res.json({ success: true, message: 'Permisos adicionales actualizados con éxito.' });
     } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Eliminar usuario
+app.delete('/api/usuarios/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await dbGet(`SELECT id, cedula, nombre, apellido, rol FROM usuarios WHERE id = ?`, [id]);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'Usuario no encontrado.' });
+        }
+
+        // Validar que no se quede el sistema sin ningún usuario
+        const totalUsers = await dbGet(`SELECT COUNT(*) as count FROM usuarios`);
+        if (totalUsers && totalUsers.count <= 1) {
+            return res.status(400).json({ success: false, error: 'No se puede eliminar el único usuario existente en el sistema.' });
+        }
+
+        // Eliminar registros dependientes si existieran (permisos o tablas relacionadas si las hay)
+        await dbRun(`DELETE FROM usuarios WHERE id = ?`, [id]);
+
+        // Sincronizar con AppData si aplica
+        const appDataDb = path.join(process.env.APPDATA || '', 'inventario-cds', 'inventario.db');
+        if (fs.existsSync(DB_PATH) && fs.existsSync(path.dirname(appDataDb)) && DB_PATH !== appDataDb) {
+            try {
+                fs.copyFileSync(DB_PATH, appDataDb);
+            } catch (e) {
+                console.warn('Sincronización AppData omitida:', e.message);
+            }
+        }
+
+        const nombreStr = `${user.nombre} ${user.apellido || ''}`.trim();
+        res.json({ 
+            success: true, 
+            message: `Usuario '${nombreStr}' (Cédula: ${user.cedula}) eliminado exitosamente.` 
+        });
+    } catch (err) {
+        console.error('Error eliminando usuario:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });

@@ -520,6 +520,16 @@ async function loadUsuarios() {
     }
 }
 
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function renderTablaUsuarios(usuarios) {
     const tbody = document.getElementById('tabla-usuarios-body');
     if (!tbody) return;
@@ -543,26 +553,56 @@ function renderTablaUsuarios(usuarios) {
 
         const nombreCompleto = `${u.nombre} ${u.apellido || ''}`.trim();
         const cedulaStr = u.cedula || u.username;
+        const safeNombre = escapeHtml(nombreCompleto);
+        const safeCedula = escapeHtml(cedulaStr);
 
         return `
             <tr>
-                <td><strong class="text-dark"><i class="bi bi-person-vcard me-1 text-primary"></i>${cedulaStr}</strong></td>
-                <td class="fw-semibold">${nombreCompleto}</td>
-                <td class="text-muted small">${u.correo || '<em>Sin correo</em>'}</td>
-                <td><span class="badge bg-light text-dark border"><i class="bi bi-geo-alt-fill text-danger me-1"></i>${u.sede || 'Sede Suroriental'}</span></td>
+                <td><strong class="text-dark"><i class="bi bi-person-vcard me-1 text-primary"></i>${safeCedula}</strong></td>
+                <td class="fw-semibold">${safeNombre}</td>
+                <td class="text-muted small">${escapeHtml(u.correo || 'Sin correo')}</td>
+                <td><span class="badge bg-light text-dark border"><i class="bi bi-geo-alt-fill text-danger me-1"></i>${escapeHtml(u.sede || 'Sede Suroriental')}</span></td>
                 <td>${rolBadge}</td>
                 <td>${estadoBadge}</td>
-                <td class="text-center">
+                <td class="text-center text-nowrap">
                     <button class="btn btn-outline-primary btn-sm px-2 py-1 me-1 shadow-sm" title="Editar Usuario" onclick="abrirModalEditarUsuario(${u.id})">
                         <i class="bi bi-pencil-square"></i>
                     </button>
-                    <button class="btn btn-outline-success btn-sm px-2 py-1 shadow-sm" title="Configurar Permisos" onclick="irAPestañaPermisosUsuario(${u.id})">
+                    <button class="btn btn-outline-success btn-sm px-2 py-1 me-1 shadow-sm" title="Configurar Permisos" onclick="irAPestañaPermisosUsuario(${u.id})">
                         <i class="bi bi-key-fill"></i>
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm px-2 py-1 shadow-sm" title="Eliminar Usuario" onclick="confirmarEliminarUsuario(${u.id}, '${safeCedula}', '${safeNombre}')">
+                        <i class="bi bi-trash-fill"></i>
                     </button>
                 </td>
             </tr>
         `;
     }).join('');
+}
+
+async function confirmarEliminarUsuario(id, cedula, nombre) {
+    if (appState.currentUser && (String(appState.currentUser.id) === String(id) || String(appState.currentUser.cedula) === String(cedula))) {
+        showToast('⚠️ No puedes eliminar tu propia cuenta mientras tienes la sesión iniciada. Inicia sesión con otra cuenta administradora para eliminarla.', 'warning');
+        return;
+    }
+
+    const confirmar = confirm(`⚠️ ¿ESTÁ SEGURO DE ELIMINAR ESTE USUARIO?\n\n• Nombre: ${nombre}\n• Cédula: ${cedula}\n\nEsta acción eliminará el usuario y sus credenciales de acceso de forma permanente.`);
+    if (!confirmar) return;
+
+    try {
+        const res = await fetch(`${API_BASE}/usuarios/${id}`, {
+            method: 'DELETE'
+        });
+        const result = await res.json();
+        if (result.success) {
+            showToast(`🗑️ ${result.message || 'Usuario eliminado exitosamente.'}`, 'success');
+            await loadUsuarios();
+        } else {
+            showToast(result.error || 'Error al eliminar usuario.', 'danger');
+        }
+    } catch (err) {
+        showToast('Error de conexión con el servidor al intentar eliminar.', 'danger');
+    }
 }
 
 function filtrarListaUsuarios(query) {

@@ -7,7 +7,20 @@ para actualizar instalaciones existentes sin perder la base de datos de movimien
 
 HISTORIAL DE VERSIONES Y CAMBIOS:
 ----------------------------------------------------------------------
-[Versión 1.2.6] (Última versión estable oficial)
+[Versión 1.4.0] (Versión Actual)
+- Módulo de Eliminación Segura de Usuarios:
+  * Nuevo botón de eliminación directa (icono de papelera roja) en la tabla de Gestión de Usuarios.
+  * Diálogo de confirmación interactivo antes de la eliminación definitiva.
+  * Protección activa para evitar eliminar la propia cuenta en sesión actual.
+  * Validación en backend (DELETE /api/usuarios/:id) con protección contra bases de datos vacías.
+  * Posibilidad de eliminar usuarios antiguos o de prueba (como el usuario '123456' Administrador General antiguo).
+  * Auto-sincronización instantánea con la base de datos persistente en AppData.
+  * Se asigna a Giobani (C.C. 1130683079) rol de ADMINISTRADOR con control total del sistema.
+
+[Versión 1.3.9]
+- Actualizaciones de rendimiento y ajustes de interfaz.
+
+[Versión 1.2.6]
 - Módulo completo de Gestión de Categorías de Inventario:
   * Panel dedicado en "Gestión de Bodegas, Destinos y Categorías" con tabla de categorías, orden, badge de ítems asignados y acciones.
   * Creación y modificación de categorías con orden personalizado y actualización en cascada sobre los ítems existentes.

@@ -7,7 +7,25 @@ para actualizar instalaciones existentes sin perder la base de datos de movimien
 
 HISTORIAL DE VERSIONES Y CAMBIOS:
 ----------------------------------------------------------------------
-[Versión 1.4.2] (Versión Actual)
+[Versión 1.5.0] (Versión Actual)
+- Reporte y Análisis de Rotación de Inventario ABC:
+  * Clasificación estratégica de ítems por volumen de salidas (Pareto 80/15/5%):
+    - Zona A: Alta rotación (80% del volumen de salidas)
+    - Zona B: Media rotación (15% del volumen de salidas)
+    - Zona C: Baja rotación (5% del volumen de salidas)
+    - Zona D: Sin salidas / Inactivos
+  * Métricas avanzadas: Stock inicial, Salidas periodo, Stock actual, Consumo promedio diario, Índice de Rotación (IR), Días de Cobertura estimada.
+  * Gráfica de torta Donut en alta definición incrustada directamente en la primera hoja del archivo Excel descargado.
+  * Dashboard interactivo en pantalla con resumen de zonas, desglose por ítem y buscador dinámico.
+- Optimización de Vista Kardex y Reportes:
+  * Retiro de las tarjetas fijas de la vista del Kardex para mayor limpieza y foco en la auditoría individual.
+  * Centralización de todos los reportes (Balance, Stock Crítico, Vencimientos, Movimientos, Catálogo y Rotación ABC) en el botón "Generador de Reportes con Filtros".
+- Validación de Bodegas en Traslados:
+  * Asignación obligatoria de bodega origen y destino en movimientos de tipo TRASLADO.
+- Compatibilidad y Preservación de Datos:
+  * Preservación intacta del 100% de la base de datos de movimientos, usuarios e inventario.
+
+[Versión 1.4.2]
 - Seguridad en Inicio de Sesión:
   * Eliminación del campo de contraseña prellenada por defecto en la pantalla de inicio de sesión.
   * Se mantiene la cédula de usuario predefinida para agilidad en el acceso, requiriendo el ingreso manual seguro de la contraseña.

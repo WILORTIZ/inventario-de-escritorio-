@@ -1285,7 +1285,7 @@ function renderMovimientosTable(movs) {
     if (!tbody) return;
 
     if (movs.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="12" class="text-center py-4 text-muted">No se encontraron movimientos registrados para ${appState.currentSede} (${appState.currentInventario}).</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="13" class="text-center py-4 text-muted">No se encontraron movimientos registrados para ${appState.currentSede} (${appState.currentInventario}).</td></tr>`;
         return;
     }
 
@@ -1303,6 +1303,7 @@ function renderMovimientosTable(movs) {
         if (m.tipo_movimiento === 'AJUSTE NEGATIVO') badgeClass = 'bg-danger bg-opacity-75';
 
         const isLatest = m.id === latestId;
+        const ubicacionItem = m.ubicacion_cds || (appState.items?.find(i => i.codigo == m.codigo_item)?.ubicacion_cds) || '-';
 
         return `
             <tr class="${isLatest ? 'table-light border-start border-primary border-3' : ''}">
@@ -1315,8 +1316,9 @@ function renderMovimientosTable(movs) {
                     <small class="text-muted">${m.hora}</small>
                 </td>
                 <td><span class="badge ${badgeClass}">${m.tipo_movimiento}</span></td>
-                <td>${m.codigo_item}</td>
+                <td><span class="badge bg-light text-dark border">${m.codigo_item}</span></td>
                 <td><div class="fw-semibold">${m.nombre_item}</div></td>
+                <td><span class="badge bg-secondary bg-opacity-10 text-secondary border"><i class="bi bi-geo-alt-fill me-1 text-primary"></i>${ubicacionItem}</span></td>
                 <td class="text-end fw-bold">${m.cantidad} ${m.unidad}</td>
                 <td>${m.bodega_origen || '-'}</td>
                 <td>${m.bodega_destino || '-'}</td>
@@ -1572,24 +1574,29 @@ function handleTipoMovimientoChange(tipo) {
         if (lblCantidad) lblCantidad.innerHTML = 'Cantidad a Entregar <span class="text-danger">*</span>';
 
     } else if (tipo === 'DEVOLUCION') {
-        // 3. DEVOLUCIÓN (REINGRESO DESDE PROYECTO)
-        if (colOrigen) colOrigen.style.display = 'none';
-        if (origenSelect) origenSelect.value = 'PROYECTOS';
-
-        // Bodega Destino: OBLIGATORIA
-        if (colDestino) colDestino.style.display = 'block';
-        if (lblDestino) lblDestino.innerHTML = '<i class="bi bi-box-arrow-in-down-right me-1 text-success"></i>Bodega de Reingreso <span class="text-danger">*</span>';
-        if (destinoSelect) {
-            destinoSelect.required = true;
-            if (!destinoSelect.value || destinoSelect.value === 'ALL') {
-                const firstOpt = Array.from(destinoSelect.options).find(o => o.value && o.value !== 'ALL');
-                destinoSelect.value = firstOpt ? firstOpt.value : 'CDS';
+        // 3. DEVOLUCIÓN (REINGRESO DESDE PROYECTO / OPERACIÓN HACIA CDS)
+        // Origen: PROYECTOS por defecto (o seleccionable si aplica)
+        if (colOrigen) colOrigen.style.display = 'block';
+        if (lblOrigen) lblOrigen.innerHTML = '<i class="bi bi-box-arrow-up-right me-1 text-primary"></i>Origen / Bodega que Devuelve';
+        if (origenSelect) {
+            origenSelect.required = false;
+            if (!origenSelect.value || origenSelect.value === 'ALL') {
+                const proyOpt = Array.from(origenSelect.options).find(o => o.value === 'PROYECTOS');
+                origenSelect.value = proyOpt ? 'PROYECTOS' : (origenSelect.options[0]?.value || 'PROYECTOS');
             }
         }
 
-        // Proyecto que Devuelve
+        // Bodega Destino: OBLIGATORIA (Reingreso a CDS)
+        if (colDestino) colDestino.style.display = 'block';
+        if (lblDestino) lblDestino.innerHTML = '<i class="bi bi-box-arrow-in-down-right me-1 text-success"></i>Bodega de Reingreso (Destino) <span class="text-danger">*</span>';
+        if (destinoSelect) {
+            destinoSelect.required = true;
+            destinoSelect.value = 'CDS';
+        }
+
+        // Proyecto / Obra que Devuelve
         if (colProyecto) colProyecto.style.display = 'block';
-        if (lblProyecto) lblProyecto.innerHTML = '<i class="bi bi-buildings me-1 text-primary"></i>Proyecto / Obra que Devuelve <span class="text-danger">*</span>';
+        if (lblProyecto) lblProyecto.innerHTML = '<i class="bi bi-buildings me-1 text-primary"></i>Proyecto / Obra / Plan de Trabajo <span class="text-danger">*</span>';
         if (proyectoSelect) proyectoSelect.required = true;
 
         // Causal
@@ -1607,10 +1614,10 @@ function handleTipoMovimientoChange(tipo) {
 
         // Documento
         if (colDocRef) colDocRef.style.display = 'block';
-        if (lblDocRef) lblDocRef.innerHTML = '<i class="bi bi-receipt me-1"></i>Acta / Remisión de Devolución';
-        if (docRefInput) docRefInput.placeholder = 'Ej: DEV-204';
+        if (lblDocRef) lblDocRef.innerHTML = '<i class="bi bi-receipt me-1"></i>Acta / Remisión / Vale de Devolución';
+        if (docRefInput) docRefInput.placeholder = 'Ej: DEV-204, VALE-501';
 
-        if (lblCantidad) lblCantidad.innerHTML = 'Cantidad a Devolver <span class="text-danger">*</span>';
+        if (lblCantidad) lblCantidad.innerHTML = 'Cantidad a Devolver / Reingresar (+) <span class="text-danger">*</span>';
 
     } else if (tipo === 'DISPOSICION FINAL') {
         // 4. DISPOSICIÓN FINAL (SCRAP / BAJA)
@@ -1797,36 +1804,68 @@ async function actualizarStockPreviewEnMovimiento() {
     const selectedCode = document.getElementById('mov-item-select')?.value;
     if (!selectedCode) return;
 
-    const item = appState.items.find(i => String(i.codigo) === String(selectedCode));
+    const item = appState.items ? appState.items.find(i => String(i.codigo) === String(selectedCode)) : null;
     if (!item) return;
 
-    const tipo = document.getElementById('mov-tipo').value;
+    const tipo = document.getElementById('mov-tipo')?.value;
     const origenSelect = document.getElementById('mov-bodega-origen');
     const labelEl = document.getElementById('mov-preview-stock-label');
     const badgeEl = document.getElementById('mov-preview-stock');
     const movSede = document.getElementById('mov-sede')?.value || appState.currentSede;
     const movTipoInv = document.getElementById('mov-tipo-inventario')?.value || appState.currentInventario;
 
-    let bodegaRelevante = 'CDS';
-    if (tipo === 'DEVOLUCION') {
-        bodegaRelevante = (origenSelect && origenSelect.value && origenSelect.value !== 'ALL') ? origenSelect.value : 'PROYECTOS';
-    } else if (tipo === 'ENTREGA' || tipo === 'DISPOSICION FINAL' || tipo === 'AJUSTE NEGATIVO') {
-        bodegaRelevante = (origenSelect && origenSelect.value && origenSelect.value !== 'ALL') ? origenSelect.value : 'CDS';
-    } else {
-        bodegaRelevante = 'CDS';
-    }
-
     try {
-        const res = await fetch(`${API_BASE}/inventario/stock-bodega?codigo_item=${selectedCode}&bodega=${encodeURIComponent(bodegaRelevante)}&sede=${encodeURIComponent(movSede)}&tipo_inventario=${encodeURIComponent(movTipoInv)}`);
+        const res = await fetch(`${API_BASE}/inventario/stock-todas-bodegas?codigo_item=${selectedCode}&sede=${encodeURIComponent(movSede)}&tipo_inventario=${encodeURIComponent(movTipoInv)}`);
         const result = await res.json();
-        const stockActual = result.success ? result.stock : 0;
+        const stockMap = (result.success && result.stockByBodega) ? result.stockByBodega : {};
+
+        // Actualizar opciones del selector de bodega de origen con los saldos disponibles
+        if (origenSelect && origenSelect.options && origenSelect.options.length > 0) {
+            Array.from(origenSelect.options).forEach(opt => {
+                const bName = opt.value;
+                if (bName && bName !== 'ALL') {
+                    const bStock = stockMap[bName] || 0;
+                    opt.textContent = `${bName} (${bStock} ${item.unidad_medida || 'Unidad'} disponibles)`;
+                }
+            });
+
+            // Si es DEVOLUCIÓN y la bodega actualmente seleccionada no tiene stock, pero otra bodega secundaria sí tiene, auto-seleccionar la bodega con stock
+            if (tipo === 'DEVOLUCION') {
+                const currentStock = stockMap[origenSelect.value] || 0;
+                if (currentStock <= 0) {
+                    const bodegaConStock = Object.keys(stockMap).find(b => b !== 'CDS' && stockMap[b] > 0);
+                    if (bodegaConStock) {
+                        const optMatch = Array.from(origenSelect.options).find(o => o.value === bodegaConStock);
+                        if (optMatch) {
+                            origenSelect.value = bodegaConStock;
+                        }
+                    }
+                }
+            }
+        }
+
+        let bodegaRelevante = 'CDS';
+        if (tipo === 'ENTREGA' || tipo === 'DISPOSICION FINAL' || tipo === 'AJUSTE NEGATIVO') {
+            bodegaRelevante = (origenSelect && origenSelect.value && origenSelect.value !== 'ALL') ? origenSelect.value : 'CDS';
+        } else {
+            bodegaRelevante = 'CDS';
+        }
+
+        const stockActual = stockMap[bodegaRelevante] !== undefined ? stockMap[bodegaRelevante] : 0;
 
         if (labelEl) {
-            labelEl.textContent = `Stock Disponible [${bodegaRelevante} - ${movSede}]:`;
+            if (tipo === 'DEVOLUCION') {
+                labelEl.textContent = `Stock actual en Bodega Central [CDS - ${movSede}]:`;
+            } else {
+                labelEl.textContent = `Stock Disponible [${bodegaRelevante} - ${movSede}]:`;
+            }
         }
 
         if (badgeEl) {
-            if (tipo === 'DEVOLUCION' || tipo === 'ENTREGA' || tipo === 'DISPOSICION FINAL' || tipo === 'AJUSTE NEGATIVO') {
+            if (tipo === 'DEVOLUCION') {
+                badgeEl.className = 'badge bg-success fs-6';
+                badgeEl.innerHTML = `<i class="bi bi-box-arrow-in-down-right me-1"></i>${stockMap['CDS'] || 0} ${item.unidad_medida || 'Unidad'} (+ Reingreso a CDS)`;
+            } else if (tipo === 'ENTREGA' || tipo === 'DISPOSICION FINAL' || tipo === 'AJUSTE NEGATIVO') {
                 if (stockActual <= 0) {
                     badgeEl.className = 'badge bg-danger fs-6';
                     badgeEl.textContent = `0 ${item.unidad_medida} (Sin existencias)`;
@@ -1872,7 +1911,7 @@ async function submitMovimiento(e) {
         bDestino = document.getElementById('mov-bodega-destino')?.value || 'PROYECTOS';
         pDestino = document.getElementById('mov-proyecto')?.value || 'OPERACION';
     } else if (tipoMov === 'DEVOLUCION') {
-        bOrigen = 'PROYECTOS';
+        bOrigen = document.getElementById('mov-bodega-origen')?.value || 'PROYECTOS';
         bDestino = document.getElementById('mov-bodega-destino')?.value || 'CDS';
         pDestino = document.getElementById('mov-proyecto')?.value || 'OPERACION';
     } else if (tipoMov === 'DISPOSICION FINAL') {
@@ -1887,6 +1926,20 @@ async function submitMovimiento(e) {
         bOrigen = document.getElementById('mov-bodega-origen')?.value || 'CDS';
         bDestino = null;
         pDestino = null;
+    }
+
+    // Validación estricta en el cliente: Impedir entrega hacia la misma bodega de origen
+    if (bOrigen && bDestino) {
+        const oNorm = bOrigen.toString().trim().toUpperCase();
+        const dNorm = bDestino.toString().trim().toUpperCase();
+        if (oNorm === dNorm && !['AJUSTE POSITIVO', 'AJUSTE NEGATIVO'].includes(tipoMov)) {
+            showToast(`⚠️ No se puede realizar una entrega a la misma bodega de origen (Origen: ${bOrigen}, Destino: ${bDestino}). Seleccione una bodega de destino diferente.`, 'danger');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = 'Registrar Transacción';
+            }
+            return;
+        }
     }
 
     const payload = {
@@ -1992,6 +2045,10 @@ function mostrarModalEliminar(mov) {
     document.getElementById('del-mov-n').textContent = mov.n_movimiento;
     document.getElementById('del-mov-tipo').textContent = mov.tipo_movimiento;
     document.getElementById('del-mov-item').textContent = `${mov.codigo_item} - ${mov.nombre_item}`;
+    const ubiEl = document.getElementById('del-mov-ubicacion');
+    if (ubiEl) {
+        ubiEl.textContent = mov.ubicacion_cds || (appState.items?.find(i => i.codigo == mov.codigo_item)?.ubicacion_cds) || '-';
+    }
     document.getElementById('del-mov-cantidad').textContent = `${mov.cantidad} ${mov.unidad}`;
     document.getElementById('del-mov-fecha').textContent = `${mov.fecha} ${mov.hora}`;
     document.getElementById('del-mov-responsable').textContent = mov.responsable || 'CDS';
@@ -4489,6 +4546,7 @@ function openModalFiltroReporte(tipoDefault = 'MOVIMIENTOS') {
 
     // Seleccionar el radio button correspondiente
     const mapRadios = {
+        'ROTACION': 'rep-tipo-rot',
         'MOVIMIENTOS': 'rep-tipo-movs',
         'BALANCE': 'rep-tipo-balance',
         'STOCK_CRITICO': 'rep-tipo-critico',
@@ -4496,7 +4554,7 @@ function openModalFiltroReporte(tipoDefault = 'MOVIMIENTOS') {
         'CATALOGO': 'rep-tipo-cat'
     };
 
-    const targetRadioId = mapRadios[tipoDefault] || 'rep-tipo-mov';
+    const targetRadioId = mapRadios[tipoDefault] || 'rep-tipo-movs';
     const radioEl = document.getElementById(targetRadioId);
     if (radioEl) radioEl.checked = true;
 
@@ -4533,7 +4591,7 @@ function onCambioTipoReporteModal() {
     const gFechaHasta = document.getElementById('group-filtro-fechas-hasta');
 
     if (gTipoMov) gTipoMov.style.display = (tipo === 'MOVIMIENTOS') ? 'block' : 'none';
-    if (gBodega) gBodega.style.display = (tipo === 'MOVIMIENTOS' || tipo === 'VENCIMIENTOS') ? 'block' : 'none';
+    if (gBodega) gBodega.style.display = (tipo === 'MOVIMIENTOS' || tipo === 'VENCIMIENTOS' || tipo === 'ROTACION') ? 'block' : 'none';
     if (gProyecto) gProyecto.style.display = (tipo === 'MOVIMIENTOS') ? 'block' : 'none';
     if (gEstadoVenc) gEstadoVenc.style.display = (tipo === 'VENCIMIENTOS') ? 'block' : 'none';
     if (gEstadoStock) gEstadoStock.style.display = (tipo === 'BALANCE' || tipo === 'STOCK_CRITICO') ? 'block' : 'none';
@@ -4673,6 +4731,7 @@ function obtenerDefinicionColumnasReporte(tipo) {
             columns: [
                 { header: 'Código Ítem', key: 'codigo_item', type: 'number' },
                 { header: 'Nombre del Ítem', key: 'nombre_item' },
+                { header: 'Ubicación Ítem', key: 'ubicacion_cds', formatter: (v, r) => v || (appState.items?.find(i => i.codigo == r.codigo_item)?.ubicacion_cds) || '-' },
                 { header: 'N° Movimiento', key: 'n_movimiento' },
                 { header: 'Fecha', key: 'fecha' },
                 { header: 'Hora', key: 'hora' },
@@ -4684,7 +4743,6 @@ function obtenerDefinicionColumnasReporte(tipo) {
                 { header: 'Bodega Origen', key: 'bodega_origen', formatter: v => v || '-' },
                 { header: 'Bodega Destino', key: 'bodega_destino', formatter: v => v || '-' },
                 { header: 'Causal / Proyecto', key: 'causal_condicion', formatter: (v, r) => v || r.proyecto_destino || '-' },
-                { header: 'Ubicación CDS', key: 'ubicacion_cds', formatter: v => v || '-' },
                 { header: 'Responsable', key: 'responsable', formatter: v => v || '-' },
                 { header: 'Persona Recibe / Devuelve', key: 'persona_recibe_devuelve', formatter: v => v || '-' },
                 { header: 'Doc. Referencia', key: 'documento_referencia', formatter: v => v || '-' },
@@ -4770,6 +4828,31 @@ function obtenerDefinicionColumnasReporte(tipo) {
         };
     }
 
+    if (tipo === 'ROTACION') {
+        return {
+            title: 'Análisis de Rotación de Inventario (ABC / Pareto)',
+            sheetName: 'Rotación ABC',
+            filename: 'Reporte_Rotacion_ABC_Filtrado',
+            columns: [
+                { header: 'Código Ítem', key: 'codigo', type: 'number' },
+                { header: 'Nombre del Ítem / Material', key: 'nombre' },
+                { header: 'Categoría', key: 'categoria' },
+                { header: 'Ubicación CDS', key: 'ubicacion_cds' },
+                { header: 'Sede', key: 'sede' },
+                { header: 'Existencia Actual', key: 'stock_actual', type: 'number' },
+                { header: 'Consumo / Salidas', key: 'total_salidas', type: 'number' },
+                { header: '% Participación', key: 'porcentaje_participacion', formatter: v => (v != null ? Number(v).toFixed(2) + '%' : '0.00%') },
+                { header: '% Acumulado', key: 'porcentaje_acumulado', formatter: v => (v != null ? Number(v).toFixed(2) + '%' : '0.00%') },
+                { header: 'Clasificación ABC', key: 'clasificacion_abc' },
+                { header: 'Velocidad Rotación', key: 'velocidad_rotacion' },
+                { header: 'Índice Rotación (IR)', key: 'indice_rotacion', formatter: v => (v != null ? Number(v).toFixed(2) : '0.00'), type: 'number' },
+                { header: 'Consumo Diario', key: 'consumo_diario', formatter: v => (v != null ? Number(v).toFixed(2) : '0.00'), type: 'number' },
+                { header: 'Días de Cobertura', key: 'dias_cobertura', formatter: v => (v != null ? (v >= 9999 ? '∞ Inactivo' : Number(v).toFixed(0) + ' días') : '0 días') },
+                { header: 'Acción Sugerida', key: 'accion_sugerida' }
+            ]
+        };
+    }
+
     // Default: CATALOGO
     return {
         title: 'Catálogo Maestro de Ítems',
@@ -4833,6 +4916,11 @@ function descargarExcelDesdeModalFiltro() {
         return;
     }
 
+    if (reporteFiltradoActivo.tipo === 'ROTACION') {
+        descargarExcelRotacionCompleto(reporteFiltradoActivo);
+        return;
+    }
+
     exportToExcelTable(
         reporteFiltradoActivo.data,
         reporteFiltradoActivo.columns,
@@ -4849,6 +4937,12 @@ function mostrarResultadosEnPantallaDesdeModal() {
     }
 
     closeModal('modalFiltroReporte');
+
+    if (reporteFiltradoActivo.tipo === 'ROTACION') {
+        abrirReporteRotacionEnPantalla(reporteFiltradoActivo);
+        return;
+    }
+
     renderReporteLive(reporteFiltradoActivo);
 }
 
@@ -4973,6 +5067,476 @@ function actualizarPrevisualizacionReporte() {
     const container = document.getElementById('reporte-live-container');
     if (container && container.style.display !== 'none') {
         aplicarFiltrosYMostrarEnPantalla(reporteFiltradoActivo.tipo || 'MOVIMIENTOS');
+    }
+}
+
+// 15.1. Dashboard y Visualizador de Rotación de Inventario (ABC / Pareto)
+let chartRotacionInstancia = null;
+let datosRotacionGlobal = null;
+
+async function abrirReporteRotacionEnPantalla(reporteObj = null) {
+    const dashboard = document.getElementById('seccion-rotacion-dashboard');
+    if (!dashboard) return;
+
+    try {
+        let data = reporteObj ? reporteObj.data : null;
+        let resumen = reporteObj ? reporteObj.resumen : null;
+        let params = reporteObj ? (reporteObj.parametros || {}) : {};
+
+        if (!data || data.length === 0) {
+            showToast('Calculando análisis de rotación ABC...', 'info');
+            const payload = {
+                tipo_reporte: 'ROTACION',
+                fecha_desde: document.getElementById('rep-quick-fecha-desde')?.value || '',
+                fecha_hasta: document.getElementById('rep-quick-fecha-hasta')?.value || '',
+                categoria: document.getElementById('rep-quick-categoria')?.value || 'TODAS',
+                ubicacion: document.getElementById('rep-quick-ubicacion')?.value || 'TODAS',
+                bodega: document.getElementById('rep-quick-bodega')?.value || 'TODAS',
+                sede: appState.currentSede,
+                tipo_inventario: appState.currentInventario
+            };
+
+            const result = await safeFetchJSON(`${API_BASE}/reportes/filtrar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!result.success) {
+                showToast('Error al obtener rotación: ' + result.error, 'danger');
+                return;
+            }
+
+            data = result.data || [];
+            resumen = result.resumen || null;
+            params = result.parametros || payload;
+        }
+
+        if (!resumen) {
+            const countA = data.filter(d => (d.clasificacion_abc || '').includes('Zona A')).length;
+            const countB = data.filter(d => (d.clasificacion_abc || '').includes('Zona B')).length;
+            const countC = data.filter(d => (d.clasificacion_abc || '').includes('Zona C')).length;
+            const countD = data.filter(d => (d.clasificacion_abc || '').includes('Zona D') || (d.clasificacion_abc || '').includes('Sin Salidas')).length;
+            const salidasA = data.filter(d => (d.clasificacion_abc || '').includes('Zona A')).reduce((acc, r) => acc + (r.total_salidas || 0), 0);
+            const salidasB = data.filter(d => (d.clasificacion_abc || '').includes('Zona B')).reduce((acc, r) => acc + (r.total_salidas || 0), 0);
+            const salidasC = data.filter(d => (d.clasificacion_abc || '').includes('Zona C')).reduce((acc, r) => acc + (r.total_salidas || 0), 0);
+            const totalSal = data.reduce((acc, r) => acc + (r.total_salidas || 0), 0);
+
+            resumen = {
+                total_items_evaluados: data.length,
+                total_salidas_unidades: totalSal,
+                zonas: [
+                    { zona: 'Zona A', nombre: 'Alta Rotación (80%)', descripcion: 'Mayor rotación operativa', color: '#198754', cantidad_items: countA, pct_items: data.length ? Math.round((countA/data.length)*100) : 0, salidas_unidades: salidasA, pct_salidas: totalSal ? Math.round((salidasA/totalSal)*100) : 0, stock_unidades: data.filter(d => (d.clasificacion_abc || '').includes('Zona A')).reduce((acc, r) => acc + (r.stock_actual || 0), 0) },
+                    { zona: 'Zona B', nombre: 'Media Rotación (15%)', descripcion: 'Rotación intermedia', color: '#0d6efd', cantidad_items: countB, pct_items: data.length ? Math.round((countB/data.length)*100) : 0, salidas_unidades: salidasB, pct_salidas: totalSal ? Math.round((salidasB/totalSal)*100) : 0, stock_unidades: data.filter(d => (d.clasificacion_abc || '').includes('Zona B')).reduce((acc, r) => acc + (r.stock_actual || 0), 0) },
+                    { zona: 'Zona C', nombre: 'Baja Rotación (5%)', descripcion: 'Bajo movimiento', color: '#fd7e14', cantidad_items: countC, pct_items: data.length ? Math.round((countC/data.length)*100) : 0, salidas_unidades: salidasC, pct_salidas: totalSal ? Math.round((salidasC/totalSal)*100) : 0, stock_unidades: data.filter(d => (d.clasificacion_abc || '').includes('Zona C')).reduce((acc, r) => acc + (r.stock_actual || 0), 0) },
+                    { zona: 'Zona D', nombre: 'Sin Rotación (Stock Inactivo)', descripcion: 'Stock disponible sin salidas en el periodo', color: '#dc3545', cantidad_items: countD, pct_items: data.length ? Math.round((countD/data.length)*100) : 0, salidas_unidades: 0, pct_salidas: 0, stock_unidades: data.filter(d => (d.clasificacion_abc || '').includes('Zona D') || (d.clasificacion_abc || '').includes('Sin Salidas')).reduce((acc, r) => acc + (r.stock_actual || 0), 0) }
+                ]
+            };
+        }
+
+        renderDashboardRotacion(data, resumen, params);
+        dashboard.style.display = 'block';
+        dashboard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (err) {
+        console.error('Error al abrir reporte de rotación:', err);
+        showToast('Error al cargar reporte de rotación: ' + err.message, 'danger');
+    }
+}
+
+function renderDashboardRotacion(data, resumen, params = {}) {
+    datosRotacionGlobal = data;
+
+    // Subtítulo
+    const subEl = document.getElementById('rotacion-dashboard-subtitle');
+    if (subEl) {
+        const dDesde = params.fecha_desde || document.getElementById('rep-quick-fecha-desde')?.value || 'Histórico';
+        const dHasta = params.fecha_hasta || document.getElementById('rep-quick-fecha-hasta')?.value || 'Actual';
+        const sede = params.sede || appState.currentSede || 'Todas';
+        subEl.textContent = `Sede: ${sede} | Rango: ${dDesde} a ${dHasta} | Evaluados ${data.length} ítems del catálogo`;
+    }
+
+    // Actualizar KPIs
+    const kpiTotalItems = document.getElementById('rot-kpi-total-items');
+    const kpiTotalSalidas = document.getElementById('rot-kpi-total-salidas');
+    const kpiZonaA = document.getElementById('rot-kpi-zona-a');
+    const kpiZonaB = document.getElementById('rot-kpi-zona-b');
+    const kpiZonaC = document.getElementById('rot-kpi-zona-c');
+    const kpiZonaD = document.getElementById('rot-kpi-zona-d');
+
+    const totalSalidas = data.reduce((sum, item) => sum + (Number(item.total_salidas) || 0), 0);
+    const countA = data.filter(i => (i.clasificacion_abc || '').includes('Zona A')).length;
+    const countB = data.filter(i => (i.clasificacion_abc || '').includes('Zona B')).length;
+    const countC = data.filter(i => (i.clasificacion_abc || '').includes('Zona C')).length;
+    const countD = data.filter(i => (i.clasificacion_abc || '').includes('Zona D') || (i.clasificacion_abc || '').includes('Sin Salidas')).length;
+
+    if (kpiTotalItems) kpiTotalItems.textContent = data.length.toLocaleString('es-ES');
+    if (kpiTotalSalidas) kpiTotalSalidas.textContent = totalSalidas.toLocaleString('es-ES');
+    if (kpiZonaA) kpiZonaA.textContent = `${countA} ítems`;
+    if (kpiZonaB) kpiZonaB.textContent = `${countB} ítems`;
+    if (kpiZonaC) kpiZonaC.textContent = `${countC} ítems`;
+    if (kpiZonaD) kpiZonaD.textContent = `${countD} ítems`;
+
+    // Renderizar Gráfica de Torta
+    renderGraficoTortaRotacion(resumen);
+
+    // Renderizar Tabla Resumen
+    renderTablaRotacionResumen(resumen);
+
+    // Renderizar Tabla Detalle
+    renderTablaRotacionDetalle(data);
+}
+
+function renderGraficoTortaRotacion(resumen) {
+    const canvas = document.getElementById('chart-rotacion-torta');
+    if (!canvas || typeof Chart === 'undefined') return;
+
+    if (chartRotacionInstancia) {
+        chartRotacionInstancia.destroy();
+    }
+
+    const labels = [];
+    const counts = [];
+    const bgColors = [];
+
+    if (resumen && resumen.zonas && resumen.zonas.length > 0) {
+        resumen.zonas.forEach(z => {
+            labels.push(`${z.zona} (${z.nombre})`);
+            counts.push(z.cantidad_items || 0);
+            bgColors.push(z.color || '#6c757d');
+        });
+    }
+
+    const ctx = canvas.getContext('2d');
+    chartRotacionInstancia = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: counts,
+                backgroundColor: bgColors,
+                borderWidth: 2,
+                borderColor: '#ffffff',
+                hoverOffset: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 12,
+                        padding: 10,
+                        font: { size: 10, weight: 'bold' }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function (ctx) {
+                            const val = ctx.raw || 0;
+                            const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                            const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                            return ` ${val} ítems (${pct}%)`;
+                        }
+                    }
+                }
+            },
+            cutout: '58%'
+        }
+    });
+}
+
+function renderTablaRotacionResumen(resumen) {
+    const tbody = document.getElementById('tbody-rotacion-resumen');
+    if (!tbody || !resumen || !resumen.zonas) return;
+
+    tbody.innerHTML = resumen.zonas.map(z => {
+        return `
+            <tr>
+                <td><span class="badge" style="background-color: ${z.color || '#6c757d'}; font-size: 0.8rem;">${z.zona}</span></td>
+                <td>
+                    <div class="fw-bold">${z.nombre}</div>
+                    <small class="text-muted" style="font-size: 0.72rem;">${z.descripcion || ''}</small>
+                </td>
+                <td class="text-end fw-bold">${(z.cantidad_items || 0).toLocaleString('es-ES')}</td>
+                <td class="text-end font-monospace">${z.pct_items || 0}%</td>
+                <td class="text-end fw-bold text-primary">${(z.salidas_unidades || 0).toLocaleString('es-ES')}</td>
+                <td class="text-end font-monospace">${z.pct_salidas || 0}%</td>
+                <td class="text-end font-monospace">${(z.stock_unidades || 0).toLocaleString('es-ES')}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function renderTablaRotacionDetalle(items) {
+    const tbody = document.getElementById('tbody-rotacion-detalle');
+    if (!tbody) return;
+
+    if (!items || items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="13" class="text-center py-4 text-muted">No se encontraron ítems para mostrar en la rotación.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = items.map(item => {
+        let badgeClass = 'bg-secondary';
+        let abc = item.clasificacion_abc || 'Zona D';
+        if (abc.includes('Zona A')) badgeClass = 'bg-success';
+        else if (abc.includes('Zona B')) badgeClass = 'bg-primary';
+        else if (abc.includes('Zona C')) badgeClass = 'bg-warning text-dark';
+        else if (abc.includes('Zona D')) badgeClass = 'bg-danger';
+
+        const diasCob = item.dias_cobertura >= 9999 ? '∞ Inactivo' : `${Math.round(item.dias_cobertura || 0)} d`;
+
+        return `
+            <tr>
+                <td class="fw-bold text-dark font-monospace">${item.codigo}</td>
+                <td>
+                    <div class="fw-semibold text-dark">${item.nombre}</div>
+                    <small class="text-muted" style="font-size: 0.7rem;">${item.unidad_medida || 'UNIDAD'} ${item.marca ? ' | ' + item.marca : ''}</small>
+                </td>
+                <td><span class="badge bg-light text-secondary border">${item.categoria || '-'}</span></td>
+                <td><span class="badge bg-dark-subtle text-dark">${item.ubicacion_cds || '-'}</span></td>
+                <td class="text-end font-monospace">${(item.stock_inicial || 0).toLocaleString('es-ES')}</td>
+                <td class="text-end font-monospace fw-bold text-primary">${(item.total_salidas || 0).toLocaleString('es-ES')}</td>
+                <td class="text-end font-monospace fw-bold">${(item.stock_actual || 0).toLocaleString('es-ES')}</td>
+                <td class="text-end font-monospace">${Number(item.consumo_diario || 0).toFixed(2)}</td>
+                <td class="text-end font-monospace fw-semibold">${Number(item.indice_rotacion || 0).toFixed(2)}</td>
+                <td class="text-end font-monospace text-muted">${diasCob}</td>
+                <td class="text-end font-monospace">${Number(item.porcentaje_participacion || 0).toFixed(2)}%</td>
+                <td class="text-end font-monospace text-muted">${Number(item.porcentaje_acumulado || 0).toFixed(2)}%</td>
+                <td class="text-center"><span class="badge ${badgeClass} px-2 py-1">${abc}</span></td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function filtrarTablaRotacionEnPantalla() {
+    const query = (document.getElementById('rotacion-filtro-tabla')?.value || '').toLowerCase().trim();
+    if (!datosRotacionGlobal) return;
+
+    if (!query) {
+        renderTablaRotacionDetalle(datosRotacionGlobal);
+        return;
+    }
+
+    const filtrados = datosRotacionGlobal.filter(item => {
+        return (item.codigo && item.codigo.toString().includes(query)) ||
+            (item.nombre && item.nombre.toLowerCase().includes(query)) ||
+            (item.categoria && item.categoria.toLowerCase().includes(query)) ||
+            (item.ubicacion_cds && item.ubicacion_cds.toLowerCase().includes(query)) ||
+            (item.clasificacion_abc && item.clasificacion_abc.toLowerCase().includes(query));
+    });
+
+    renderTablaRotacionDetalle(filtrados);
+}
+
+function cerrarDashboardRotacion() {
+    const dashboard = document.getElementById('seccion-rotacion-dashboard');
+    if (dashboard) dashboard.style.display = 'none';
+}
+
+// Función generadora de gráfica de torta pura en Canvas 2D de alta definición para Excel
+function generarImagenTortaBase64(resumen = null, data = null) {
+    try {
+        const offCanvas = document.createElement('canvas');
+        const width = 760;
+        const height = 420;
+        offCanvas.width = width;
+        offCanvas.height = height;
+        const ctx = offCanvas.getContext('2d');
+        if (!ctx) return null;
+
+        // 1. Fondo sólido blanco
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+
+        // 2. Encabezado / Banner superior
+        ctx.fillStyle = '#F8F9FA';
+        ctx.fillRect(15, 15, width - 30, 60);
+        ctx.strokeStyle = '#E9ECEF';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(15, 15, width - 30, 60);
+
+        ctx.fillStyle = '#212529';
+        ctx.font = 'bold 15px Arial, Helvetica, sans-serif';
+        ctx.fillText('DISTRIBUCIÓN DE ÍTEMS POR ZONA ABC (ROTACIÓN)', 30, 42);
+
+        ctx.fillStyle = '#6C757D';
+        ctx.font = '11px Arial, Helvetica, sans-serif';
+        ctx.fillText('Clasificación estratégica según volumen acumulado de salidas (Pareto 80/15/5%)', 30, 60);
+
+        // 3. Preparar zonas y datos
+        let zones = [];
+        if (resumen && Array.isArray(resumen.zonas) && resumen.zonas.length > 0) {
+            zones = resumen.zonas.map(z => ({
+                zona: z.zona,
+                nombre: z.nombre,
+                count: Number(z.cantidad_items || 0),
+                salidas: Number(z.salidas_unidades || 0),
+                pctItems: Number(z.pct_items || 0),
+                pctSalidas: Number(z.pct_salidas || 0),
+                color: z.color || '#6c757d'
+            }));
+        } else {
+            const list = data || datosRotacionGlobal || [];
+            const countA = list.filter(i => (i.clasificacion_abc || '').includes('Zona A')).length;
+            const countB = list.filter(i => (i.clasificacion_abc || '').includes('Zona B')).length;
+            const countC = list.filter(i => (i.clasificacion_abc || '').includes('Zona C')).length;
+            const countD = list.filter(i => (i.clasificacion_abc || '').includes('Zona D') || (i.clasificacion_abc || '').includes('Sin Salidas')).length;
+            const total = (countA + countB + countC + countD) || 1;
+
+            zones = [
+                { zona: 'Zona A', nombre: 'Alta Rotación (80% Salidas)', count: countA, pctItems: ((countA / total) * 100).toFixed(1), color: '#198754' },
+                { zona: 'Zona B', nombre: 'Media Rotación (15% Salidas)', count: countB, pctItems: ((countB / total) * 100).toFixed(1), color: '#0d6efd' },
+                { zona: 'Zona C', nombre: 'Baja Rotación (5% Salidas)', count: countC, pctItems: ((countC / total) * 100).toFixed(1), color: '#fd7e14' },
+                { zona: 'Zona D', nombre: 'Sin Salidas / Inactivos', count: countD, pctItems: ((countD / total) * 100).toFixed(1), color: '#dc3545' }
+            ];
+        }
+
+        const totalItems = zones.reduce((sum, z) => sum + z.count, 0);
+
+        // 4. Dibujar Gráfico Donut (Torta)
+        const cx = 190;
+        const cy = 245;
+        const outerR = 125;
+        const innerR = 70;
+
+        let startAngle = -Math.PI / 2;
+
+        if (totalItems === 0) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
+            ctx.arc(cx, cy, innerR, Math.PI * 2, 0, true);
+            ctx.fillStyle = '#E9ECEF';
+            ctx.fill();
+        } else {
+            zones.forEach(z => {
+                if (z.count <= 0) return;
+                const sliceAngle = (z.count / totalItems) * Math.PI * 2;
+                const endAngle = startAngle + sliceAngle;
+
+                ctx.beginPath();
+                ctx.arc(cx, cy, outerR, startAngle, endAngle, false);
+                ctx.arc(cx, cy, innerR, endAngle, startAngle, true);
+                ctx.closePath();
+                ctx.fillStyle = z.color;
+                ctx.fill();
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                startAngle = endAngle;
+            });
+        }
+
+        // Centro del Donut con total
+        ctx.beginPath();
+        ctx.arc(cx, cy, innerR - 2, 0, Math.PI * 2);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fill();
+
+        ctx.fillStyle = '#212529';
+        ctx.font = 'bold 22px Arial, Helvetica, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(totalItems.toLocaleString('es-ES'), cx, cy + 2);
+
+        ctx.fillStyle = '#6C757D';
+        ctx.font = 'bold 10px Arial, Helvetica, sans-serif';
+        ctx.fillText('ÍTEMS / REF', cx, cy + 18);
+
+        // 5. Leyenda y Tarjetas a la derecha
+        ctx.textAlign = 'left';
+        const startX = 360;
+        let startY = 105;
+        const cardHeight = 65;
+
+        zones.forEach((z) => {
+            ctx.fillStyle = '#F8F9FA';
+            ctx.fillRect(startX, startY, 370, 56);
+            ctx.strokeStyle = '#E9ECEF';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(startX, startY, 370, 56);
+
+            ctx.fillStyle = z.color;
+            ctx.beginPath();
+            ctx.arc(startX + 18, startY + 18, 9, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#212529';
+            ctx.font = 'bold 12px Arial, Helvetica, sans-serif';
+            ctx.fillText(`${z.zona} - ${z.nombre}`, startX + 35, startY + 22);
+
+            ctx.fillStyle = '#495057';
+            ctx.font = '11px Arial, Helvetica, sans-serif';
+            const salidasText = z.salidas != null ? ` | Salidas: ${Number(z.salidas).toLocaleString('es-ES')} u.` : '';
+            ctx.fillText(`Ítems: ${z.count.toLocaleString('es-ES')} (${z.pctItems}%)${salidasText}`, startX + 35, startY + 42);
+
+            startY += cardHeight;
+        });
+
+        // 6. Pie de gráfica
+        ctx.fillStyle = '#ADB5BD';
+        ctx.font = 'italic 10px Arial, Helvetica, sans-serif';
+        ctx.fillText('Generado automáticamente por el Sistema INVENTARIO CDS', 30, height - 15);
+
+        return offCanvas.toDataURL('image/png');
+    } catch (err) {
+        console.warn('Error generando imagen de torta base64:', err);
+        return null;
+    }
+}
+
+async function exportRotacionExcelFiltrado() {
+    await descargarExcelRotacionCompleto();
+}
+
+async function descargarExcelRotacionCompleto(customReporte = null) {
+    try {
+        showToast('Generando Libro Excel de Rotación con Gráfica de Torta...', 'info');
+
+        // Generación garantizada de imagen base64 de la torta
+        const chartImageBase64 = generarImagenTortaBase64(customReporte?.resumen, customReporte?.data);
+
+        const payload = {
+            tipo_reporte: 'ROTACION',
+            fecha_desde: document.getElementById('modal-filtro-fecha-desde')?.value || document.getElementById('rep-quick-fecha-desde')?.value || '',
+            fecha_hasta: document.getElementById('modal-filtro-fecha-hasta')?.value || document.getElementById('rep-quick-fecha-hasta')?.value || '',
+            categoria: document.getElementById('modal-filtro-categoria')?.value || document.getElementById('rep-quick-categoria')?.value || 'TODAS',
+            ubicacion: document.getElementById('modal-filtro-ubicacion')?.value || document.getElementById('rep-quick-ubicacion')?.value || 'TODAS',
+            bodega: document.getElementById('modal-filtro-bodega')?.value || 'TODAS',
+            sede: document.getElementById('modal-filtro-sede')?.value || appState.currentSede,
+            tipo_inventario: document.getElementById('modal-filtro-tipo-inv')?.value || appState.currentInventario,
+            search: document.getElementById('modal-filtro-search')?.value || '',
+            chart_image: chartImageBase64
+        };
+
+        const res = await fetch(`${API_BASE}/reportes/rotacion/excel`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+        }
+
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        const nowStr = new Date().toISOString().slice(0, 10);
+        a.download = `Reporte_Rotacion_ABC_Inventario_${nowStr}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        showToast('✅ Reporte Excel descargado exitosamente con análisis ABC y gráfica de torta.', 'success');
+    } catch (err) {
+        console.error('Error al descargar Excel de rotación:', err);
+        showToast('⚠️ No se pudo generar el archivo Excel con el servidor: ' + err.message, 'danger');
     }
 }
 

@@ -4,6 +4,7 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const crypto = require('crypto');
 
 const app = express();
@@ -1116,7 +1117,7 @@ app.get('/api/inventario', async (req, res) => {
                 i.stock_minimo,
                 i.estado as item_estado,
                 COALESCE(SUM(CASE WHEN m.tipo_movimiento IN ('ENTRADA', 'ENTRADA POR TRASLADO') AND (m.bodega_destino = 'CDS' OR m.bodega_destino IS NULL) THEN m.cantidad ELSE 0 END), 0) AS entradas,
-                COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'DEVOLUCION' AND m.bodega_destino = 'CDS' THEN m.cantidad ELSE 0 END), 0) AS devoluciones,
+                COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'DEVOLUCION' AND (m.bodega_destino = 'CDS' OR m.bodega_destino IS NULL) THEN m.cantidad ELSE 0 END), 0) AS devoluciones,
                 COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'ENTREGA' AND m.bodega_destino = 'CDS' THEN m.cantidad ELSE 0 END), 0) AS entregas_recibidas,
                 COALESCE(SUM(CASE WHEN m.tipo_movimiento = 'AJUSTE POSITIVO' AND (m.bodega_destino = 'CDS' OR m.bodega_destino IS NULL) THEN m.cantidad ELSE 0 END), 0) AS ajustes_pos,
                 COALESCE(SUM(CASE WHEN m.tipo_movimiento IN ('ENTREGA', 'SALIDA POR TRASLADO') AND (m.bodega_origen = 'CDS' OR m.bodega_origen IS NULL) THEN m.cantidad ELSE 0 END), 0) AS entregas_enviadas,
@@ -1352,39 +1353,46 @@ app.put('/api/items/:codigo', async (req, res) => {
 app.get('/api/movimientos', async (req, res) => {
     try {
         const { sede, tipo_inventario, tipo, bodega, search, fechaInicio, fechaFin } = req.query;
-        let query = `SELECT * FROM movimientos WHERE 1=1`;
+        let query = `
+            SELECT 
+                m.*,
+                COALESCE(i.ubicacion_cds, m.ubicacion_cds, 'A1') AS ubicacion_cds
+            FROM movimientos m
+            LEFT JOIN items i ON m.codigo_item = i.codigo
+            WHERE 1=1
+        `;
         const params = [];
 
         if (sede && sede !== 'ALL') {
-            query += ` AND sede = ?`;
+            query += ` AND m.sede = ?`;
             params.push(sede);
         }
         if (tipo_inventario && tipo_inventario !== 'ALL') {
-            query += ` AND tipo_inventario = ?`;
+            query += ` AND m.tipo_inventario = ?`;
             params.push(tipo_inventario);
         }
         if (tipo && tipo !== 'ALL') {
-            query += ` AND tipo_movimiento = ?`;
+            query += ` AND m.tipo_movimiento = ?`;
             params.push(tipo);
         }
         if (bodega && bodega !== 'ALL') {
-            query += ` AND (bodega_origen = ? OR bodega_destino = ?)`;
+            query += ` AND (m.bodega_origen = ? OR m.bodega_destino = ?)`;
             params.push(bodega, bodega);
         }
         if (fechaInicio) {
-            query += ` AND fecha >= ?`;
+            query += ` AND m.fecha >= ?`;
             params.push(fechaInicio);
         }
         if (fechaFin) {
-            query += ` AND fecha <= ?`;
+            query += ` AND m.fecha <= ?`;
             params.push(fechaFin);
         }
         if (search) {
-            query += ` AND (n_movimiento LIKE ? OR CAST(codigo_item AS TEXT) LIKE ? OR nombre_item LIKE ? OR responsable LIKE ? OR proyecto_destino LIKE ?)`;
-            params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+            query += ` AND (m.n_movimiento LIKE ? OR CAST(m.codigo_item AS TEXT) LIKE ? OR m.nombre_item LIKE ? OR m.responsable LIKE ? OR m.proyecto_destino LIKE ? OR i.ubicacion_cds LIKE ? OR m.ubicacion_cds LIKE ?)`;
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
         }
 
-        query += ` ORDER BY id DESC LIMIT 500`;
+        query += ` ORDER BY m.id DESC LIMIT 500`;
         const movs = await dbAll(query, params);
         res.json({ success: true, count: movs.length, data: movs });
     } catch (err) {
@@ -1416,8 +1424,8 @@ app.get('/api/inventario/stock-bodega', async (req, res) => {
             const stockData = await dbGet(`
                 SELECT 
                     COALESCE(SUM(
-                        (CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END) -
-                        (CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END)
+                        (CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO', 'ENTRADA POR TRASLADO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END) -
+                        (CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO', 'SALIDA POR TRASLADO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END)
                     ), 0) as stock
                 FROM movimientos WHERE codigo_item = ? ${sedeFilter}
             `, [codigo_item, ...sedeParams]);
@@ -1435,6 +1443,63 @@ app.get('/api/inventario/stock-bodega', async (req, res) => {
             stock = stockData ? stockData.stock : 0;
         }
         res.json({ success: true, codigo_item: parseInt(codigo_item, 10), bodega: bodegaTarget, stock });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Consultar stock de un ítem consolidado en todas las bodegas
+app.get('/api/inventario/stock-todas-bodegas', async (req, res) => {
+    try {
+        const { codigo_item, sede, tipo_inventario } = req.query;
+        if (!codigo_item) {
+            return res.status(400).json({ success: false, error: 'Código de ítem requerido.' });
+        }
+        let sedeFilter = '';
+        let sedeParams = [];
+        if (sede && sede !== 'ALL') {
+            sedeFilter += ` AND sede = ?`;
+            sedeParams.push(sede);
+        }
+        if (tipo_inventario && tipo_inventario !== 'ALL') {
+            sedeFilter += ` AND tipo_inventario = ?`;
+            sedeParams.push(tipo_inventario);
+        }
+
+        const stockRows = await dbAll(`
+            SELECT 
+                bodega,
+                SUM(ingresos - salidas) as stock
+            FROM (
+                SELECT 
+                    (CASE WHEN bodega_destino = 'CDS' OR bodega_destino IS NULL THEN 'CDS' ELSE bodega_destino END) as bodega, 
+                    cantidad as ingresos, 
+                    0 as salidas 
+                FROM movimientos 
+                WHERE tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO', 'ENTRADA POR TRASLADO', 'ENTREGA')
+                  AND codigo_item = ? ${sedeFilter}
+                  AND (bodega_destino IS NOT NULL OR tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO'))
+                UNION ALL
+                SELECT 
+                    (CASE WHEN bodega_origen = 'CDS' OR bodega_origen IS NULL THEN 'CDS' ELSE bodega_origen END) as bodega, 
+                    0 as ingresos, 
+                    cantidad as salidas 
+                FROM movimientos 
+                WHERE tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO', 'SALIDA POR TRASLADO', 'DEVOLUCION')
+                  AND codigo_item = ? ${sedeFilter}
+                  AND (bodega_origen IS NOT NULL OR tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO'))
+            )
+            GROUP BY bodega
+        `, [codigo_item, ...sedeParams, codigo_item, ...sedeParams]);
+
+        const stockByBodega = {};
+        stockRows.forEach(r => {
+            if (r.bodega && r.bodega !== 'DISPOSICION FINAL') {
+                stockByBodega[r.bodega] = Math.max(0, r.stock);
+            }
+        });
+
+        res.json({ success: true, codigo_item: parseInt(codigo_item, 10), stockByBodega });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -1476,12 +1541,23 @@ app.post('/api/movimientos', async (req, res) => {
         const movSede = sede || item.sede || 'Sede Suroriental';
         const movTipoInv = tipo_inventario || item.tipo_inventario || 'CDS';
 
-        // Validación estricta de existencias para Salidas y Devoluciones por bodega de origen
-        const esSalidaODevolucion = ['ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO', 'DEVOLUCION'].includes(tipo_movimiento);
-        if (esSalidaODevolucion) {
-            const origenActual = (tipo_movimiento === 'DEVOLUCION') 
-                ? (bodega_origen && bodega_origen !== 'ALL' ? bodega_origen : 'PROYECTOS')
-                : (bodega_origen && bodega_origen !== 'ALL' ? bodega_origen : 'CDS');
+        // Validación estricta: No permitir entregas ni traslados hacia la misma bodega de origen
+        if (bodega_origen && bodega_destino) {
+            const origenNormalizado = bodega_origen.toString().trim().toUpperCase();
+            const destinoNormalizado = bodega_destino.toString().trim().toUpperCase();
+            if (origenNormalizado === destinoNormalizado && !['AJUSTE POSITIVO', 'AJUSTE NEGATIVO'].includes(tipo_movimiento)) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: `No se puede realizar una transacción a la misma bodega de origen. Origen: "${bodega_origen}", Destino: "${bodega_destino}". La bodega de destino debe ser diferente.` 
+                });
+            }
+        }
+
+        // Validación estricta de existencias para Salidas por bodega de origen (ENTREGA, DISPOSICION FINAL, AJUSTE NEGATIVO)
+        // NOTA: DEVOLUCION es un REINGRESO a inventario CDS, por lo cual suma existencias y no debe bloquearse por saldo en proyectos
+        const esSalida = ['ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO'].includes(tipo_movimiento);
+        if (esSalida) {
+            const origenActual = (bodega_origen && bodega_origen !== 'ALL') ? bodega_origen : 'CDS';
             
             let stockDisponible = 0;
             if (origenActual === 'CDS') {
@@ -1508,18 +1584,16 @@ app.post('/api/movimientos', async (req, res) => {
             }
 
             if (stockDisponible <= 0) {
-                const accion = tipo_movimiento === 'DEVOLUCION' ? 'la devolución' : 'la salida';
                 return res.status(400).json({ 
                     success: false, 
-                    error: `No se puede realizar ${accion}. La bodega de origen "${origenActual}" en ${movSede} no tiene existencias disponibles del ítem "${item.nombre}" (Stock disponible: 0 ${item.unidad_medida}).` 
+                    error: `No se puede realizar la salida. La bodega de origen "${origenActual}" en ${movSede} no tiene existencias disponibles del ítem "${item.nombre}" (Stock disponible: 0 ${item.unidad_medida}).` 
                 });
             }
 
             if (stockDisponible < cantNum) {
-                const accion = tipo_movimiento === 'DEVOLUCION' ? 'devolver' : 'retirar';
                 return res.status(400).json({ 
                     success: false, 
-                    error: `Stock insuficiente en la bodega de origen "${origenActual}" (${movSede}). Stock disponible: ${stockDisponible} ${item.unidad_medida}. Intentó ${accion}: ${cantNum} ${item.unidad_medida}.` 
+                    error: `Stock insuficiente en la bodega de origen "${origenActual}" (${movSede}). Stock disponible: ${stockDisponible} ${item.unidad_medida}. Intentó retirar: ${cantNum} ${item.unidad_medida}.` 
                 });
             }
         }
@@ -1548,9 +1622,9 @@ app.post('/api/movimientos', async (req, res) => {
             item.nombre,
             cantNum,
             item.unidad_medida,
-            bodega_origen || null,
-            bodega_destino || (tipo_movimiento === 'ENTRADA' ? 'CDS' : null),
-            causal_condicion || (tipo_movimiento === 'ENTRADA' ? 'NUEVO / INICIAL' : null),
+            bodega_origen || (tipo_movimiento === 'DEVOLUCION' ? 'PROYECTOS' : null),
+            bodega_destino || (tipo_movimiento === 'ENTRADA' || tipo_movimiento === 'DEVOLUCION' ? 'CDS' : null),
+            causal_condicion || (tipo_movimiento === 'ENTRADA' ? 'NUEVO / INICIAL' : (tipo_movimiento === 'DEVOLUCION' ? 'SOBRANTE DE OBRA' : null)),
             ubicacion_cds || item.ubicacion_cds,
             proyecto_destino || 'Operacion Central',
             responsable || 'Administrador CDS',
@@ -1606,17 +1680,24 @@ app.post('/api/movimientos', async (req, res) => {
 app.get('/api/movimientos/ultimo', async (req, res) => {
     try {
         const { sede, tipo_inventario } = req.query;
-        let query = `SELECT * FROM movimientos WHERE 1=1`;
+        let query = `
+            SELECT 
+                m.*,
+                COALESCE(i.ubicacion_cds, m.ubicacion_cds, 'A1') AS ubicacion_cds
+            FROM movimientos m
+            LEFT JOIN items i ON m.codigo_item = i.codigo
+            WHERE 1=1
+        `;
         let params = [];
         if (sede && sede !== 'ALL') {
-            query += ` AND sede = ?`;
+            query += ` AND m.sede = ?`;
             params.push(sede);
         }
         if (tipo_inventario && tipo_inventario !== 'ALL') {
-            query += ` AND tipo_inventario = ?`;
+            query += ` AND m.tipo_inventario = ?`;
             params.push(tipo_inventario);
         }
-        query += ` ORDER BY id DESC LIMIT 1`;
+        query += ` ORDER BY m.id DESC LIMIT 1`;
         const lastMov = await dbGet(query, params);
         if (!lastMov) {
             return res.status(404).json({ success: false, error: 'No hay movimientos registrados en la base de datos.' });
@@ -2815,7 +2896,10 @@ app.post('/api/reportes/filtrar', async (req, res) => {
 
         if (tipo_reporte === 'MOVIMIENTOS') {
             let query = `
-                SELECT m.*, i.categoria, i.subcategoria, i.marca, i.referencia
+                SELECT 
+                    m.*, 
+                    COALESCE(i.ubicacion_cds, m.ubicacion_cds, 'A1') AS ubicacion_cds,
+                    i.categoria, i.subcategoria, i.marca, i.referencia
                 FROM movimientos m
                 LEFT JOIN items i ON m.codigo_item = i.codigo
                 WHERE 1=1
@@ -2948,9 +3032,11 @@ app.post('/api/reportes/filtrar', async (req, res) => {
                 const b = movByItem[m.codigo_item];
                 if (m.tipo_movimiento === 'ENTRADA' && (m.bodega_destino === bodegaFiltro || (!m.bodega_destino && bodegaFiltro === 'CDS'))) b.entradas += m.cantidad;
                 if (m.tipo_movimiento === 'DEVOLUCION' && m.bodega_destino === bodegaFiltro) b.devoluciones += m.cantidad;
+                if (m.tipo_movimiento === 'DEVOLUCION' && m.bodega_origen === bodegaFiltro) b.entregas_enviadas += m.cantidad;
                 if (m.tipo_movimiento === 'ENTRADA POR TRASLADO' && m.bodega_destino === bodegaFiltro) b.entregas_recibidas += m.cantidad;
                 if (m.tipo_movimiento === 'AJUSTE POSITIVO' && (m.bodega_destino === bodegaFiltro || (!m.bodega_destino && bodegaFiltro === 'CDS'))) b.ajustes_pos += m.cantidad;
                 if (m.tipo_movimiento === 'ENTREGA' && (m.bodega_origen === bodegaFiltro || (!m.bodega_origen && bodegaFiltro === 'CDS'))) b.entregas_enviadas += m.cantidad;
+                if (m.tipo_movimiento === 'ENTREGA' && m.bodega_destino === bodegaFiltro && bodegaFiltro !== 'CDS') b.entregas_recibidas += m.cantidad;
                 if (m.tipo_movimiento === 'DISPOSICION FINAL' && (m.bodega_origen === bodegaFiltro || (!m.bodega_origen && bodegaFiltro === 'CDS'))) b.disp_final += m.cantidad;
                 if (m.tipo_movimiento === 'SALIDA POR TRASLADO' && (m.bodega_origen === bodegaFiltro || (!m.bodega_origen && bodegaFiltro === 'CDS'))) b.entregas_enviadas += m.cantidad;
                 if (m.tipo_movimiento === 'AJUSTE NEGATIVO' && (m.bodega_origen === bodegaFiltro || (!m.bodega_origen && bodegaFiltro === 'CDS'))) b.ajustes_neg += m.cantidad;
@@ -3118,9 +3204,590 @@ app.post('/api/reportes/filtrar', async (req, res) => {
             return res.json({ success: true, count: data.length, data });
         }
 
+        if (tipo_reporte === 'ROTACION') {
+            const rotacionResult = await calcularReporteRotacion({
+                sede, tipo_inventario, categoria, ubicacion, bodega,
+                fecha_desde, fecha_hasta, codigo_item, search
+            });
+            return res.json({ 
+                success: true, 
+                count: rotacionResult.detalle.length, 
+                data: rotacionResult.detalle,
+                resumen: rotacionResult.resumen,
+                parametros: rotacionResult.parametros
+            });
+        }
+
         res.status(400).json({ success: false, error: 'Tipo de reporte no reconocido.' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Función de Motor de Cálculo de Rotación de Inventario (Principio ABC + Velocidad de Rotación)
+async function calcularReporteRotacion(filtros = {}) {
+    const {
+        sede,
+        tipo_inventario,
+        categoria,
+        ubicacion,
+        bodega,
+        fecha_desde,
+        fecha_hasta,
+        codigo_item,
+        search
+    } = filtros;
+
+    // 1. Obtener catálogo de ítems filtrado
+    let itemQuery = `SELECT * FROM items WHERE 1=1`;
+    const itemParams = [];
+
+    if (sede && sede !== 'TODAS' && sede !== 'ALL') {
+        itemQuery += ` AND (sede = ? OR sede IS NULL)`;
+        itemParams.push(sede);
+    }
+    if (tipo_inventario && tipo_inventario !== 'TODOS' && tipo_inventario !== 'ALL') {
+        itemQuery += ` AND (tipo_inventario = ? OR tipo_inventario IS NULL)`;
+        itemParams.push(tipo_inventario);
+    }
+    if (categoria && categoria !== 'TODAS' && categoria !== 'ALL') {
+        itemQuery += ` AND categoria = ?`;
+        itemParams.push(categoria);
+    }
+    if (ubicacion && ubicacion !== 'TODAS' && ubicacion !== 'ALL') {
+        itemQuery += ` AND ubicacion_cds = ?`;
+        itemParams.push(ubicacion);
+    }
+    if (codigo_item && codigo_item !== 'TODOS' && codigo_item !== 'ALL' && !isNaN(parseInt(codigo_item, 10))) {
+        itemQuery += ` AND codigo = ?`;
+        itemParams.push(parseInt(codigo_item, 10));
+    }
+    if (search && typeof search === 'string' && search.trim()) {
+        const s = `%${search.trim()}%`;
+        itemQuery += ` AND (CAST(codigo AS TEXT) LIKE ? OR nombre LIKE ? OR marca LIKE ? OR referencia LIKE ?)`;
+        itemParams.push(s, s, s, s);
+    }
+    itemQuery += ` ORDER BY codigo ASC`;
+    const items = await dbAll(itemQuery, itemParams);
+
+    // 2. Obtener movimientos relevantes
+    let movQuery = `SELECT * FROM movimientos WHERE 1=1`;
+    const movParams = [];
+
+    if (sede && sede !== 'TODAS' && sede !== 'ALL') {
+        movQuery += ` AND sede = ?`;
+        movParams.push(sede);
+    }
+    if (tipo_inventario && tipo_inventario !== 'TODOS' && tipo_inventario !== 'ALL') {
+        movQuery += ` AND tipo_inventario = ?`;
+        movParams.push(tipo_inventario);
+    }
+    if (bodega && bodega !== 'TODAS' && bodega !== 'ALL') {
+        movQuery += ` AND (bodega_origen = ? OR bodega_destino = ?)`;
+        movParams.push(bodega, bodega);
+    }
+    movQuery += ` ORDER BY fecha ASC, hora ASC, id ASC`;
+    const movs = await dbAll(movQuery, movParams);
+
+    // 3. Mapear movimientos a ítems
+    const itemMap = {};
+    items.forEach(i => {
+        itemMap[i.codigo] = {
+            codigo: i.codigo,
+            nombre: i.nombre,
+            categoria: i.categoria || 'General',
+            subcategoria: i.subcategoria || '',
+            unidad_medida: i.unidad_medida || 'Unidad',
+            ubicacion_cds: i.ubicacion_cds || 'A1',
+            sede: i.sede || sede || 'Sede Suroriental',
+            tipo_inventario: i.tipo_inventario || tipo_inventario || 'CDS',
+            stock_minimo: i.stock_minimo || 0,
+            stock_inicial: 0,
+            entradas_periodo: 0,
+            devoluciones_periodo: 0,
+            ajustes_pos_periodo: 0,
+            entregas_periodo: 0,
+            salidas_traslado_periodo: 0,
+            disp_final_periodo: 0,
+            ajustes_neg_periodo: 0,
+            salidas_totales: 0,
+            existencia_actual: 0
+        };
+    });
+
+    const dDesde = fecha_desde && fecha_desde.trim() ? fecha_desde.trim() : null;
+    const dHasta = fecha_hasta && fecha_hasta.trim() ? fecha_hasta.trim() : null;
+
+    movs.forEach(m => {
+        const it = itemMap[m.codigo_item];
+        if (!it) return;
+
+        const cant = parseFloat(m.cantidad) || 0;
+        const movFecha = m.fecha;
+
+        // Si hay fecha_desde y el movimiento es anterior, acumula en stock_inicial
+        if (dDesde && movFecha < dDesde) {
+            if (['ENTRADA', 'ENTRADA POR TRASLADO', 'DEVOLUCION', 'AJUSTE POSITIVO'].includes(m.tipo_movimiento)) {
+                it.stock_inicial += cant;
+            } else if (['ENTREGA', 'SALIDA POR TRASLADO', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO'].includes(m.tipo_movimiento)) {
+                it.stock_inicial -= cant;
+            }
+            return;
+        }
+
+        // Si hay fecha_hasta y el movimiento es posterior, se omite del período
+        if (dHasta && movFecha > dHasta) {
+            return;
+        }
+
+        // Movimientos dentro del período
+        if (['ENTRADA', 'ENTRADA POR TRASLADO'].includes(m.tipo_movimiento)) {
+            it.entradas_periodo += cant;
+        } else if (m.tipo_movimiento === 'DEVOLUCION') {
+            it.devoluciones_periodo += cant;
+        } else if (m.tipo_movimiento === 'AJUSTE POSITIVO') {
+            it.ajustes_pos_periodo += cant;
+        } else if (m.tipo_movimiento === 'ENTREGA') {
+            it.entregas_periodo += cant;
+            it.salidas_totales += cant;
+        } else if (m.tipo_movimiento === 'SALIDA POR TRASLADO') {
+            it.salidas_traslado_periodo += cant;
+            it.salidas_totales += cant;
+        } else if (m.tipo_movimiento === 'DISPOSICION FINAL') {
+            it.disp_final_periodo += cant;
+            it.salidas_totales += cant;
+        } else if (m.tipo_movimiento === 'AJUSTE NEGATIVO') {
+            it.ajustes_neg_periodo += cant;
+            it.salidas_totales += cant;
+        }
+    });
+
+    // Calcular días del período
+    let diasPeriodo = 30;
+    if (dDesde && dHasta) {
+        const tDiff = (new Date(dHasta) - new Date(dDesde)) / (1000 * 60 * 60 * 24);
+        diasPeriodo = Math.max(1, Math.round(tDiff) + 1);
+    }
+
+    let totalSalidasGlobal = 0;
+    let totalStockGlobal = 0;
+
+    const itemsList = Object.values(itemMap).map(it => {
+        it.stock_inicial = Math.max(0, it.stock_inicial);
+        const ingresos = it.entradas_periodo + it.devoluciones_periodo + it.ajustes_pos_periodo;
+        const egresos = it.salidas_totales;
+        it.existencia_actual = Math.max(0, it.stock_inicial + ingresos - egresos);
+        
+        // Inventario promedio
+        it.stock_promedio = Math.max(0, parseFloat(((it.stock_inicial + it.existencia_actual) / 2).toFixed(2)));
+        if (it.stock_promedio === 0 && it.existencia_actual > 0) it.stock_promedio = it.existencia_actual;
+
+        // Consumo Diario Promedio y Métricas de Rotación
+        it.consumo_diario = parseFloat((it.salidas_totales / diasPeriodo).toFixed(3));
+        it.indice_rotacion = (it.stock_promedio > 0) 
+            ? parseFloat((it.salidas_totales / it.stock_promedio).toFixed(2)) 
+            : (it.salidas_totales > 0 ? 99.9 : 0);
+        
+        it.dias_cobertura = (it.consumo_diario > 0) 
+            ? Math.round(it.existencia_actual / it.consumo_diario) 
+            : (it.existencia_actual > 0 ? 999 : 0);
+
+        totalSalidasGlobal += it.salidas_totales;
+        totalStockGlobal += it.existencia_actual;
+        return it;
+    });
+
+    // 4. Ordenar de mayor a menor salidas para el Principio ABC (Ley de Pareto)
+    itemsList.sort((a, b) => {
+        if (b.salidas_totales !== a.salidas_totales) {
+            return b.salidas_totales - a.salidas_totales;
+        }
+        return b.existencia_actual - a.existencia_actual;
+    });
+
+    let acumuladoSalidas = 0;
+    let countA = 0, countB = 0, countC = 0, countSinRot = 0, countSinMov = 0;
+    let salidasA = 0, salidasB = 0, salidasC = 0;
+    let stockA = 0, stockB = 0, stockC = 0, stockSinRot = 0, stockSinMov = 0;
+
+    itemsList.forEach((it, idx) => {
+        acumuladoSalidas += it.salidas_totales;
+        const pctSalidas = totalSalidasGlobal > 0 ? (it.salidas_totales / totalSalidasGlobal) * 100 : 0;
+        const pctAcum = totalSalidasGlobal > 0 ? (acumuladoSalidas / totalSalidasGlobal) * 100 : 0;
+
+        it.pct_salidas = parseFloat(pctSalidas.toFixed(2));
+        it.pct_acumulado = parseFloat(pctAcum.toFixed(2));
+
+        if (it.salidas_totales === 0) {
+            if (it.existencia_actual > 0) {
+                it.clasificacion_abc = 'SIN ROTACIÓN';
+                it.zona_abc = 'D';
+                it.badge_color = 'danger';
+                it.hex_color = '#dc3545';
+                it.interpretacion = 'Inmovilizado / Stock Muerto';
+                countSinRot++;
+                stockSinRot += it.existencia_actual;
+            } else {
+                it.clasificacion_abc = 'SIN MOVIMIENTO';
+                it.zona_abc = 'E';
+                it.badge_color = 'secondary';
+                it.hex_color = '#6c757d';
+                it.interpretacion = 'Agotado sin salidas';
+                countSinMov++;
+                stockSinMov += it.existencia_actual;
+            }
+        } else if (pctAcum <= 80 || idx === 0) {
+            it.clasificacion_abc = 'ALTA ROTACIÓN (A)';
+            it.zona_abc = 'A';
+            it.badge_color = 'success';
+            it.hex_color = '#198754';
+            it.interpretacion = 'Clave 80% Consumo';
+            countA++;
+            salidasA += it.salidas_totales;
+            stockA += it.existencia_actual;
+        } else if (pctAcum <= 95) {
+            it.clasificacion_abc = 'MEDIA ROTACIÓN (B)';
+            it.zona_abc = 'B';
+            it.badge_color = 'primary';
+            it.hex_color = '#0d6efd';
+            it.interpretacion = 'Consumo Regular 15%';
+            countB++;
+            salidasB += it.salidas_totales;
+            stockB += it.existencia_actual;
+        } else {
+            it.clasificacion_abc = 'BAJA ROTACIÓN (C)';
+            it.zona_abc = 'C';
+            it.badge_color = 'warning';
+            it.hex_color = '#fd7e14';
+            it.interpretacion = 'Consumo Esporádico 5%';
+            countC++;
+            salidasC += it.salidas_totales;
+            stockC += it.existencia_actual;
+        }
+    });
+
+    const totalItems = itemsList.length;
+
+    const resumen = {
+        total_items: totalItems,
+        total_salidas: totalSalidasGlobal,
+        total_stock: totalStockGlobal,
+        dias_periodo: diasPeriodo,
+        zonas: [
+            {
+                zona: 'Zona A',
+                nombre: 'Alta Rotación (A)',
+                descripcion: 'Concentra el 80% de las salidas y despachos',
+                cantidad_items: countA,
+                pct_items: totalItems > 0 ? parseFloat(((countA / totalItems) * 100).toFixed(1)) : 0,
+                salidas_unidades: salidasA,
+                pct_salidas: totalSalidasGlobal > 0 ? parseFloat(((salidasA / totalSalidasGlobal) * 100).toFixed(1)) : 0,
+                stock_unidades: stockA,
+                color: '#198754'
+            },
+            {
+                zona: 'Zona B',
+                nombre: 'Media Rotación (B)',
+                descripcion: 'Concentra el 15% de las salidas y despachos',
+                cantidad_items: countB,
+                pct_items: totalItems > 0 ? parseFloat(((countB / totalItems) * 100).toFixed(1)) : 0,
+                salidas_unidades: salidasB,
+                pct_salidas: totalSalidasGlobal > 0 ? parseFloat(((salidasB / totalSalidasGlobal) * 100).toFixed(1)) : 0,
+                stock_unidades: stockB,
+                color: '#0d6efd'
+            },
+            {
+                zona: 'Zona C',
+                nombre: 'Baja Rotación (C)',
+                descripcion: 'Concentra el 5% de las salidas y despachos',
+                cantidad_items: countC,
+                pct_items: totalItems > 0 ? parseFloat(((countC / totalItems) * 100).toFixed(1)) : 0,
+                salidas_unidades: salidasC,
+                pct_salidas: totalSalidasGlobal > 0 ? parseFloat(((salidasC / totalSalidasGlobal) * 100).toFixed(1)) : 0,
+                stock_unidades: stockC,
+                color: '#fd7e14'
+            },
+            {
+                zona: 'Zona D',
+                nombre: 'Sin Rotación / Inactivo',
+                descripcion: 'Stock inmovilizado con 0 salidas en el período',
+                cantidad_items: countSinRot,
+                pct_items: totalItems > 0 ? parseFloat(((countSinRot / totalItems) * 100).toFixed(1)) : 0,
+                salidas_unidades: 0,
+                pct_salidas: 0,
+                stock_unidades: stockSinRot,
+                color: '#dc3545'
+            },
+            {
+                zona: 'Zona E',
+                nombre: 'Sin Movimiento',
+                descripcion: 'Referencias sin salidas y con saldo en 0',
+                cantidad_items: countSinMov,
+                pct_items: totalItems > 0 ? parseFloat(((countSinMov / totalItems) * 100).toFixed(1)) : 0,
+                salidas_unidades: 0,
+                pct_salidas: 0,
+                stock_unidades: stockSinMov,
+                color: '#6c757d'
+            }
+        ]
+    };
+
+    return {
+        detalle: itemsList,
+        resumen,
+        parametros: {
+            sede: sede || 'TODAS',
+            tipo_inventario: tipo_inventario || 'TODOS',
+            categoria: categoria || 'TODAS',
+            ubicacion: ubicacion || 'TODAS',
+            bodega: bodega || 'TODAS',
+            fecha_desde: dDesde || 'Inicio Histórico',
+            fecha_hasta: dHasta || 'Fecha Actual',
+            dias_periodo: diasPeriodo
+        }
+    };
+}
+
+// Endpoint de descarga de Excel de Rotación con Resumen, Gráfico de Torta y Detalle
+app.post('/api/reportes/rotacion/excel', async (req, res) => {
+    try {
+        const {
+            sede,
+            tipo_inventario,
+            categoria,
+            ubicacion,
+            bodega,
+            fecha_desde,
+            fecha_hasta,
+            codigo_item,
+            search,
+            chart_image
+        } = req.body;
+
+        const { detalle, resumen, parametros } = await calcularReporteRotacion({
+            sede, tipo_inventario, categoria, ubicacion, bodega,
+            fecha_desde, fecha_hasta, codigo_item, search
+        });
+
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = 'INVENTARIO CDS';
+        workbook.lastModifiedBy = 'INVENTARIO CDS';
+        workbook.created = new Date();
+
+        // -----------------------------------------------------------------
+        // HOJA 1: RESUMEN EJECUTIVO & GRÁFICA DE TORTA
+        // -----------------------------------------------------------------
+        const ws1 = workbook.addWorksheet('Resumen de Rotación ABC', {
+            views: [{ showGridLines: true }]
+        });
+
+        // Banner de Título
+        ws1.mergeCells('B2:J2');
+        const headerCell = ws1.getCell('B2');
+        headerCell.value = 'INFORME DE ROTACIÓN DE INVENTARIO - ANÁLISIS ABC & VELOCIDAD DE SALIDAS';
+        headerCell.font = { name: 'Arial', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
+        headerCell.alignment = { vertical: 'middle', horizontal: 'center' };
+        headerCell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FF0D6EFD' }
+        };
+        ws1.getRow(2).height = 30;
+
+        // Ficha de Parámetros
+        ws1.mergeCells('B3:J3');
+        const paramCell = ws1.getCell('B3');
+        paramCell.value = `Sede: ${parametros.sede} | Inventario: ${parametros.tipo_inventario} | Rango: ${parametros.fecha_desde} a ${parametros.fecha_hasta} (${parametros.dias_periodo} días) | Categoría: ${parametros.categoria}`;
+        paramCell.font = { name: 'Arial', size: 9, italic: true, color: { argb: 'FF495057' } };
+        paramCell.alignment = { vertical: 'middle', horizontal: 'center' };
+        ws1.getRow(3).height = 20;
+
+        // Encabezados Tabla Resumen
+        const headersResumen = ['Zona ABC', 'Clasificación', 'Criterio Operativo', 'N° Ítems', '% Ítems', 'Salidas (Unid)', '% Salidas', 'Stock Actual', 'Color Ref'];
+        ws1.getRow(5).values = ['', ...headersResumen];
+        ws1.getRow(5).height = 24;
+        ws1.getRow(5).font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+        for (let c = 2; c <= 10; c++) {
+            ws1.getCell(5, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF212529' } };
+            ws1.getCell(5, c).alignment = { vertical: 'middle', horizontal: 'center' };
+        }
+
+        const colorsARGB = ['FF198754', 'FF0D6EFD', 'FFFD7E14', 'FFDC3545', 'FF6C757D'];
+
+        resumen.zonas.forEach((z, idx) => {
+            const rNum = 6 + idx;
+            ws1.getRow(rNum).values = [
+                '',
+                z.zona,
+                z.nombre,
+                z.descripcion,
+                z.cantidad_items,
+                `${z.pct_items}%`,
+                z.salidas_unidades,
+                `${z.pct_salidas}%`,
+                z.stock_unidades,
+                z.zona
+            ];
+            ws1.getRow(rNum).height = 20;
+            ws1.getCell(rNum, 2).font = { bold: true, color: { argb: colorsARGB[idx] } };
+            ws1.getCell(rNum, 3).font = { bold: true };
+            ws1.getCell(rNum, 10).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colorsARGB[idx] } };
+            ws1.getCell(rNum, 10).font = { color: { argb: 'FFFFFFFF' }, bold: true };
+            ws1.getCell(rNum, 10).alignment = { horizontal: 'center', vertical: 'middle' };
+
+            for (let c = 2; c <= 10; c++) {
+                ws1.getCell(rNum, c).border = {
+                    top: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+                    bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+                    left: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+                    right: { style: 'thin', color: { argb: 'FFE0E0E0' } }
+                };
+                if ([5, 6, 7, 8, 9].includes(c)) {
+                    ws1.getCell(rNum, c).alignment = { horizontal: 'right', vertical: 'middle' };
+                }
+            }
+        });
+
+        // Fila de Totales
+        const totalRow = 6 + resumen.zonas.length;
+        ws1.getRow(totalRow).values = [
+            '',
+            'TOTAL',
+            'Consolidado General',
+            '100% de las referencias analizadas',
+            resumen.total_items,
+            '100.0%',
+            resumen.total_salidas,
+            '100.0%',
+            resumen.total_stock,
+            '-'
+        ];
+        ws1.getRow(totalRow).height = 22;
+        ws1.getRow(totalRow).font = { bold: true, color: { argb: 'FF000000' } };
+        for (let c = 2; c <= 10; c++) {
+            ws1.getCell(totalRow, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F4F8' } };
+            ws1.getCell(totalRow, c).border = {
+                top: { style: 'medium', color: { argb: 'FF212529' } },
+                bottom: { style: 'medium', color: { argb: 'FF212529' } }
+            };
+            if ([5, 6, 7, 8, 9].includes(c)) {
+                ws1.getCell(totalRow, c).alignment = { horizontal: 'right', vertical: 'middle' };
+            }
+        }
+
+        // Anchos de columna en Hoja 1
+        ws1.columns = [
+            { width: 4 },
+            { width: 12 },
+            { width: 24 },
+            { width: 38 },
+            { width: 12 },
+            { width: 12 },
+            { width: 16 },
+            { width: 14 },
+            { width: 16 },
+            { width: 12 }
+        ];
+
+        // Incrustar Imagen de la Gráfica de Torta si fue enviada desde el cliente
+        if (chart_image && typeof chart_image === 'string' && chart_image.includes('base64,')) {
+            try {
+                const base64Data = chart_image.split('base64,')[1];
+                const imageBuffer = Buffer.from(base64Data, 'base64');
+                const imageId = workbook.addImage({
+                    buffer: imageBuffer,
+                    extension: 'png'
+                });
+                ws1.addImage(imageId, {
+                    tl: { col: 1, row: 13 },
+                    ext: { width: 560, height: 340 }
+                });
+            } catch (e) {
+                console.warn('No se pudo incrustar imagen del gráfico en Excel:', e.message);
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // HOJA 2: DETALLE DE ROTACIÓN POR CADA ÍTEM
+        // -----------------------------------------------------------------
+        const ws2 = workbook.addWorksheet('Detalle de Rotación por Ítem');
+        ws2.columns = [
+            { header: 'Código', key: 'codigo', width: 10 },
+            { header: 'Nombre del Ítem / Material', key: 'nombre', width: 36 },
+            { header: 'Categoría', key: 'categoria', width: 18 },
+            { header: 'Ubicación CDS', key: 'ubicacion_cds', width: 14 },
+            { header: 'Unidad', key: 'unidad_medida', width: 10 },
+            { header: 'Stock Inicial', key: 'stock_inicial', width: 14 },
+            { header: 'Entradas (+)', key: 'entradas_periodo', width: 13 },
+            { header: 'Salidas / Consumo (-)', key: 'salidas_totales', width: 18 },
+            { header: 'Stock Actual', key: 'existencia_actual', width: 14 },
+            { header: 'Stock Promedio', key: 'stock_promedio', width: 15 },
+            { header: 'Consumo Diario', key: 'consumo_diario', width: 15 },
+            { header: 'Índice Rotación (IR)', key: 'indice_rotacion', width: 18 },
+            { header: 'Días Cobertura', key: 'dias_cobertura', width: 15 },
+            { header: '% Salidas', key: 'pct_salidas', width: 12 },
+            { header: '% Acumulado', key: 'pct_acumulado', width: 14 },
+            { header: 'Zona ABC', key: 'zona_abc', width: 12 },
+            { header: 'Clasificación Rotación', key: 'clasificacion_abc', width: 24 }
+        ];
+
+        ws2.getRow(1).height = 26;
+        ws2.getRow(1).font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+        ws2.getRow(1).eachCell(cell => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0D6EFD' } };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        });
+
+        detalle.forEach(item => {
+            const row = ws2.addRow({
+                codigo: item.codigo,
+                nombre: item.nombre,
+                categoria: item.categoria,
+                ubicacion_cds: item.ubicacion_cds,
+                unidad_medida: item.unidad_medida,
+                stock_inicial: item.stock_inicial,
+                entradas_periodo: item.entradas_periodo + item.devoluciones_periodo + item.ajustes_pos_periodo,
+                salidas_totales: item.salidas_totales,
+                existencia_actual: item.existencia_actual,
+                stock_promedio: item.stock_promedio,
+                consumo_diario: item.consumo_diario,
+                indice_rotacion: item.indice_rotacion,
+                dias_cobertura: item.dias_cobertura,
+                pct_salidas: `${item.pct_salidas}%`,
+                pct_acumulado: `${item.pct_acumulado}%`,
+                zona_abc: item.zona_abc,
+                clasificacion_abc: item.clasificacion_abc
+            });
+
+            const colorMap = {
+                'A': 'FF198754',
+                'B': 'FF0D6EFD',
+                'C': 'FFFD7E14',
+                'D': 'FFDC3545',
+                'E': 'FF6C757D'
+            };
+
+            const zColor = colorMap[item.zona_abc] || 'FF000000';
+            row.getCell('zona_abc').font = { bold: true, color: { argb: zColor } };
+            row.getCell('zona_abc').alignment = { horizontal: 'center' };
+            row.getCell('clasificacion_abc').font = { bold: true, color: { argb: zColor } };
+
+            ['stock_inicial', 'entradas_periodo', 'salidas_totales', 'existencia_actual', 'stock_promedio', 'consumo_diario', 'indice_rotacion', 'dias_cobertura', 'pct_salidas', 'pct_acumulado'].forEach(colKey => {
+                row.getCell(colKey).alignment = { horizontal: 'right' };
+            });
+        });
+
+        const today = new Date().toISOString().split('T')[0];
+        const filename = `Reporte_Rotacion_ABC_${today}.xlsx`;
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+        await workbook.xlsx.write(res);
+        res.end();
+    } catch (err) {
+        console.error('Error generando Excel de rotación:', err);
+        res.status(500).json({ success: false, error: 'Error al generar archivo Excel: ' + err.message });
     }
 });
 

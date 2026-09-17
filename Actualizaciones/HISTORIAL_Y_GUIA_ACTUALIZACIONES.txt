@@ -7,7 +7,16 @@ para actualizar instalaciones existentes sin perder la base de datos de movimien
 
 HISTORIAL DE VERSIONES Y CAMBIOS:
 ----------------------------------------------------------------------
-[Versión 1.4.0] (Versión Actual)
+[Versión 1.4.2] (Versión Actual)
+- Seguridad en Inicio de Sesión:
+  * Eliminación del campo de contraseña prellenada por defecto en la pantalla de inicio de sesión.
+  * Se mantiene la cédula de usuario predefinida para agilidad en el acceso, requiriendo el ingreso manual seguro de la contraseña.
+  * Preservación intacta de la base de datos de inventario, usuarios y movimientos operativos.
+
+[Versión 1.4.1]
+- Visualización y trazabilidad de ubicación de ítems en movimientos.
+
+[Versión 1.4.0]
 - Módulo de Eliminación Segura de Usuarios:
   * Nuevo botón de eliminación directa (icono de papelera roja) en la tabla de Gestión de Usuarios.
   * Diálogo de confirmación interactivo antes de la eliminación definitiva.

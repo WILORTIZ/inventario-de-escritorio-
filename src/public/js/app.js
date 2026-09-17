@@ -4707,11 +4707,18 @@ async function ejecutarFiltroReporteModal() {
         reporteFiltradoActivo = {
             tipo,
             data,
+            resumen: result.resumen || null,
+            parametros: result.parametros || null,
             columns: columnDefs.columns,
             title: columnDefs.title,
             sheetName: columnDefs.sheetName,
             filename: columnDefs.filename
         };
+
+        if (tipo === 'ROTACION' && result.resumen) {
+            resumenRotacionGlobal = result.resumen;
+            datosRotacionGlobal = data;
+        }
 
         renderTablaPreviewModal(data, columnDefs.columns);
     } catch (err) {
@@ -5073,6 +5080,7 @@ function actualizarPrevisualizacionReporte() {
 // 15.1. Dashboard y Visualizador de Rotación de Inventario (ABC / Pareto)
 let chartRotacionInstancia = null;
 let datosRotacionGlobal = null;
+let resumenRotacionGlobal = null;
 
 async function abrirReporteRotacionEnPantalla(reporteObj = null) {
     const dashboard = document.getElementById('seccion-rotacion-dashboard');
@@ -5145,6 +5153,7 @@ async function abrirReporteRotacionEnPantalla(reporteObj = null) {
 
 function renderDashboardRotacion(data, resumen, params = {}) {
     datosRotacionGlobal = data;
+    resumenRotacionGlobal = resumen;
 
     // Subtítulo
     const subEl = document.getElementById('rotacion-dashboard-subtitle');
@@ -5155,7 +5164,7 @@ function renderDashboardRotacion(data, resumen, params = {}) {
         subEl.textContent = `Sede: ${sede} | Rango: ${dDesde} a ${dHasta} | Evaluados ${data.length} ítems del catálogo`;
     }
 
-    // Actualizar KPIs
+    // Actualizar KPIs con los datos reales del resumen
     const kpiTotalItems = document.getElementById('rot-kpi-total-items');
     const kpiTotalSalidas = document.getElementById('rot-kpi-total-salidas');
     const kpiZonaA = document.getElementById('rot-kpi-zona-a');
@@ -5163,13 +5172,18 @@ function renderDashboardRotacion(data, resumen, params = {}) {
     const kpiZonaC = document.getElementById('rot-kpi-zona-c');
     const kpiZonaD = document.getElementById('rot-kpi-zona-d');
 
-    const totalSalidas = data.reduce((sum, item) => sum + (Number(item.total_salidas) || 0), 0);
-    const countA = data.filter(i => (i.clasificacion_abc || '').includes('Zona A')).length;
-    const countB = data.filter(i => (i.clasificacion_abc || '').includes('Zona B')).length;
-    const countC = data.filter(i => (i.clasificacion_abc || '').includes('Zona C')).length;
-    const countD = data.filter(i => (i.clasificacion_abc || '').includes('Zona D') || (i.clasificacion_abc || '').includes('Sin Salidas')).length;
+    const totalSalidas = resumen?.total_salidas != null ? resumen.total_salidas : data.reduce((sum, item) => sum + (Number(item.total_salidas) || 0), 0);
+    const zA = resumen?.zonas?.find(z => z.zona === 'Zona A' || z.zona === 'A');
+    const zB = resumen?.zonas?.find(z => z.zona === 'Zona B' || z.zona === 'B');
+    const zC = resumen?.zonas?.find(z => z.zona === 'Zona C' || z.zona === 'C');
+    const zD = resumen?.zonas?.find(z => z.zona === 'Zona D' || z.zona === 'D');
 
-    if (kpiTotalItems) kpiTotalItems.textContent = data.length.toLocaleString('es-ES');
+    const countA = zA ? zA.cantidad_items : data.filter(i => i.zona_abc === 'A' || (i.clasificacion_abc || '').includes('(A)')).length;
+    const countB = zB ? zB.cantidad_items : data.filter(i => i.zona_abc === 'B' || (i.clasificacion_abc || '').includes('(B)')).length;
+    const countC = zC ? zC.cantidad_items : data.filter(i => i.zona_abc === 'C' || (i.clasificacion_abc || '').includes('(C)')).length;
+    const countD = zD ? zD.cantidad_items : data.filter(i => i.zona_abc === 'D' || (i.clasificacion_abc || '').includes('INACTIVO') || (i.clasificacion_abc || '').includes('Sin Rotación')).length;
+
+    if (kpiTotalItems) kpiTotalItems.textContent = (resumen?.total_items || data.length).toLocaleString('es-ES');
     if (kpiTotalSalidas) kpiTotalSalidas.textContent = totalSalidas.toLocaleString('es-ES');
     if (kpiZonaA) kpiZonaA.textContent = `${countA} ítems`;
     if (kpiZonaB) kpiZonaB.textContent = `${countB} ítems`;
@@ -5280,11 +5294,12 @@ function renderTablaRotacionDetalle(items) {
 
     tbody.innerHTML = items.map(item => {
         let badgeClass = 'bg-secondary';
-        let abc = item.clasificacion_abc || 'Zona D';
-        if (abc.includes('Zona A')) badgeClass = 'bg-success';
-        else if (abc.includes('Zona B')) badgeClass = 'bg-primary';
-        else if (abc.includes('Zona C')) badgeClass = 'bg-warning text-dark';
-        else if (abc.includes('Zona D')) badgeClass = 'bg-danger';
+        let abc = item.clasificacion_abc || 'SIN ROTACIÓN';
+        if (abc.includes('Zona A') || abc.includes('(A)') || item.zona_abc === 'A') badgeClass = 'bg-success';
+        else if (abc.includes('Zona B') || abc.includes('(B)') || item.zona_abc === 'B') badgeClass = 'bg-primary';
+        else if (abc.includes('Zona C') || abc.includes('(C)') || item.zona_abc === 'C') badgeClass = 'bg-warning text-dark';
+        else if (abc.includes('Zona D') || abc.includes('INACTIVO') || abc.includes('Sin Rotación') || item.zona_abc === 'D') badgeClass = 'bg-danger';
+        else if (abc.includes('Zona E') || abc.includes('SIN MOVIMIENTO') || item.zona_abc === 'E') badgeClass = 'bg-secondary';
 
         const diasCob = item.dias_cobertura >= 9999 ? '∞ Inactivo' : `${Math.round(item.dias_cobertura || 0)} d`;
 
@@ -5298,13 +5313,13 @@ function renderTablaRotacionDetalle(items) {
                 <td><span class="badge bg-light text-secondary border">${item.categoria || '-'}</span></td>
                 <td><span class="badge bg-dark-subtle text-dark">${item.ubicacion_cds || '-'}</span></td>
                 <td class="text-end font-monospace">${(item.stock_inicial || 0).toLocaleString('es-ES')}</td>
-                <td class="text-end font-monospace fw-bold text-primary">${(item.total_salidas || 0).toLocaleString('es-ES')}</td>
-                <td class="text-end font-monospace fw-bold">${(item.stock_actual || 0).toLocaleString('es-ES')}</td>
+                <td class="text-end font-monospace fw-bold text-primary">${(item.salidas_totales || item.total_salidas || 0).toLocaleString('es-ES')}</td>
+                <td class="text-end font-monospace fw-bold">${(item.existencia_actual || item.stock_actual || 0).toLocaleString('es-ES')}</td>
                 <td class="text-end font-monospace">${Number(item.consumo_diario || 0).toFixed(2)}</td>
                 <td class="text-end font-monospace fw-semibold">${Number(item.indice_rotacion || 0).toFixed(2)}</td>
                 <td class="text-end font-monospace text-muted">${diasCob}</td>
-                <td class="text-end font-monospace">${Number(item.porcentaje_participacion || 0).toFixed(2)}%</td>
-                <td class="text-end font-monospace text-muted">${Number(item.porcentaje_acumulado || 0).toFixed(2)}%</td>
+                <td class="text-end font-monospace">${Number(item.porcentaje_participacion || item.pct_salidas || 0).toFixed(2)}%</td>
+                <td class="text-end font-monospace text-muted">${Number(item.porcentaje_acumulado || item.pct_acumulado || 0).toFixed(2)}%</td>
                 <td class="text-center"><span class="badge ${badgeClass} px-2 py-1">${abc}</span></td>
             </tr>
         `;
@@ -5340,12 +5355,15 @@ function cerrarDashboardRotacion() {
 function generarImagenTortaBase64(resumen = null, data = null) {
     try {
         const offCanvas = document.createElement('canvas');
-        const width = 760;
-        const height = 420;
+        const width = 800;
+        const height = 460;
         offCanvas.width = width;
         offCanvas.height = height;
         const ctx = offCanvas.getContext('2d');
         if (!ctx) return null;
+
+        const effectiveResumen = resumen || resumenRotacionGlobal || reporteFiltradoActivo?.resumen;
+        const effectiveData = data || datosRotacionGlobal || reporteFiltradoActivo?.data || [];
 
         // 1. Fondo sólido blanco
         ctx.fillStyle = '#FFFFFF';
@@ -5353,52 +5371,54 @@ function generarImagenTortaBase64(resumen = null, data = null) {
 
         // 2. Encabezado / Banner superior
         ctx.fillStyle = '#F8F9FA';
-        ctx.fillRect(15, 15, width - 30, 60);
+        ctx.fillRect(15, 12, width - 30, 52);
         ctx.strokeStyle = '#E9ECEF';
         ctx.lineWidth = 1;
-        ctx.strokeRect(15, 15, width - 30, 60);
+        ctx.strokeRect(15, 12, width - 30, 52);
 
         ctx.fillStyle = '#212529';
         ctx.font = 'bold 15px Arial, Helvetica, sans-serif';
-        ctx.fillText('DISTRIBUCIÓN DE ÍTEMS POR ZONA ABC (ROTACIÓN)', 30, 42);
+        ctx.fillText('DISTRIBUCIÓN DE ÍTEMS POR ROTACIÓN ABC (VOLUMEN DE SALIDAS)', 28, 34);
 
         ctx.fillStyle = '#6C757D';
         ctx.font = '11px Arial, Helvetica, sans-serif';
-        ctx.fillText('Clasificación estratégica según volumen acumulado de salidas (Pareto 80/15/5%)', 30, 60);
+        ctx.fillText('Clasificación estratégica basada en salidas acumuladas del período (Pareto 80/15/5%)', 28, 52);
 
-        // 3. Preparar zonas y datos
+        // 3. Preparar zonas y datos con precisión
         let zones = [];
-        if (resumen && Array.isArray(resumen.zonas) && resumen.zonas.length > 0) {
-            zones = resumen.zonas.map(z => ({
+        if (effectiveResumen && Array.isArray(effectiveResumen.zonas) && effectiveResumen.zonas.length > 0) {
+            zones = effectiveResumen.zonas.map(z => ({
                 zona: z.zona,
                 nombre: z.nombre,
                 count: Number(z.cantidad_items || 0),
                 salidas: Number(z.salidas_unidades || 0),
-                pctItems: Number(z.pct_items || 0),
-                pctSalidas: Number(z.pct_salidas || 0),
+                pctItems: z.pct_items != null ? z.pct_items : 0,
+                pctSalidas: z.pct_salidas != null ? z.pct_salidas : 0,
                 color: z.color || '#6c757d'
             }));
         } else {
-            const list = data || datosRotacionGlobal || [];
-            const countA = list.filter(i => (i.clasificacion_abc || '').includes('Zona A')).length;
-            const countB = list.filter(i => (i.clasificacion_abc || '').includes('Zona B')).length;
-            const countC = list.filter(i => (i.clasificacion_abc || '').includes('Zona C')).length;
-            const countD = list.filter(i => (i.clasificacion_abc || '').includes('Zona D') || (i.clasificacion_abc || '').includes('Sin Salidas')).length;
-            const total = (countA + countB + countC + countD) || 1;
+            const list = effectiveData;
+            const countA = list.filter(i => i.zona_abc === 'A' || (i.clasificacion_abc || '').includes('(A)') || (i.clasificacion_abc || '').includes('Zona A')).length;
+            const countB = list.filter(i => i.zona_abc === 'B' || (i.clasificacion_abc || '').includes('(B)') || (i.clasificacion_abc || '').includes('Zona B')).length;
+            const countC = list.filter(i => i.zona_abc === 'C' || (i.clasificacion_abc || '').includes('(C)') || (i.clasificacion_abc || '').includes('Zona C')).length;
+            const countD = list.filter(i => i.zona_abc === 'D' || (i.clasificacion_abc || '').includes('INACTIVO') || (i.clasificacion_abc || '').includes('Sin Rotación') || (i.clasificacion_abc || '').includes('(D)')).length;
+            const countE = list.filter(i => i.zona_abc === 'E' || (i.clasificacion_abc || '').includes('SIN MOVIMIENTO') || (i.clasificacion_abc || '').includes('(E)')).length;
+            const total = (countA + countB + countC + countD + countE) || 1;
 
             zones = [
-                { zona: 'Zona A', nombre: 'Alta Rotación (80% Salidas)', count: countA, pctItems: ((countA / total) * 100).toFixed(1), color: '#198754' },
-                { zona: 'Zona B', nombre: 'Media Rotación (15% Salidas)', count: countB, pctItems: ((countB / total) * 100).toFixed(1), color: '#0d6efd' },
-                { zona: 'Zona C', nombre: 'Baja Rotación (5% Salidas)', count: countC, pctItems: ((countC / total) * 100).toFixed(1), color: '#fd7e14' },
-                { zona: 'Zona D', nombre: 'Sin Salidas / Inactivos', count: countD, pctItems: ((countD / total) * 100).toFixed(1), color: '#dc3545' }
+                { zona: 'Zona A', nombre: 'Alta Rotación (A)', count: countA, pctItems: ((countA / total) * 100).toFixed(1), color: '#198754' },
+                { zona: 'Zona B', nombre: 'Media Rotación (B)', count: countB, pctItems: ((countB / total) * 100).toFixed(1), color: '#0d6efd' },
+                { zona: 'Zona C', nombre: 'Baja Rotación (C)', count: countC, pctItems: ((countC / total) * 100).toFixed(1), color: '#fd7e14' },
+                { zona: 'Zona D', nombre: 'Sin Rotación / Inactivo', count: countD, pctItems: ((countD / total) * 100).toFixed(1), color: '#dc3545' },
+                { zona: 'Zona E', nombre: 'Sin Movimiento (0 Stock)', count: countE, pctItems: ((countE / total) * 100).toFixed(1), color: '#6c757d' }
             ];
         }
 
         const totalItems = zones.reduce((sum, z) => sum + z.count, 0);
 
         // 4. Dibujar Gráfico Donut (Torta)
-        const cx = 190;
-        const cy = 245;
+        const cx = 175;
+        const cy = 255;
         const outerR = 125;
         const innerR = 70;
 
@@ -5443,42 +5463,55 @@ function generarImagenTortaBase64(resumen = null, data = null) {
 
         ctx.fillStyle = '#6C757D';
         ctx.font = 'bold 10px Arial, Helvetica, sans-serif';
-        ctx.fillText('ÍTEMS / REF', cx, cy + 18);
+        ctx.fillText('ÍTEMS TOTALES', cx, cy + 18);
 
         // 5. Leyenda y Tarjetas a la derecha
         ctx.textAlign = 'left';
-        const startX = 360;
-        let startY = 105;
-        const cardHeight = 65;
+        const startX = 350;
+        let startY = 75;
+        const cardHeight = 68;
+        const cardWidth = 430;
 
         zones.forEach((z) => {
+            // Fondo suave de cada zona
             ctx.fillStyle = '#F8F9FA';
-            ctx.fillRect(startX, startY, 370, 56);
+            ctx.fillRect(startX, startY, cardWidth, 58);
             ctx.strokeStyle = '#E9ECEF';
             ctx.lineWidth = 1;
-            ctx.strokeRect(startX, startY, 370, 56);
+            ctx.strokeRect(startX, startY, cardWidth, 58);
 
+            // Círculo de color con letra de la zona
             ctx.fillStyle = z.color;
             ctx.beginPath();
-            ctx.arc(startX + 18, startY + 18, 9, 0, Math.PI * 2);
+            ctx.arc(startX + 22, startY + 29, 14, 0, Math.PI * 2);
             ctx.fill();
 
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 11px Arial, Helvetica, sans-serif';
+            ctx.textAlign = 'center';
+            const letter = (z.zona || '').replace('Zona ', '').trim() || 'A';
+            ctx.fillText(letter, startX + 22, startY + 33);
+
+            // Título de la zona
+            ctx.textAlign = 'left';
             ctx.fillStyle = '#212529';
             ctx.font = 'bold 12px Arial, Helvetica, sans-serif';
-            ctx.fillText(`${z.zona} - ${z.nombre}`, startX + 35, startY + 22);
+            ctx.fillText(`${z.zona} - ${z.nombre}`, startX + 44, startY + 22);
 
+            // Detalle numérico
             ctx.fillStyle = '#495057';
             ctx.font = '11px Arial, Helvetica, sans-serif';
-            const salidasText = z.salidas != null ? ` | Salidas: ${Number(z.salidas).toLocaleString('es-ES')} u.` : '';
-            ctx.fillText(`Ítems: ${z.count.toLocaleString('es-ES')} (${z.pctItems}%)${salidasText}`, startX + 35, startY + 42);
+            const salidasText = z.salidas != null ? ` | Salidas: ${Number(z.salidas).toLocaleString('es-ES')} u. (${z.pctSalidas}%)` : '';
+            ctx.fillText(`Ítems: ${z.count.toLocaleString('es-ES')} (${z.pctItems}%)${salidasText}`, startX + 44, startY + 44);
 
             startY += cardHeight;
         });
 
         // 6. Pie de gráfica
+        ctx.textAlign = 'left';
         ctx.fillStyle = '#ADB5BD';
         ctx.font = 'italic 10px Arial, Helvetica, sans-serif';
-        ctx.fillText('Generado automáticamente por el Sistema INVENTARIO CDS', 30, height - 15);
+        ctx.fillText('Generado automáticamente por el Sistema INVENTARIO CDS', 28, height - 12);
 
         return offCanvas.toDataURL('image/png');
     } catch (err) {
@@ -5495,10 +5528,10 @@ async function descargarExcelRotacionCompleto(customReporte = null) {
     try {
         showToast('Generando Libro Excel de Rotación con Gráfica de Torta...', 'info');
 
-        // Generación garantizada de imagen base64 de la torta
-        const chartImageBase64 = generarImagenTortaBase64(customReporte?.resumen, customReporte?.data);
+        let resumen = customReporte?.resumen || resumenRotacionGlobal;
+        let data = customReporte?.data || datosRotacionGlobal;
 
-        const payload = {
+        const payloadParams = {
             tipo_reporte: 'ROTACION',
             fecha_desde: document.getElementById('modal-filtro-fecha-desde')?.value || document.getElementById('rep-quick-fecha-desde')?.value || '',
             fecha_hasta: document.getElementById('modal-filtro-fecha-hasta')?.value || document.getElementById('rep-quick-fecha-hasta')?.value || '',
@@ -5507,14 +5540,43 @@ async function descargarExcelRotacionCompleto(customReporte = null) {
             bodega: document.getElementById('modal-filtro-bodega')?.value || 'TODAS',
             sede: document.getElementById('modal-filtro-sede')?.value || appState.currentSede,
             tipo_inventario: document.getElementById('modal-filtro-tipo-inv')?.value || appState.currentInventario,
-            search: document.getElementById('modal-filtro-search')?.value || '',
+            search: document.getElementById('modal-filtro-search')?.value || ''
+        };
+
+        // Si no tenemos el resumen exacto en memoria, consultamos los datos al backend primero
+        if (!resumen) {
+            try {
+                const queryRes = await fetch(`${API_BASE}/reportes/filtrar`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payloadParams)
+                });
+                if (queryRes.ok) {
+                    const jsonRes = await queryRes.json();
+                    if (jsonRes && jsonRes.resumen) {
+                        resumen = jsonRes.resumen;
+                        data = jsonRes.data;
+                        resumenRotacionGlobal = resumen;
+                        datosRotacionGlobal = data;
+                    }
+                }
+            } catch (e) {
+                console.warn('No se pudo pre-consultar resumen:', e);
+            }
+        }
+
+        // Generación garantizada de imagen base64 de la torta con datos precisos
+        const chartImageBase64 = generarImagenTortaBase64(resumen, data);
+
+        const fullPayload = {
+            ...payloadParams,
             chart_image: chartImageBase64
         };
 
         const res = await fetch(`${API_BASE}/reportes/rotacion/excel`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(fullPayload)
         });
 
         if (!res.ok) {

@@ -3,7 +3,10 @@ const path = require('path');
 const XLSX = require('xlsx');
 
 const DB_PATH = path.join(__dirname, '..', 'inventario.db');
-const EXCEL_PATH = path.join(__dirname, '..', 'cargue.xlsx');
+const fs = require('fs');
+const EXCEL_PATH = fs.existsSync(path.join(__dirname, '..', 'Programa_Completo', 'cargue.xlsx'))
+    ? path.join(__dirname, '..', 'Programa_Completo', 'cargue.xlsx')
+    : path.join(__dirname, 'cargue.xlsx');
 
 const db = new sqlite3.Database(DB_PATH);
 

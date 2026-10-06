@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Definitions_KardexReportes"
+                  targetNamespace="http://bpmn.io/schema/bpmn"
+                  exporter="Antigravity BPMN Modeler"
+                  exporterVersion="1.0.0">
+  <bpmn:collaboration id="Collaboration_KardexReportes">
+    <bpmn:participant id="Participant_ProcesoKardexReportes" name="Proceso de Auditoría de Kardex y Análisis de Rotación ABC" processRef="Process_KardexReportes" />
+  </bpmn:collaboration>
+
+  <bpmn:process id="Process_KardexReportes" name="Auditoría de Kardex y Reportes Gerenciales" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_KardexReportes">
+      <bpmn:lane id="Lane_Usuario_Rep" name="Auditor / Gerencia / Supervisor">
+        <bpmn:flowNodeRef>StartEvent_SolicitudAuditoria</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_ConfigurarFiltrosReporte</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_TipoConsulta</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_AnalizarKardexIndividual</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_VisualizarGraficaPareto</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_DescargarExcelPDF</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_ReporteGenerado</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Motor_Rep" name="Motor de Negocio y Cálculo (Node.js)">
+        <bpmn:flowNodeRef>Activity_ConsultarTrazabilidadKardex</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_CalcularAlgoritmoParetoABC</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_RenderizarCanvasDonutBase64</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_ConstruirLibroExcelJS</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_DB_Rep" name="Base de Datos SQLite">
+        <bpmn:flowNodeRef>Activity_QueryMovimientosIndexados</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <!-- Flujo Usuario -->
+    <bpmn:startEvent id="StartEvent_SolicitudAuditoria" name="Requerimiento de Auditoría o Informe">
+      <bpmn:outgoing>Flow_R1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:userTask id="Activity_ConfigurarFiltrosReporte" name="Seleccionar Rango de Fechas, Sede, Bodega o Categoría">
+      <bpmn:incoming>Flow_R1</bpmn:incoming>
+      <bpmn:outgoing>Flow_R2</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:exclusiveGateway id="Gateway_TipoConsulta" name="¿Tipo de Informe Requerido?">
+      <bpmn:incoming>Flow_R2</bpmn:incoming>
+      <bpmn:outgoing>Flow_R_Kardex</bpmn:outgoing>
+      <bpmn:outgoing>Flow_R_Pareto</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- Rama Kardex -->
+    <bpmn:serviceTask id="Activity_ConsultarTrazabilidadKardex" name="Calcular Saldo Inicial, Entradas, Salidas y Saldo Final">
+      <bpmn:incoming>Flow_R_Kardex</bpmn:incoming>
+      <bpmn:outgoing>Flow_R3</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="Activity_AnalizarKardexIndividual" name="Auditoría en Pantalla de Movimientos del Ítem">
+      <bpmn:incoming>Flow_R3</bpmn:incoming>
+      <bpmn:outgoing>Flow_R4</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Rama Pareto -->
+    <bpmn:serviceTask id="Activity_QueryMovimientosIndexados" name="Consultar Salidas Totales por Ítem en SQLite">
+      <bpmn:incoming>Flow_R_Pareto</bpmn:incoming>
+      <bpmn:outgoing>Flow_R5</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Activity_CalcularAlgoritmoParetoABC" name="Calcular % Participación, % Acumulado y Asignar Zonas A-E">
+      <bpmn:incoming>Flow_R5</bpmn:incoming>
+      <bpmn:outgoing>Flow_R6</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Activity_RenderizarCanvasDonutBase64" name="Generar Gráfica Donut 800x460 en Canvas 2D Base64">
+      <bpmn:incoming>Flow_R6</bpmn:incoming>
+      <bpmn:outgoing>Flow_R7</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="Activity_VisualizarGraficaPareto" name="Explorar Dashboard de Rotación y Semáforos en Pantalla">
+      <bpmn:incoming>Flow_R7</bpmn:incoming>
+      <bpmn:outgoing>Flow_R8</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Exportación -->
+    <bpmn:serviceTask id="Activity_ConstruirLibroExcelJS" name="Incrustar Gráfico en Celda B14 y Formatear Hojas ExcelJS">
+      <bpmn:incoming>Flow_R4</bpmn:incoming>
+      <bpmn:incoming>Flow_R8</bpmn:incoming>
+      <bpmn:outgoing>Flow_R9</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="Activity_DescargarExcelPDF" name="Descargar Archivo Oficial (.xlsx) o Imprimir PDF">
+      <bpmn:incoming>Flow_R9</bpmn:incoming>
+      <bpmn:outgoing>Flow_R10</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="EndEvent_ReporteGenerado" name="Informe Entregado a Gerencia / Auditoría">
+      <bpmn:incoming>Flow_R10</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Conexiones -->
+    <bpmn:sequenceFlow id="Flow_R1" sourceRef="StartEvent_SolicitudAuditoria" targetRef="Activity_ConfigurarFiltrosReporte" />
+    <bpmn:sequenceFlow id="Flow_R2" sourceRef="Activity_ConfigurarFiltrosReporte" targetRef="Gateway_TipoConsulta" />
+    <bpmn:sequenceFlow id="Flow_R_Kardex" name="Kardex por Ítem" sourceRef="Gateway_TipoConsulta" targetRef="Activity_ConsultarTrazabilidadKardex" />
+    <bpmn:sequenceFlow id="Flow_R_Pareto" name="Rotación ABC / Pareto" sourceRef="Gateway_TipoConsulta" targetRef="Activity_QueryMovimientosIndexados" />
+    <bpmn:sequenceFlow id="Flow_R3" sourceRef="Activity_ConsultarTrazabilidadKardex" targetRef="Activity_AnalizarKardexIndividual" />
+    <bpmn:sequenceFlow id="Flow_R4" sourceRef="Activity_AnalizarKardexIndividual" targetRef="Activity_ConstruirLibroExcelJS" />
+    <bpmn:sequenceFlow id="Flow_R5" sourceRef="Activity_QueryMovimientosIndexados" targetRef="Activity_CalcularAlgoritmoParetoABC" />
+    <bpmn:sequenceFlow id="Flow_R6" sourceRef="Activity_CalcularAlgoritmoParetoABC" targetRef="Activity_RenderizarCanvasDonutBase64" />
+    <bpmn:sequenceFlow id="Flow_R7" sourceRef="Activity_RenderizarCanvasDonutBase64" targetRef="Activity_VisualizarGraficaPareto" />
+    <bpmn:sequenceFlow id="Flow_R8" sourceRef="Activity_VisualizarGraficaPareto" targetRef="Activity_ConstruirLibroExcelJS" />
+    <bpmn:sequenceFlow id="Flow_R9" sourceRef="Activity_ConstruirLibroExcelJS" targetRef="Activity_DescargarExcelPDF" />
+    <bpmn:sequenceFlow id="Flow_R10" sourceRef="Activity_DescargarExcelPDF" targetRef="EndEvent_ReporteGenerado" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_KardexReportes">
+    <bpmndi:BPMNPlane id="BPMNPlane_KardexReportes" bpmnElement="Collaboration_KardexReportes">
+      <bpmndi:BPMNShape id="Participant_ProcesoKardexReportes_di" bpmnElement="Participant_ProcesoKardexReportes" isHorizontal="true">
+        <dc:Bounds x="160" y="80" width="1500" height="520" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Usuario_Rep_di" bpmnElement="Lane_Usuario_Rep" isHorizontal="true">
+        <dc:Bounds x="190" y="80" width="1470" height="170" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Motor_Rep_di" bpmnElement="Lane_Motor_Rep" isHorizontal="true">
+        <dc:Bounds x="190" y="250" width="1470" height="190" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_DB_Rep_di" bpmnElement="Lane_DB_Rep" isHorizontal="true">
+        <dc:Bounds x="190" y="440" width="1470" height="160" />
+      </bpmndi:BPMNShape>
+
+      <!-- Elements -->
+      <bpmndi:BPMNShape id="StartEvent_SolicitudAuditoria_di" bpmnElement="StartEvent_SolicitudAuditoria">
+        <dc:Bounds x="242" y="137" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="220" y="180" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ConfigurarFiltrosReporte_di" bpmnElement="Activity_ConfigurarFiltrosReporte">
+        <dc:Bounds x="330" y="115" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_TipoConsulta_di" bpmnElement="Gateway_TipoConsulta" isMarkerVisible="true">
+        <dc:Bounds x="505" y="130" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="488" y="95" width="84" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ConsultarTrazabilidadKardex_di" bpmnElement="Activity_ConsultarTrazabilidadKardex">
+        <dc:Bounds x="610" y="270" width="130" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_AnalizarKardexIndividual_di" bpmnElement="Activity_AnalizarKardexIndividual">
+        <dc:Bounds x="610" y="115" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_QueryMovimientosIndexados_di" bpmnElement="Activity_QueryMovimientosIndexados">
+        <dc:Bounds x="500" y="475" width="130" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_CalcularAlgoritmoParetoABC_di" bpmnElement="Activity_CalcularAlgoritmoParetoABC">
+        <dc:Bounds x="680" y="350" width="130" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_RenderizarCanvasDonutBase64_di" bpmnElement="Activity_RenderizarCanvasDonutBase64">
+        <dc:Bounds x="850" y="350" width="130" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_VisualizarGraficaPareto_di" bpmnElement="Activity_VisualizarGraficaPareto">
+        <dc:Bounds x="850" y="115" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ConstruirLibroExcelJS_di" bpmnElement="Activity_ConstruirLibroExcelJS">
+        <dc:Bounds x="1050" y="280" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_DescargarExcelPDF_di" bpmnElement="Activity_DescargarExcelPDF">
+        <dc:Bounds x="1240" y="115" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_ReporteGenerado_di" bpmnElement="EndEvent_ReporteGenerado">
+        <dc:Bounds x="1442" y="137" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1420" y="180" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Edges -->
+      <bpmndi:BPMNEdge id="Flow_R1_di" bpmnElement="Flow_R1"><di:waypoint x="278" y="155" /><di:waypoint x="330" y="155" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_R2_di" bpmnElement="Flow_R2"><di:waypoint x="460" y="155" /><di:waypoint x="505" y="155" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_R_Kardex_di" bpmnElement="Flow_R_Kardex"><di:waypoint x="530" y="180" /><di:waypoint x="530" y="305" /><di:waypoint x="610" y="305" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_R_Pareto_di" bpmnElement="Flow_R_Pareto"><di:waypoint x="530" y="180" /><di:waypoint x="530" y="475" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_R3_di" bpmnElement="Flow_R3"><di:waypoint x="675" y="270" /><di:waypoint x="675" y="195" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_R4_di" bpmnElement="Flow_R4"><di:waypoint x="740" y="155" /><di:waypoint x="1115" y="155" /><di:waypoint x="1115" y="280" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_R5_di" bpmnElement="Flow_R5"><di:waypoint x="630" y="510" /><di:waypoint x="655" y="510" /><di:waypoint x="655" y="385" /><di:waypoint x="680" y="385" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_R6_di" bpmnElement="Flow_R6"><di:waypoint x="810" y="385" /><di:waypoint x="850" y="385" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_R7_di" bpmnElement="Flow_R7"><di:waypoint x="915" y="350" /><di:waypoint x="915" y="195" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_R8_di" bpmnElement="Flow_R8"><di:waypoint x="980" y="155" /><di:waypoint x="1115" y="155" /><di:waypoint x="1115" y="280" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_R9_di" bpmnElement="Flow_R9"><di:waypoint x="1180" y="320" /><di:waypoint x="1210" y="320" /><di:waypoint x="1210" y="155" /><di:waypoint x="1240" y="155" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_R10_di" bpmnElement="Flow_R10"><di:waypoint x="1370" y="155" /><di:waypoint x="1442" y="155" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Definitions_Ajuste"
+                  targetNamespace="http://bpmn.io/schema/bpmn"
+                  exporter="Antigravity BPMN Modeler"
+                  exporterVersion="1.0.0">
+  <bpmn:collaboration id="Collaboration_Ajuste">
+    <bpmn:participant id="Participant_ProcesoAjuste" name="Proceso de Ajuste y Cuadre Físico de Inventario (Inventario CDS)" processRef="Process_Ajuste" />
+  </bpmn:collaboration>
+
+  <bpmn:process id="Process_Ajuste" name="Ajuste de Inventario por Conteo Físico" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_Ajuste">
+      <bpmn:lane id="Lane_Auditor_Ajuste" name="Auditor / Auxiliar de Inventario">
+        <bpmn:flowNodeRef>StartEvent_TomaInventarioFisico</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_ConteoFisicoEstanterias</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_CompararConteoVsSistema</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_ExisteDiferencia</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_InventarioCuadrado</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Admin_Ajuste" name="Administrador / Supervisor">
+        <bpmn:flowNodeRef>Activity_InvestigarCausaDiscrepancia</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_TipoAjuste</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_AprobarAjustePositivo</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_AprobarAjusteNegativo</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Sistema_Ajuste" name="Sistema de Inventario CDS">
+        <bpmn:flowNodeRef>Activity_RegistrarMovimientoAjuste</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_RegularizarSaldoKardex</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_AjusteCompletado</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <!-- Flujo Auditor -->
+    <bpmn:startEvent id="StartEvent_TomaInventarioFisico" name="Programación de Conteo Cíclico / Auditoría">
+      <bpmn:outgoing>Flow_A1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:userTask id="Activity_ConteoFisicoEstanterias" name="Toma Física de Conteo por Referencia y Ubicación">
+      <bpmn:incoming>Flow_A1</bpmn:incoming>
+      <bpmn:outgoing>Flow_A2</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:serviceTask id="Activity_CompararConteoVsSistema" name="Cotejar Conteo Físico vs Saldo Teórico en Sistema">
+      <bpmn:incoming>Flow_A2</bpmn:incoming>
+      <bpmn:outgoing>Flow_A3</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="Gateway_ExisteDiferencia" name="¿Existe Descuadre / Diferencia?">
+      <bpmn:incoming>Flow_A3</bpmn:incoming>
+      <bpmn:outgoing>Flow_DifNo</bpmn:outgoing>
+      <bpmn:outgoing>Flow_DifSi</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:endEvent id="EndEvent_InventarioCuadrado" name="Inventario 100% Cuadrado (Sin Novedades)">
+      <bpmn:incoming>Flow_DifNo</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Flujo Administrador -->
+    <bpmn:userTask id="Activity_InvestigarCausaDiscrepancia" name="Análisis de Causa Raíz (Error de Conteo / Merma / Digitado)">
+      <bpmn:incoming>Flow_DifSi</bpmn:incoming>
+      <bpmn:outgoing>Flow_A4</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:exclusiveGateway id="Gateway_TipoAjuste" name="¿Tipo de Ajuste Requerido?">
+      <bpmn:incoming>Flow_A4</bpmn:incoming>
+      <bpmn:outgoing>Flow_Sobrante</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Faltante</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:userTask id="Activity_AprobarAjustePositivo" name="Aprobar Ajuste Positivo (+) por Sobrante Justificado">
+      <bpmn:incoming>Flow_Sobrante</bpmn:incoming>
+      <bpmn:outgoing>Flow_A5</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:userTask id="Activity_AprobarAjusteNegativo" name="Aprobar Ajuste Negativo (-) por Faltante / Descuadre">
+      <bpmn:incoming>Flow_Faltante</bpmn:incoming>
+      <bpmn:outgoing>Flow_A6</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Flujo Sistema CDS -->
+    <bpmn:serviceTask id="Activity_RegistrarMovimientoAjuste" name="Registrar Movimiento 'AJUSTE' (+/-) con Observación">
+      <bpmn:incoming>Flow_A5</bpmn:incoming>
+      <bpmn:incoming>Flow_A6</bpmn:incoming>
+      <bpmn:outgoing>Flow_A7</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Activity_RegularizarSaldoKardex" name="Regularizar Saldo Físico y Asentar Balance en Kardex">
+      <bpmn:incoming>Flow_A7</bpmn:incoming>
+      <bpmn:outgoing>Flow_A8</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_AjusteCompletado" name="Inventario Cuadrado y Auditado">
+      <bpmn:incoming>Flow_A8</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Conexiones -->
+    <bpmn:sequenceFlow id="Flow_A1" sourceRef="StartEvent_TomaInventarioFisico" targetRef="Activity_ConteoFisicoEstanterias" />
+    <bpmn:sequenceFlow id="Flow_A2" sourceRef="Activity_ConteoFisicoEstanterias" targetRef="Activity_CompararConteoVsSistema" />
+    <bpmn:sequenceFlow id="Flow_A3" sourceRef="Activity_CompararConteoVsSistema" targetRef="Gateway_ExisteDiferencia" />
+    <bpmn:sequenceFlow id="Flow_DifNo" name="No (Coincide)" sourceRef="Gateway_ExisteDiferencia" targetRef="EndEvent_InventarioCuadrado" />
+    <bpmn:sequenceFlow id="Flow_DifSi" name="Sí (Diferencia)" sourceRef="Gateway_ExisteDiferencia" targetRef="Activity_InvestigarCausaDiscrepancia" />
+    <bpmn:sequenceFlow id="Flow_A4" sourceRef="Activity_InvestigarCausaDiscrepancia" targetRef="Gateway_TipoAjuste" />
+    <bpmn:sequenceFlow id="Flow_Sobrante" name="Sobrante (+)" sourceRef="Gateway_TipoAjuste" targetRef="Activity_AprobarAjustePositivo" />
+    <bpmn:sequenceFlow id="Flow_Faltante" name="Faltante (-)" sourceRef="Gateway_TipoAjuste" targetRef="Activity_AprobarAjusteNegativo" />
+    <bpmn:sequenceFlow id="Flow_A5" sourceRef="Activity_AprobarAjustePositivo" targetRef="Activity_RegistrarMovimientoAjuste" />
+    <bpmn:sequenceFlow id="Flow_A6" sourceRef="Activity_AprobarAjusteNegativo" targetRef="Activity_RegistrarMovimientoAjuste" />
+    <bpmn:sequenceFlow id="Flow_A7" sourceRef="Activity_RegistrarMovimientoAjuste" targetRef="Activity_RegularizarSaldoKardex" />
+    <bpmn:sequenceFlow id="Flow_A8" sourceRef="Activity_RegularizarSaldoKardex" targetRef="EndEvent_AjusteCompletado" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Ajuste">
+    <bpmndi:BPMNPlane id="BPMNPlane_Ajuste" bpmnElement="Collaboration_Ajuste">
+      <bpmndi:BPMNShape id="Participant_ProcesoAjuste_di" bpmnElement="Participant_ProcesoAjuste" isHorizontal="true">
+        <dc:Bounds x="160" y="80" width="1440" height="520" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Auditor_Ajuste_di" bpmnElement="Lane_Auditor_Ajuste" isHorizontal="true">
+        <dc:Bounds x="190" y="80" width="1410" height="160" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Admin_Ajuste_di" bpmnElement="Lane_Admin_Ajuste" isHorizontal="true">
+        <dc:Bounds x="190" y="240" width="1410" height="190" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Sistema_Ajuste_di" bpmnElement="Lane_Sistema_Ajuste" isHorizontal="true">
+        <dc:Bounds x="190" y="430" width="1410" height="170" />
+      </bpmndi:BPMNShape>
+
+      <!-- Elements -->
+      <bpmndi:BPMNShape id="StartEvent_TomaInventarioFisico_di" bpmnElement="StartEvent_TomaInventarioFisico">
+        <dc:Bounds x="242" y="137" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="220" y="180" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ConteoFisicoEstanterias_di" bpmnElement="Activity_ConteoFisicoEstanterias">
+        <dc:Bounds x="330" y="115" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_CompararConteoVsSistema_di" bpmnElement="Activity_CompararConteoVsSistema">
+        <dc:Bounds x="500" y="115" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_ExisteDiferencia_di" bpmnElement="Gateway_ExisteDiferencia" isMarkerVisible="true">
+        <dc:Bounds x="675" y="130" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="658" y="93" width="84" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_InventarioCuadrado_di" bpmnElement="EndEvent_InventarioCuadrado">
+        <dc:Bounds x="802" y="137" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="780" y="180" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_InvestigarCausaDiscrepancia_di" bpmnElement="Activity_InvestigarCausaDiscrepancia">
+        <dc:Bounds x="635" y="280" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_TipoAjuste_di" bpmnElement="Gateway_TipoAjuste" isMarkerVisible="true">
+        <dc:Bounds x="825" y="295" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="810" y="260" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_AprobarAjustePositivo_di" bpmnElement="Activity_AprobarAjustePositivo">
+        <dc:Bounds x="930" y="260" width="130" height="65" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_AprobarAjusteNegativo_di" bpmnElement="Activity_AprobarAjusteNegativo">
+        <dc:Bounds x="930" y="340" width="130" height="65" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_RegistrarMovimientoAjuste_di" bpmnElement="Activity_RegistrarMovimientoAjuste">
+        <dc:Bounds x="1120" y="475" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_RegularizarSaldoKardex_di" bpmnElement="Activity_RegularizarSaldoKardex">
+        <dc:Bounds x="1290" y="475" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_AjusteCompletado_di" bpmnElement="EndEvent_AjusteCompletado">
+        <dc:Bounds x="1462" y="497" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1440" y="540" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Edges -->
+      <bpmndi:BPMNEdge id="Flow_A1_di" bpmnElement="Flow_A1"><di:waypoint x="278" y="155" /><di:waypoint x="330" y="155" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_A2_di" bpmnElement="Flow_A2"><di:waypoint x="460" y="155" /><di:waypoint x="500" y="155" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_A3_di" bpmnElement="Flow_A3"><di:waypoint x="630" y="155" /><di:waypoint x="675" y="155" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_DifNo_di" bpmnElement="Flow_DifNo"><di:waypoint x="725" y="155" /><di:waypoint x="802" y="155" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_DifSi_di" bpmnElement="Flow_DifSi"><di:waypoint x="700" y="180" /><di:waypoint x="700" y="280" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_A4_di" bpmnElement="Flow_A4"><di:waypoint x="765" y="320" /><di:waypoint x="825" y="320" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Sobrante_di" bpmnElement="Flow_Sobrante"><di:waypoint x="850" y="295" /><di:waypoint x="850" y="292" /><di:waypoint x="930" y="292" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Faltante_di" bpmnElement="Flow_Faltante"><di:waypoint x="850" y="345" /><di:waypoint x="850" y="372" /><di:waypoint x="930" y="372" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_A5_di" bpmnElement="Flow_A5"><di:waypoint x="1060" y="292" /><di:waypoint x="1090" y="292" /><di:waypoint x="1090" y="515" /><di:waypoint x="1120" y="515" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_A6_di" bpmnElement="Flow_A6"><di:waypoint x="1060" y="372" /><di:waypoint x="1090" y="372" /><di:waypoint x="1090" y="515" /><di:waypoint x="1120" y="515" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_A7_di" bpmnElement="Flow_A7"><di:waypoint x="1250" y="515" /><di:waypoint x="1290" y="515" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_A8_di" bpmnElement="Flow_A8"><di:waypoint x="1420" y="515" /><di:waypoint x="1462" y="515" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visor de Procesos BPMN 2.0 - Sistema Inventario CDS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-main: #0f172a;
+      --bg-card: #1e293b;
+      --bg-card-hover: #334155;
+      --border-color: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-primary: #3b82f6;
+      --accent-success: #10b981;
+      --accent-warning: #f59e0b;
+      --accent-purple: #8b5cf6;
+      --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border-bottom: 1px solid var(--border-color);
+      padding: 1.25rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .brand-icon {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+    }
+
+    .brand h1 {
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .brand p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .badge-std {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    /* Main Layout */
+    .container {
+      max-width: 1680px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      width: 100%;
+    }
+
+    /* Tabs Bar */
+    .tabs-wrapper {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 0.75rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .tab-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      padding: 0.55rem 1rem;
+      border-radius: 10px;
+      font-family: var(--font-sans);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .tab-btn:hover {
+      background: var(--bg-card-hover);
+      color: var(--text-main);
+      border-color: #475569;
+    }
+
+    .tab-btn.active {
+      background: var(--accent-primary);
+      color: #ffffff;
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 15px rgba(59, 130, 246, 0.35);
+    }
+
+    .tab-badge {
+      font-size: 0.68rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.18);
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 0.55rem 1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+
+    .btn:hover {
+      background: var(--bg-card-hover);
+      border-color: #64748b;
+      transform: translateY(-1px);
+    }
+
+    .btn-primary {
+      background: #2563eb;
+      border-color: #3b82f6;
+    }
+
+    .btn-primary:hover {
+      background: #1d4ed8;
+    }
+
+    /* Content Area */
+    .view-grid {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 1200px) {
+      .view-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Diagram Card */
+    .diagram-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    }
+
+    .diagram-header {
+      padding: 1rem 1.5rem;
+      background: rgba(15, 23, 42, 0.6);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .diagram-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .zoom-controls {
+      display: flex;
+      gap: 0.25rem;
+      background: var(--bg-main);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 0.2rem;
+    }
+
+    .zoom-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      transition: all 0.15s;
+    }
+
+    .zoom-btn:hover {
+      background: var(--bg-card);
+      color: var(--text-main);
+    }
+
+    .diagram-viewport {
+      background: #ffffff;
+      padding: 1.5rem;
+      overflow: auto;
+      min-height: 520px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .diagram-viewport img {
+      width: 100%;
+      height: auto;
+      transition: transform 0.2s ease-out;
+      transform-origin: center center;
+    }
+
+    /* Sidebar info */
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .info-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 1.25rem;
+    }
+
+    .info-card h3 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 0.85rem;
+      color: #93c5fd;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 0.5rem;
+    }
+
+    .flow-steps {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+
+    .flow-step-item {
+      display: flex;
+      gap: 0.65rem;
+      font-size: 0.82rem;
+      line-height: 1.4;
+      color: #cbd5e1;
+    }
+
+    .step-num {
+      background: var(--accent-primary);
+      color: #ffffff;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: bold;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .tag-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .tag {
+      background: #0f172a;
+      border: 1px solid var(--border-color);
+      color: #94a3b8;
+      padding: 0.3rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+    }
+
+    .tag.highlight {
+      border-color: #3b82f6;
+      color: #60a5fa;
+      background: rgba(59, 130, 246, 0.1);
+    }
+
+    /* XML Drawer */
+    .xml-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .xml-header {
+      padding: 0.85rem 1.25rem;
+      background: rgba(15, 23, 42, 0.6);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .xml-header h4 {
+      font-size: 0.9rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    pre code {
+      display: block;
+      padding: 1.25rem;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      background: #090d16;
+      color: #38bdf8;
+      overflow-x: auto;
+      max-height: 280px;
+      line-height: 1.5;
+    }
+
+    footer {
+      border-top: 1px solid var(--border-color);
+      padding: 1.25rem 2rem;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      background: #0b1120;
+      margin-top: 2rem;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon">📦</div>
+      <div>
+        <h1>Modelado de Procesos BPMN 2.0 (8 Flujos Completos)</h1>
+        <p>Sistema de Gestión de Inventario CDS • Arquitectura Transaccional</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span class="badge-std">OMG BPMN 2.0 VALIDATED</span>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- Tabs Navigation -->
+    <div class="tabs-wrapper">
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchProcess('entrega', this)">
+          <span>📤</span> Entrega / Despacho
+          <span class="tab-badge">Salida (-)</span>
+        </button>
+        <button class="tab-btn" onclick="switchProcess('devolucion', this)">
+          <span>📥</span> Devolución
+          <span class="tab-badge">Entrada (+)</span>
+        </button>
+        <button class="tab-btn" onclick="switchProcess('traslado', this)">
+          <span>🔄</span> Traslado
+          <span class="tab-badge">(↔)</span>
+        </button>
+        <button class="tab-btn" onclick="switchProcess('entrada', this)">
+          <span>🛒</span> Compras / Entrada
+          <span class="tab-badge">Entrada (+)</span>
+        </button>
+        <button class="tab-btn" onclick="switchProcess('bajas', this)">
+          <span>🗑️</span> Bajas / Caducidad
+          <span class="tab-badge">Baja (-)</span>
+        </button>
+        <button class="tab-btn" onclick="switchProcess('ajuste', this)">
+          <span>⚖️</span> Ajuste / Conteo
+          <span class="tab-badge">(+/-)</span>
+        </button>
+        <button class="tab-btn" onclick="switchProcess('reportes', this)">
+          <span>📊</span> Kardex / Pareto ABC
+          <span class="tab-badge">Auditoría</span>
+        </button>
+        <button class="tab-btn" onclick="switchProcess('respaldos', this)">
+          <span>💾</span> Respaldos BD
+          <span class="tab-badge">VACUUM</span>
+        </button>
+        <button class="tab-btn" onclick="switchProcess('licenciamiento', this)">
+          <span>🔐</span> Licenciamiento Offline
+          <span class="tab-badge">HMAC-SHA256</span>
+        </button>
+      </div>
+
+      <div class="action-buttons">
+        <a id="btnDownloadBpmn" href="proceso_entrega.bpmn" download class="btn btn-primary">
+          💾 Descargar .BPMN
+        </a>
+        <a id="btnDownloadSvg" href="proceso_entrega.svg" download class="btn">
+          🖼️ Descargar .SVG
+        </a>
+      </div>
+    </div>
+
+    <!-- Main Workspace -->
+    <div class="view-grid">
+      <!-- Diagram View -->
+      <div class="diagram-card">
+        <div class="diagram-header">
+          <div class="diagram-title" id="diagramTitle">
+            <span>📤</span> Proceso de Entrega de Materiales
+          </div>
+          <div class="zoom-controls">
+            <button class="zoom-btn" onclick="zoomIn()" title="Acercar">+</button>
+            <button class="zoom-btn" onclick="resetZoom()" title="Restablecer">100%</button>
+            <button class="zoom-btn" onclick="zoomOut()" title="Alejar">-</button>
+          </div>
+        </div>
+        <div class="diagram-viewport" id="diagramViewport">
+          <img id="diagramImage" src="proceso_entrega.svg" alt="Diagrama BPMN">
+        </div>
+      </div>
+
+      <!-- Process Info Sidebar -->
+      <div class="sidebar">
+        <div class="info-card">
+          <h3 id="sidebarTitle">📋 Secuencia Operativa</h3>
+          <ul class="flow-steps" id="stepList">
+            <!-- Dynamic steps -->
+          </ul>
+        </div>
+
+        <div class="info-card">
+          <h3>⚡ Afectación en BD e Inventario</h3>
+          <div class="tag-grid" id="systemTags">
+            <!-- Dynamic tags -->
+          </div>
+        </div>
+
+        <div class="info-card">
+          <h3>👥 Carriles / Roles (Swimlanes)</h3>
+          <div class="tag-grid" id="laneTags">
+            <!-- Dynamic lanes -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- XML Viewer Accordion -->
+    <div class="xml-section">
+      <div class="xml-header" onclick="toggleXml()">
+        <h4>📄 Estructura BPMN 2.0 XML Estandarizada (<span id="xmlFileName">proceso_entrega.bpmn</span>)</h4>
+        <span id="xmlToggleIcon">▼</span>
+      </div>
+      <div id="xmlContentContainer">
+        <pre><code id="xmlCodeView">Cargando definición BPMN 2.0 XML...</code></pre>
+      </div>
+    </div>
+
+  </main>
+
+  <footer>
+    <p>Sistema Inventario CDS • Suite Completa de Procesos BPMN 2.0 • Compatible con Camunda, bpmn.io, Signavio y Enterprise Architect</p>
+  </footer>
+
+  <script>
+    const processData = {
+      entrega: {
+        title: "📤 Proceso de Entrega y Despacho de Materiales",
+        svg: "proceso_entrega.svg",
+        bpmn: "proceso_entrega.bpmn",
+        steps: [
+          "Técnico presenta solicitud con código y cantidad requerida.",
+          "Almacenista consulta existencias y ubicación CDS en sistema.",
+          "Validación de stock: si no hay saldo suficiente, se rechaza la entrega.",
+          "Picking y alistamiento físico en estantería CDS.",
+          "Si aplica caducidad, se valida lote y semáforo vigente (> 30 días).",
+          "Entrega física en ventanilla y validación por parte del receptor.",
+          "Firma y registro de cédula del receptor.",
+          "Registro del movimiento 'ENTREGA' (-) en Sistema CDS y descuento automático en Kardex."
+        ],
+        tags: ["Tipo: ENTREGA (-)", "Afecta: Saldo Físico (-)", "Kardex: Salida auditada", "Semáforo: Control Lotes", "Trazabilidad: Cédula y OT"],
+        lanes: ["Técnico / Solicitante", "Almacenista CDS", "Sistema de Inventario CDS"]
+      },
+      devolucion: {
+        title: "📥 Proceso de Devolución y Reingreso de Materiales",
+        svg: "proceso_devolucion.svg",
+        bpmn: "proceso_devolucion.bpmn",
+        steps: [
+          "Técnico presenta material sobrante con referencia de entrega / OT previa.",
+          "Almacenista realiza inspección física, técnica y de limpieza.",
+          "Compuerta de Calidad: Si está dañado o vencido, se envía a 'DISPOSICIÓN FINAL (BAJA)'.",
+          "Si está en óptimas condiciones, se reubica en la estantería CDS asignada.",
+          "Confirmación y firma del comprobante de devolución.",
+          "Registro del movimiento 'DEVOLUCIÓN' (+) en Sistema CDS.",
+          "Actualización inmediata de saldo físico disponible y kardex del ítem."
+        ],
+        tags: ["Tipo: DEVOLUCIÓN (+)", "Afecta: Saldo Físico (+)", "Kardex: Reingreso auditado", "Filtro: Control de Calidad", "Alternativa: Disposición Final (-)"],
+        lanes: ["Responsable que Devuelve", "Auxiliar Almacén CDS", "Sistema de Inventario CDS"]
+      },
+      traslado: {
+        title: "🔄 Proceso de Traslado entre Bodegas (Inter-Bodegas)",
+        svg: "proceso_traslado.svg",
+        bpmn: "proceso_traslado.bpmn",
+        steps: [
+          "Bodega Destino identifica necesidad y crea solicitud de traslado.",
+          "Validación de existencias disponibles en Bodega Origen.",
+          "Si no hay stock en origen, se cancela y notifica a la sede solicitante.",
+          "Picking, embalaje y emisión de guía de traslado en Bodega Origen.",
+          "Registro del movimiento 'TRASLADO' (↔) que descuenta el stock en Origen.",
+          "Transporte físico y recepción en Bodega Destino.",
+          "Conteo y verificación: si hay discrepancia se documenta novedad de ajuste.",
+          "Almacenaje físico en estantería destino y confirmación en Sistema CDS para acreditar saldo."
+        ],
+        tags: ["Tipo: TRASLADO (↔)", "Origen: Saldo (-)", "Destino: Saldo (+)", "Validación: Doble Bodega", "Kardex: Trazabilidad cruzada"],
+        lanes: ["Bodega Destino (Receptora)", "Bodega Origen (Emisora)", "Sistema de Inventario CDS"]
+      },
+      entrada: {
+        title: "🛒 Proceso de Entrada y Recepción de Compras",
+        svg: "proceso_entrada.svg",
+        bpmn: "proceso_entrada.bpmn",
+        steps: [
+          "Llegada de mercancía enviada por proveedor / transportador.",
+          "Entrega de factura comercial, remisión o copia de Orden de Compra.",
+          "Inspección física y conteo cuantitativo en muelle de recepción.",
+          "Compuerta: ¿Conforme con Factura/OC? Si no, se devuelve y rechaza.",
+          "Verificación de lote y fecha de vencimiento del fabricante.",
+          "Almacenamiento y ubicación física en estantería CDS asignada.",
+          "Registro del movimiento 'ENTRADA' (+) con número de factura y lote.",
+          "Incremento de stock disponible y actualización de Kardex en SQLite."
+        ],
+        tags: ["Tipo: ENTRADA (+)", "Afecta: Saldo Físico (+)", "Documento: Factura / Remisión", "Control: Lote Fabricante", "Kardex: Asiento de Ingreso"],
+        lanes: ["Proveedor / Transportador", "Almacenista CDS", "Sistema de Inventario CDS"]
+      },
+      bajas: {
+        title: "🗑️ Proceso de Disposición Final y Bajas por Caducidad o Daño",
+        svg: "proceso_bajas_disposicion_final.svg",
+        bpmn: "proceso_bajas_disposicion_final.bpmn",
+        steps: [
+          "Detección de productos vencidos (semáforo rojo) o dañados en almacén.",
+          "Supervisor evalúa causal: Vencimiento automático o Dictamen de merma/rotura.",
+          "Si es vencimiento: Ejecuta el botón 'Dar de Baja Ítems Vencidos' automático.",
+          "Extracción física del material desde estanterías hacia Zona de Cuarentena.",
+          "Disposición física (destrucción, scrap, chatarrización o gestor ambiental).",
+          "Firma y autorización del Acta de Disposición Final.",
+          "Registro del movimiento 'DISPOSICIÓN FINAL (BAJA)' (-) en Sistema CDS.",
+          "Descuento definitivo del saldo y asiento contable de pérdida en Kardex."
+        ],
+        tags: ["Tipo: DISPOSICIÓN FINAL (-)", "Afecta: Saldo Físico (-)", "Causal: Vencimiento / Scrap", "Seguridad: Bloqueo Automático", "Kardex: Asiento de Pérdida"],
+        lanes: ["Supervisor / Administrador", "Auxiliar Almacén CDS", "Sistema de Inventario CDS"]
+      },
+      ajuste: {
+        title: "⚖️ Proceso de Ajuste y Cuadre Físico de Inventario",
+        svg: "proceso_ajuste_inventario.svg",
+        bpmn: "proceso_ajuste_inventario.bpmn",
+        steps: [
+          "Programación de conteo físico cíclico o auditoría general de bodega.",
+          "Toma física de conteo por estantería, módulo y ubicación CDS.",
+          "Cotejo del conteo físico contra el saldo teórico registrado en el sistema.",
+          "Compuerta: ¿Existe descuadre? Si no hay diferencia, inventario 100% cuadrado.",
+          "Si hay diferencia: Auditor y Administrador investigan causa raíz (merma, digitación).",
+          "Aprobación administrativa: Ajuste Positivo (+) por sobrante o Negativo (-) por faltante.",
+          "Registro del movimiento 'AJUSTE' (+/-) con motivo y observaciones.",
+          "Regularización inmediata del balance físico y cierre en Kardex."
+        ],
+        tags: ["Tipo: AJUSTE (+/-)", "Afecta: Cuadre Físico", "Disparador: Conteo Cíclico", "Autorización: Administrador", "Kardex: Regularización"],
+        lanes: ["Auditor de Inventarios", "Supervisor / Administrador", "Sistema de Inventario CDS"]
+      },
+      reportes: {
+        title: "📊 Proceso de Auditoría de Kardex y Análisis ABC (Pareto)",
+        svg: "proceso_auditoria_kardex_reportes.svg",
+        bpmn: "proceso_auditoria_kardex_reportes.bpmn",
+        steps: [
+          "Requerimiento de auditoría o informe gerencial de inventarios.",
+          "Configuración de filtros: Rango de fechas, sede, bodega o categoría.",
+          "Compuerta: ¿Kardex individual o Análisis ABC de Rotación?",
+          "Para Kardex: Cálculo de saldo inicial, histórico de entradas/salidas y saldo final.",
+          "Para Rotación ABC: Agrupación SQL de salidas, cálculo de % de Pareto y asignación de Zonas A-E.",
+          "Generación de gráfico Donut en Canvas 2D Base64 (800x460 px).",
+          "Incrustación de imagen en celda B14 y estilización de hojas con ExcelJS.",
+          "Descarga de libro Excel oficial (.xlsx) o impresión en PDF formateado."
+        ],
+        tags: ["Módulo: Kardex & Reportes", "Algoritmo: Pareto (80/20)", "Zonas: A, B, C, D, E", "Canvas 2D: Donut HD Base64", "Exportación: ExcelJS / PDF"],
+        lanes: ["Auditor / Gerencia", "Motor Node.js Express", "Base de Datos SQLite 3"]
+      },
+      respaldos: {
+        title: "💾 Proceso de Respaldos y Recuperación de Base de Datos",
+        svg: "proceso_respaldos_bd.svg",
+        bpmn: "proceso_respaldos_bd.bpmn",
+        steps: [
+          "Inicio de operación preventiva de respaldo o contingencia de recuperación.",
+          "Compuerta: ¿Generar Backup o Restaurar BD?",
+          "Para Backup: Ejecución de 'VACUUM INTO' para crear clon binario atómico .db en caliente.",
+          "Descarga del archivo .db, exportación a Excel o JSON y resguardo en ubicación segura.",
+          "Para Restauración: Carga de archivo de copia de seguridad .db previa.",
+          "Validación de integridad SQLite ('PRAGMA integrity_check').",
+          "Compuerta: Si el archivo está íntegro, sobrescribe la base activa en %APPDATA%.",
+          "Reinicio de conexiones y recarga completa de catálogos en memoria."
+        ],
+        tags: ["Módulo: Base de Datos", "Comando: VACUUM INTO", "Integridad: PRAGMA check", "Ruta: %APPDATA%\\INVENTARIO CDS", "Seguridad: Clon Atómico"],
+        lanes: ["Super Administrador / TI", "Motor SQLite 3 / Node.js"]
+      },
+      licenciamiento: {
+        title: "🔐 Proceso de Licenciamiento Offline (Challenge-Response HMAC-SHA256)",
+        svg: "proceso_licenciamiento.svg",
+        bpmn: "proceso_licenciamiento.bpmn",
+        steps: [
+          "Aplicación muestra código de desafío de 6 dígitos aleatorio único en pantalla modal.",
+          "Cliente solicita activación enviando código y días requeridos por WhatsApp.",
+          "Administrador ingresa código de 6 dígitos en herramienta offline 'licencias_admin.html'.",
+          "Selección de días (7, 15, 30, 60, 90, 180, 365, 9999) y cálculo de firma criptográfica.",
+          "Administrador envía clave de activación '[DIAS]-[FIRMA]' por WhatsApp con 1 clic.",
+          "Cliente ingresa la clave en su aplicación y presiona 'Activar'.",
+          "Motor de Licencias valida: Protección Anti-Manipulación de Reloj y Firma HMAC-SHA256.",
+          "Actualización de fecha de expiración en SQLite, rotación de desafío y desbloqueo total."
+        ],
+        tags: ["Algoritmo: HMAC-SHA256", "Protocolo: Challenge-Response", "Seguridad: Anti-Atraso de Reloj", "Operación: 100% Offline", "Formato: [DIAS]-[FIRMA]"],
+        lanes: ["Cliente / Usuario", "Administrador / Generador", "Motor App / SQLite"]
+      }
+    };
+
+    let currentZoom = 1;
+    let currentProcess = 'entrega';
+
+    function switchProcess(procKey, btnElement) {
+      currentProcess = procKey;
+      const data = processData[procKey];
+
+      // Update tabs
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      if (btnElement) {
+        btnElement.classList.add('active');
+      }
+
+      // Update Downloads
+      document.getElementById('btnDownloadBpmn').href = data.bpmn;
+      document.getElementById('btnDownloadBpmn').setAttribute('download', data.bpmn);
+      document.getElementById('btnDownloadSvg').href = data.svg;
+      document.getElementById('btnDownloadSvg').setAttribute('download', data.svg);
+
+      // Update Diagram
+      document.getElementById('diagramTitle').innerHTML = data.title;
+      document.getElementById('diagramImage').src = data.svg;
+      resetZoom();
+
+      // Update Steps
+      const stepList = document.getElementById('stepList');
+      stepList.innerHTML = data.steps.map((st, i) => `
+        <li class="flow-step-item">
+          <span class="step-num">${i + 1}</span>
+          <span>${st}</span>
+        </li>
+      `).join('');
+
+      // Update Tags
+      const systemTags = document.getElementById('systemTags');
+      systemTags.innerHTML = data.tags.map(t => `
+        <span class="tag ${t.includes('Tipo') || t.includes('Módulo') ? 'highlight' : ''}">${t}</span>
+      `).join('');
+
+      // Update Lanes
+      const laneTags = document.getElementById('laneTags');
+      laneTags.innerHTML = data.lanes.map(l => `
+        <span class="tag">${l}</span>
+      `).join('');
+
+      // Update XML View
+      document.getElementById('xmlFileName').innerText = data.bpmn;
+      fetchXml(data.bpmn);
+    }
+
+    function zoomIn() {
+      currentZoom = Math.min(currentZoom + 0.15, 2.5);
+      applyZoom();
+    }
+
+    function zoomOut() {
+      currentZoom = Math.max(currentZoom - 0.15, 0.6);
+      applyZoom();
+    }
+
+    function resetZoom() {
+      currentZoom = 1;
+      applyZoom();
+    }
+
+    function applyZoom() {
+      const img = document.getElementById('diagramImage');
+      img.style.transform = `scale(${currentZoom})`;
+    }
+
+    function toggleXml() {
+      const container = document.getElementById('xmlContentContainer');
+      const icon = document.getElementById('xmlToggleIcon');
+      if (container.style.display === 'none') {
+        container.style.display = 'block';
+        icon.innerText = '▼';
+      } else {
+        container.style.display = 'none';
+        icon.innerText = '▶';
+      }
+    }
+
+    async function fetchXml(filename) {
+      try {
+        const res = await fetch(filename);
+        if (res.ok) {
+          const text = await res.text();
+          document.getElementById('xmlCodeView').innerText = text;
+        } else {
+          document.getElementById('xmlCodeView').innerText = "El archivo BPMN XML se puede abrir directamente en tu editor de código o Camunda Modeler.";
+        }
+      } catch (e) {
+        document.getElementById('xmlCodeView').innerText = "Abra " + filename + " en su visualizador BPMN o editor de texto.";
+      }
+    }
+
+    // Initialize
+    window.addEventListener('DOMContentLoaded', () => {
+      switchProcess('entrega', document.querySelector('.tab-btn.active'));
+    });
+  </script>
+</body>
+</html>

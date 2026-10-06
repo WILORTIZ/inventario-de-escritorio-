@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Definitions_Devolucion"
+                  targetNamespace="http://bpmn.io/schema/bpmn"
+                  exporter="Antigravity BPMN Modeler"
+                  exporterVersion="1.0.0">
+  <bpmn:collaboration id="Collaboration_Devolucion">
+    <bpmn:participant id="Participant_ProcesoDevolucion" name="Proceso de Devolución y Reingreso de Materiales (Inventario CDS)" processRef="Process_Devolucion" />
+  </bpmn:collaboration>
+
+  <bpmn:process id="Process_Devolucion" name="Devolución de Materiales" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_Devolucion">
+      <bpmn:lane id="Lane_Devolvedor" name="Técnico / Responsable que Devuelve">
+        <bpmn:flowNodeRef>StartEvent_Devolucion</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_PresentarMaterial</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_FirmarComprobanteDevolucion</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_InspeccionAlmacen" name="Auxiliar / Almacenista CDS">
+        <bpmn:flowNodeRef>Activity_InspeccionarEstado</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_EstadoMaterial</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_ReubicarEstanteria</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_EnviarDisposicionFinal</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_FinDisposicionBaja</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_SistemaCDS_Dev" name="Sistema de Inventario CDS">
+        <bpmn:flowNodeRef>Activity_RegistrarMovimientoDevolucion</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_ActualizarSaldoKardexDev</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_DevolucionExitosa</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <!-- Flujo Inicio -->
+    <bpmn:startEvent id="StartEvent_Devolucion" name="Material Sobrante / Fin de OT">
+      <bpmn:outgoing>Flow_D1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:userTask id="Activity_PresentarMaterial" name="Presentar Material con Referencia / OT de Entrega">
+      <bpmn:incoming>Flow_D1</bpmn:incoming>
+      <bpmn:outgoing>Flow_D2</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Inspección -->
+    <bpmn:userTask id="Activity_InspeccionarEstado" name="Inspección Física, Técnica y Limpieza del Ítem">
+      <bpmn:incoming>Flow_D2</bpmn:incoming>
+      <bpmn:outgoing>Flow_D3</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:exclusiveGateway id="Gateway_EstadoMaterial" name="¿Material en Buen Estado / Reutilizable?">
+      <bpmn:incoming>Flow_D3</bpmn:incoming>
+      <bpmn:outgoing>Flow_EstadoNo</bpmn:outgoing>
+      <bpmn:outgoing>Flow_EstadoSi</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- Rama Baja / Daño -->
+    <bpmn:userTask id="Activity_EnviarDisposicionFinal" name="Registrar Salida por 'DISPOSICIÓN FINAL (BAJA)' / Scrap">
+      <bpmn:incoming>Flow_EstadoNo</bpmn:incoming>
+      <bpmn:outgoing>Flow_D_Baja</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="EndEvent_FinDisposicionBaja" name="Material Enviado a Cuarentena / Baja">
+      <bpmn:incoming>Flow_D_Baja</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Rama Reingreso Óptimo -->
+    <bpmn:userTask id="Activity_ReubicarEstanteria" name="Reubicar Físicamente en Estantería / Posición CDS">
+      <bpmn:incoming>Flow_EstadoSi</bpmn:incoming>
+      <bpmn:outgoing>Flow_D4</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:userTask id="Activity_FirmarComprobanteDevolucion" name="Confirmar Acta / Registro de Devolución">
+      <bpmn:incoming>Flow_D4</bpmn:incoming>
+      <bpmn:outgoing>Flow_D5</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Registro en Sistema -->
+    <bpmn:serviceTask id="Activity_RegistrarMovimientoDevolucion" name="Registrar Movimiento 'DEVOLUCIÓN' (+) en Sistema">
+      <bpmn:incoming>Flow_D5</bpmn:incoming>
+      <bpmn:outgoing>Flow_D6</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Activity_ActualizarSaldoKardexDev" name="Incrementar Saldo Físico y Actualizar Kardex">
+      <bpmn:incoming>Flow_D6</bpmn:incoming>
+      <bpmn:outgoing>Flow_D7</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_DevolucionExitosa" name="Devolución y Reintegro Completado">
+      <bpmn:incoming>Flow_D7</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Conexiones de Secuencia -->
+    <bpmn:sequenceFlow id="Flow_D1" sourceRef="StartEvent_Devolucion" targetRef="Activity_PresentarMaterial" />
+    <bpmn:sequenceFlow id="Flow_D2" sourceRef="Activity_PresentarMaterial" targetRef="Activity_InspeccionarEstado" />
+    <bpmn:sequenceFlow id="Flow_D3" sourceRef="Activity_InspeccionarEstado" targetRef="Gateway_EstadoMaterial" />
+    <bpmn:sequenceFlow id="Flow_EstadoNo" name="No (Dañado/Vencido)" sourceRef="Gateway_EstadoMaterial" targetRef="Activity_EnviarDisposicionFinal" />
+    <bpmn:sequenceFlow id="Flow_EstadoSi" name="Sí (Óptimo)" sourceRef="Gateway_EstadoMaterial" targetRef="Activity_ReubicarEstanteria" />
+    <bpmn:sequenceFlow id="Flow_D_Baja" sourceRef="Activity_EnviarDisposicionFinal" targetRef="EndEvent_FinDisposicionBaja" />
+    <bpmn:sequenceFlow id="Flow_D4" sourceRef="Activity_ReubicarEstanteria" targetRef="Activity_FirmarComprobanteDevolucion" />
+    <bpmn:sequenceFlow id="Flow_D5" sourceRef="Activity_FirmarComprobanteDevolucion" targetRef="Activity_RegistrarMovimientoDevolucion" />
+    <bpmn:sequenceFlow id="Flow_D6" sourceRef="Activity_RegistrarMovimientoDevolucion" targetRef="Activity_ActualizarSaldoKardexDev" />
+    <bpmn:sequenceFlow id="Flow_D7" sourceRef="Activity_ActualizarSaldoKardexDev" targetRef="EndEvent_DevolucionExitosa" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Devolucion">
+    <bpmndi:BPMNPlane id="BPMNPlane_Devolucion" bpmnElement="Collaboration_Devolucion">
+      <bpmndi:BPMNShape id="Participant_ProcesoDevolucion_di" bpmnElement="Participant_ProcesoDevolucion" isHorizontal="true">
+        <dc:Bounds x="160" y="80" width="1280" height="520" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Devolvedor_di" bpmnElement="Lane_Devolvedor" isHorizontal="true">
+        <dc:Bounds x="190" y="80" width="1250" height="150" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_InspeccionAlmacen_di" bpmnElement="Lane_InspeccionAlmacen" isHorizontal="true">
+        <dc:Bounds x="190" y="230" width="1250" height="200" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_SistemaCDS_Dev_di" bpmnElement="Lane_SistemaCDS_Dev" isHorizontal="true">
+        <dc:Bounds x="190" y="430" width="1250" height="170" />
+      </bpmndi:BPMNShape>
+
+      <!-- Elementos -->
+      <bpmndi:BPMNShape id="StartEvent_Devolucion_di" bpmnElement="StartEvent_Devolucion">
+        <dc:Bounds x="242" y="137" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="220" y="180" width="80" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_PresentarMaterial_di" bpmnElement="Activity_PresentarMaterial">
+        <dc:Bounds x="330" y="115" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_InspeccionarEstado_di" bpmnElement="Activity_InspeccionarEstado">
+        <dc:Bounds x="330" y="280" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_EstadoMaterial_di" bpmnElement="Gateway_EstadoMaterial" isMarkerVisible="true">
+        <dc:Bounds x="525" y="295" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="507" y="258" width="86" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_EnviarDisposicionFinal_di" bpmnElement="Activity_EnviarDisposicionFinal">
+        <dc:Bounds x="640" y="350" width="130" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_FinDisposicionBaja_di" bpmnElement="EndEvent_FinDisposicionBaja">
+        <dc:Bounds x="822" y="367" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="800" y="410" width="82" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ReubicarEstanteria_di" bpmnElement="Activity_ReubicarEstanteria">
+        <dc:Bounds x="640" y="250" width="130" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_FirmarComprobanteDevolucion_di" bpmnElement="Activity_FirmarComprobanteDevolucion">
+        <dc:Bounds x="820" y="115" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_RegistrarMovimientoDevolucion_di" bpmnElement="Activity_RegistrarMovimientoDevolucion">
+        <dc:Bounds x="820" y="475" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ActualizarSaldoKardexDev_di" bpmnElement="Activity_ActualizarSaldoKardexDev">
+        <dc:Bounds x="1010" y="475" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_DevolucionExitosa_di" bpmnElement="EndEvent_DevolucionExitosa">
+        <dc:Bounds x="1202" y="497" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1182" y="540" width="76" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Conexiones -->
+      <bpmndi:BPMNEdge id="Flow_D1_di" bpmnElement="Flow_D1">
+        <di:waypoint x="278" y="155" />
+        <di:waypoint x="330" y="155" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_D2_di" bpmnElement="Flow_D2">
+        <di:waypoint x="395" y="195" />
+        <di:waypoint x="395" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_D3_di" bpmnElement="Flow_D3">
+        <di:waypoint x="460" y="320" />
+        <di:waypoint x="525" y="320" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_EstadoNo_di" bpmnElement="Flow_EstadoNo">
+        <di:waypoint x="550" y="345" />
+        <di:waypoint x="550" y="385" />
+        <di:waypoint x="640" y="385" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="555" y="360" width="70" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_EstadoSi_di" bpmnElement="Flow_EstadoSi">
+        <di:waypoint x="550" y="295" />
+        <di:waypoint x="550" y="285" />
+        <di:waypoint x="640" y="285" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="558" y="265" width="58" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_D_Baja_di" bpmnElement="Flow_D_Baja">
+        <di:waypoint x="770" y="385" />
+        <di:waypoint x="822" y="385" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_D4_di" bpmnElement="Flow_D4">
+        <di:waypoint x="770" y="285" />
+        <di:waypoint x="795" y="285" />
+        <di:waypoint x="795" y="155" />
+        <di:waypoint x="820" y="155" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_D5_di" bpmnElement="Flow_D5">
+        <di:waypoint x="885" y="195" />
+        <di:waypoint x="885" y="475" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_D6_di" bpmnElement="Flow_D6">
+        <di:waypoint x="950" y="515" />
+        <di:waypoint x="1010" y="515" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_D7_di" bpmnElement="Flow_D7">
+        <di:waypoint x="1140" y="515" />
+        <di:waypoint x="1202" y="515" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

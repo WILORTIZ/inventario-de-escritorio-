@@ -6,3 +6,5 @@ dist/
 .DS_Store
 Thumbs.db
 scratch/
+# Carpeta privada del propietario con herramientas de generación de licencias
+ADMIN_LICENCIAS_PROPIETARIO/

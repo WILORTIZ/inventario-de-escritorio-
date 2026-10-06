@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1460 620" width="100%" height="100%" style="background:#ffffff; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;">
+  <defs>
+    <marker id="arrow-dev" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#334155"/>
+    </marker>
+    <filter id="shadow-dev" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="2" dy="3" stdDeviation="3" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <!-- Pool Header -->
+  <rect x="30" y="30" width="1400" height="550" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="30" y="30" width="45" height="550" rx="8" fill="#0f172a"/>
+  <text x="-310" y="60" transform="rotate(-90)" fill="#ffffff" font-size="15" font-weight="bold" letter-spacing="1">PROCESO DE DEVOLUCIÓN Y REINGRESO DE MATERIALES</text>
+
+  <!-- Lanes -->
+  <!-- Lane 1: Devolvedor -->
+  <rect x="75" y="30" width="1355" height="170" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="30" width="35" height="170" fill="#6366f1"/>
+  <text x="-135" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">RESPONSABLE</text>
+
+  <!-- Lane 2: Almacén -->
+  <rect x="75" y="200" width="1355" height="200" fill="#fcfdfe" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="200" width="35" height="200" fill="#0284c7"/>
+  <text x="-315" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">ALMACÉN CDS</text>
+
+  <!-- Lane 3: Sistema CDS -->
+  <rect x="75" y="400" width="1355" height="180" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="400" width="35" height="180" fill="#0f766e"/>
+  <text x="-505" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">SISTEMA CDS</text>
+
+  <!-- Flow Lines -->
+  <!-- Start to Presentar -->
+  <path d="M 166 115 L 210 115" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-dev)"/>
+  <!-- Presentar to Inspección -->
+  <path d="M 275 155 L 275 270" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-dev)"/>
+  <!-- Inspección to Gateway Estado -->
+  <path d="M 340 300 L 410 300" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-dev)"/>
+  <!-- Gateway -> No (Baja) -->
+  <path d="M 435 325 L 435 365 L 500 365" stroke="#ef4444" stroke-width="2" fill="none" marker-end="url(#arrow-dev)"/>
+  <text x="442" y="352" font-size="11" font-weight="bold" fill="#ef4444">No (Dañado/Vencido)</text>
+  <!-- Gateway -> Si (Reubicar) -->
+  <path d="M 435 275 L 435 245 L 500 245" stroke="#10b981" stroke-width="2" fill="none" marker-end="url(#arrow-dev)"/>
+  <text x="442" y="235" font-size="11" font-weight="bold" fill="#10b981">Sí (Óptimo)</text>
+  <!-- Disposición Final to Fin Baja -->
+  <path d="M 630 365 L 680 365" stroke="#ef4444" stroke-width="2" fill="none" marker-end="url(#arrow-dev)"/>
+  <!-- Reubicar to Firmar Acta -->
+  <path d="M 630 245 L 755 245 L 755 155" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-dev)"/>
+  <!-- Firmar to Registrar Devolución -->
+  <path d="M 820 115 L 870 115 L 870 450" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-dev)"/>
+  <!-- Registrar to Actualizar Saldo -->
+  <path d="M 935 490 L 985 490" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-dev)"/>
+  <!-- Actualizar Saldo to Fin -->
+  <path d="M 1115 490 L 1165 490" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-dev)"/>
+
+  <!-- NODES -->
+  <!-- Start Event -->
+  <circle cx="145" cy="115" r="18" fill="#e0e7ff" stroke="#4f46e5" stroke-width="2.5" filter="url(#shadow-dev)"/>
+  <circle cx="145" cy="115" r="8" fill="#4f46e5"/>
+  <text x="145" y="152" font-size="11" font-weight="600" fill="#1e293b" text-anchor="middle">Sobrante / OT</text>
+
+  <!-- User Task Presentar -->
+  <rect x="210" y="75" width="130" height="80" rx="8" fill="#ffffff" stroke="#6366f1" stroke-width="2" filter="url(#shadow-dev)"/>
+  <text x="275" y="105" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Presentar Material</text>
+  <text x="275" y="122" font-size="10" fill="#64748b" text-anchor="middle">Referencia OT previa</text>
+  <text x="275" y="137" font-size="10" fill="#64748b" text-anchor="middle">y cantidad a devolver</text>
+
+  <!-- Task Inspección -->
+  <rect x="210" y="270" width="130" height="65" rx="8" fill="#f0f9ff" stroke="#0284c7" stroke-width="2" filter="url(#shadow-dev)"/>
+  <text x="275" y="295" font-size="11" font-weight="bold" fill="#0369a1" text-anchor="middle">Inspección Física</text>
+  <text x="275" y="312" font-size="10" fill="#64748b" text-anchor="middle">Validar integridad,</text>
+  <text x="275" y="325" font-size="10" fill="#64748b" text-anchor="middle">limpieza y empaque</text>
+
+  <!-- Gateway Estado -->
+  <polygon points="435,275 460,300 435,325 410,300" fill="#fef3c7" stroke="#d97706" stroke-width="2" filter="url(#shadow-dev)"/>
+  <text x="435" y="304" font-size="14" font-weight="bold" fill="#b45309" text-anchor="middle">✕</text>
+  <text x="435" y="265" font-size="10" font-weight="bold" fill="#1e293b" text-anchor="middle">¿Estado Apto?</text>
+
+  <!-- Task Baja / Scrap -->
+  <rect x="500" y="335" width="130" height="60" rx="8" fill="#fef2f2" stroke="#ef4444" stroke-width="1.5" filter="url(#shadow-dev)"/>
+  <text x="565" y="357" font-size="10" font-weight="bold" fill="#991b1b" text-anchor="middle">Disposición Final</text>
+  <text x="565" y="372" font-size="9" fill="#dc2626" text-anchor="middle">Baja / Cuarentena / Scrap</text>
+
+  <!-- End Event Baja -->
+  <circle cx="695" cy="365" r="15" fill="#fee2e2" stroke="#dc2626" stroke-width="3" filter="url(#shadow-dev)"/>
+  <text x="695" y="395" font-size="9" font-weight="600" fill="#b91c1c" text-anchor="middle">Material Descartado</text>
+
+  <!-- Task Reubicar -->
+  <rect x="500" y="215" width="130" height="60" rx="8" fill="#ffffff" stroke="#0284c7" stroke-width="2" filter="url(#shadow-dev)"/>
+  <text x="565" y="238" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Reubicar en Estante</text>
+  <text x="565" y="253" font-size="10" fill="#64748b" text-anchor="middle">Posición física CDS</text>
+
+  <!-- Task Firmar Acta -->
+  <rect x="690" y="75" width="130" height="80" rx="8" fill="#ffffff" stroke="#6366f1" stroke-width="2" filter="url(#shadow-dev)"/>
+  <text x="755" y="105" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Confirmar Acta</text>
+  <text x="755" y="122" font-size="10" fill="#64748b" text-anchor="middle">Persona que devuelve</text>
+  <text x="755" y="137" font-size="10" fill="#64748b" text-anchor="middle">y observaciones</text>
+
+  <!-- Task Registrar Devolución CDS -->
+  <rect x="805" y="450" width="130" height="80" rx="8" fill="#f0fdfa" stroke="#0f766e" stroke-width="2" filter="url(#shadow-dev)"/>
+  <text x="870" y="480" font-size="11" font-weight="bold" fill="#115e59" text-anchor="middle">Registrar 'DEVOLUCIÓN'</text>
+  <text x="870" y="497" font-size="10" fill="#047857" text-anchor="middle">Movimiento Entrada (+)</text>
+  <text x="870" y="512" font-size="10" fill="#64748b" text-anchor="middle">en Sistema CDS</text>
+
+  <!-- Task Actualizar Kardex -->
+  <rect x="985" y="450" width="130" height="80" rx="8" fill="#f0fdfa" stroke="#0f766e" stroke-width="2" filter="url(#shadow-dev)"/>
+  <text x="1050" y="480" font-size="11" font-weight="bold" fill="#115e59" text-anchor="middle">Actualizar Saldo</text>
+  <text x="1050" y="497" font-size="10" fill="#64748b" text-anchor="middle">Reintegro a Kardex</text>
+  <text x="1050" y="512" font-size="10" fill="#64748b" text-anchor="middle">y stock disponible</text>
+
+  <!-- End Event Exitoso -->
+  <circle cx="1180" cy="490" r="18" fill="#dcfce7" stroke="#16a34a" stroke-width="4" filter="url(#shadow-dev)"/>
+  <text x="1180" y="525" font-size="10" font-weight="bold" fill="#15803d" text-anchor="middle">Devolución Exitosa</text>
+</svg>

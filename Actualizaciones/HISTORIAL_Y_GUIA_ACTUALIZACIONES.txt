@@ -7,7 +7,21 @@ para actualizar instalaciones existentes sin perder la base de datos de movimien
 
 HISTORIAL DE VERSIONES Y CAMBIOS:
 ----------------------------------------------------------------------
-[Versión 1.5.0] (Versión Actual)
+[Versión 1.5.1] (Versión Actual)
+- Sistema Criptográfico de Licenciamiento Offline (Challenge-Response HMAC-SHA256):
+  * Generación y validación de licencias de uso 100% offline (sin necesidad de internet ni servidores).
+  * Código de desafío aleatorio de 6 dígitos único por instalación y renovación.
+  * Protección activa contra manipulación de reloj (Anti-Clock Tampering) con detección de saltos temporales hacia atrás.
+  * Período de prueba de cortesía (Trial) de 7 días predeterminado para nuevas instalaciones.
+  * Compatibilidad con licencias temporales (7, 15, 30, 60, 90, 180, 365 días) y vitalicias (9999 días).
+  * Modal interactivo de activación con enlace directo a WhatsApp para soporte y adquisición de licencias.
+  * Panel aislado de administración y generación privada (`ADMIN_LICENCIAS_PROPIETARIO`).
+- Documentación y Diagramación de Procesos BPMN:
+  * 9 diagramas oficiales BPMN 2.0 y visores SVG interactivos en `procesos_bpmn/`.
+  * Manual de usuario integral en formato Word (`Documentacion/MANUAL_INTEGRAL_INVENTARIO_CDS.docx`).
+  * Galería visual de capturas de código y procesos en `capturas/`.
+
+[Versión 1.5.0]
 - Reporte y Análisis de Rotación de Inventario ABC:
   * Clasificación estratégica de ítems por volumen de salidas (Pareto 80/15/5%):
     - Zona A: Alta rotación (80% del volumen de salidas)

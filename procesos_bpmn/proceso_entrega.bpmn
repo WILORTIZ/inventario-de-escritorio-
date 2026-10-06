@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Definitions_Entrega"
+                  targetNamespace="http://bpmn.io/schema/bpmn"
+                  exporter="Antigravity BPMN Modeler"
+                  exporterVersion="1.0.0">
+  <bpmn:collaboration id="Collaboration_Entrega">
+    <bpmn:participant id="Participant_ProcesoEntrega" name="Proceso de Entrega y Despacho de Materiales (Inventario CDS)" processRef="Process_Entrega" />
+  </bpmn:collaboration>
+
+  <bpmn:process id="Process_Entrega" name="Entrega de Materiales" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_Entrega">
+      <bpmn:lane id="Lane_Solicitante" name="Técnico / Solicitante">
+        <bpmn:flowNodeRef>StartEvent_Solicitud</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_PresentarSolicitud</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_RecibirMaterial</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_FirmarEntrega</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Almacenista" name="Almacenista / Operador CDS">
+        <bpmn:flowNodeRef>Activity_VerificarStock</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_StockDisponible</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_AlistarMaterial</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_AplicaVencimiento</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_ValidarLote</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_EntregarFisico</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_RechazoStock</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_SistemaCDS" name="Sistema de Inventario CDS">
+        <bpmn:flowNodeRef>Activity_RegistrarMovimientoEntrega</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_ActualizarKardex</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_EntregaExitosa</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <!-- Evento Inicial -->
+    <bpmn:startEvent id="StartEvent_Solicitud" name="Requerimiento de Material / OT">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <!-- Flujos Solicitante -->
+    <bpmn:userTask id="Activity_PresentarSolicitud" name="Presentar Solicitud con Código de Ítem y Cantidad">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Tareas Almacén -->
+    <bpmn:serviceTask id="Activity_VerificarStock" name="Consultar Existencias y Ubicación en Sistema">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="Gateway_StockDisponible" name="¿Stock Suficiente?">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_StockNo</bpmn:outgoing>
+      <bpmn:outgoing>Flow_StockSi</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:endEvent id="EndEvent_RechazoStock" name="Solicitud Rechazada por Stock Insuficiente">
+      <bpmn:incoming>Flow_StockNo</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:userTask id="Activity_AlistarMaterial" name="Picking y Alistamiento Físico en Ubicación CDS">
+      <bpmn:incoming>Flow_StockSi</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:exclusiveGateway id="Gateway_AplicaVencimiento" name="¿Aplica Lote / Vencimiento?">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_VenceSi</bpmn:outgoing>
+      <bpmn:outgoing>Flow_VenceNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:userTask id="Activity_ValidarLote" name="Verificar Lote y Semáforo de Vencimiento Vigente (> 30d)">
+      <bpmn:incoming>Flow_VenceSi</bpmn:incoming>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:userTask id="Activity_EntregarFisico" name="Entregar Material Físico al Solicitante">
+      <bpmn:incoming>Flow_VenceNo</bpmn:incoming>
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:userTask id="Activity_RecibirMaterial" name="Revisar Conformidad de Ítems y Cantidad">
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:userTask id="Activity_FirmarEntrega" name="Suministrar Documento de Identidad y Firma">
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+      <bpmn:outgoing>Flow_8</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Acciones Sistema CDS -->
+    <bpmn:serviceTask id="Activity_RegistrarMovimientoEntrega" name="Registrar Movimiento 'ENTREGA' (-) en Sistema">
+      <bpmn:incoming>Flow_8</bpmn:incoming>
+      <bpmn:outgoing>Flow_9</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Activity_ActualizarKardex" name="Descontar Saldo Físico y Actualizar Kardex en Tiempo Real">
+      <bpmn:incoming>Flow_9</bpmn:incoming>
+      <bpmn:outgoing>Flow_10</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_EntregaExitosa" name="Entrega Completada y Documentada">
+      <bpmn:incoming>Flow_10</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Secuencias de Flujo -->
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_Solicitud" targetRef="Activity_PresentarSolicitud" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_PresentarSolicitud" targetRef="Activity_VerificarStock" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_VerificarStock" targetRef="Gateway_StockDisponible" />
+    <bpmn:sequenceFlow id="Flow_StockNo" name="No" sourceRef="Gateway_StockDisponible" targetRef="EndEvent_RechazoStock" />
+    <bpmn:sequenceFlow id="Flow_StockSi" name="Sí" sourceRef="Gateway_StockDisponible" targetRef="Activity_AlistarMaterial" />
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Activity_AlistarMaterial" targetRef="Gateway_AplicaVencimiento" />
+    <bpmn:sequenceFlow id="Flow_VenceSi" name="Sí" sourceRef="Gateway_AplicaVencimiento" targetRef="Activity_ValidarLote" />
+    <bpmn:sequenceFlow id="Flow_VenceNo" name="No" sourceRef="Gateway_AplicaVencimiento" targetRef="Activity_EntregarFisico" />
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_ValidarLote" targetRef="Activity_EntregarFisico" />
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_EntregarFisico" targetRef="Activity_RecibirMaterial" />
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Activity_RecibirMaterial" targetRef="Activity_FirmarEntrega" />
+    <bpmn:sequenceFlow id="Flow_8" sourceRef="Activity_FirmarEntrega" targetRef="Activity_RegistrarMovimientoEntrega" />
+    <bpmn:sequenceFlow id="Flow_9" sourceRef="Activity_RegistrarMovimientoEntrega" targetRef="Activity_ActualizarKardex" />
+    <bpmn:sequenceFlow id="Flow_10" sourceRef="Activity_ActualizarKardex" targetRef="EndEvent_EntregaExitosa" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collaboration_Entrega">
+      <bpmndi:BPMNShape id="Participant_ProcesoEntrega_di" bpmnElement="Participant_ProcesoEntrega" isHorizontal="true">
+        <dc:Bounds x="160" y="80" width="1380" height="540" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Solicitante_di" bpmnElement="Lane_Solicitante" isHorizontal="true">
+        <dc:Bounds x="190" y="80" width="1350" height="160" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Almacenista_di" bpmnElement="Lane_Almacenista" isHorizontal="true">
+        <dc:Bounds x="190" y="240" width="1350" height="200" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_SistemaCDS_di" bpmnElement="Lane_SistemaCDS" isHorizontal="true">
+        <dc:Bounds x="190" y="440" width="1350" height="180" />
+      </bpmndi:BPMNShape>
+
+      <!-- Elementos -->
+      <bpmndi:BPMNShape id="StartEvent_Solicitud_di" bpmnElement="StartEvent_Solicitud">
+        <dc:Bounds x="242" y="142" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="220" y="185" width="82" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_PresentarSolicitud_di" bpmnElement="Activity_PresentarSolicitud">
+        <dc:Bounds x="330" y="120" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_VerificarStock_di" bpmnElement="Activity_VerificarStock">
+        <dc:Bounds x="330" y="290" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_StockDisponible_di" bpmnElement="Gateway_StockDisponible" isMarkerVisible="true">
+        <dc:Bounds x="515" y="305" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="500" y="275" width="81" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_RechazoStock_di" bpmnElement="EndEvent_RechazoStock">
+        <dc:Bounds x="522" y="382" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="568" y="386" width="90" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_AlistarMaterial_di" bpmnElement="Activity_AlistarMaterial">
+        <dc:Bounds x="620" y="290" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_AplicaVencimiento_di" bpmnElement="Gateway_AplicaVencimiento" isMarkerVisible="true">
+        <dc:Bounds x="795" y="305" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="781" y="268" width="79" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ValidarLote_di" bpmnElement="Activity_ValidarLote">
+        <dc:Bounds x="755" y="360" width="130" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_EntregarFisico_di" bpmnElement="Activity_EntregarFisico">
+        <dc:Bounds x="920" y="290" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_RecibirMaterial_di" bpmnElement="Activity_RecibirMaterial">
+        <dc:Bounds x="920" y="120" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_FirmarEntrega_di" bpmnElement="Activity_FirmarEntrega">
+        <dc:Bounds x="1100" y="120" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_RegistrarMovimientoEntrega_di" bpmnElement="Activity_RegistrarMovimientoEntrega">
+        <dc:Bounds x="1100" y="490" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ActualizarKardex_di" bpmnElement="Activity_ActualizarKardex">
+        <dc:Bounds x="1280" y="490" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_EntregaExitosa_di" bpmnElement="EndEvent_EntregaExitosa">
+        <dc:Bounds x="1462" y="512" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1440" y="555" width="80" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Conexiones -->
+      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1">
+        <di:waypoint x="278" y="160" />
+        <di:waypoint x="330" y="160" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2">
+        <di:waypoint x="395" y="200" />
+        <di:waypoint x="395" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3">
+        <di:waypoint x="460" y="330" />
+        <di:waypoint x="515" y="330" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_StockNo_di" bpmnElement="Flow_StockNo">
+        <di:waypoint x="540" y="355" />
+        <di:waypoint x="540" y="382" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="548" y="360" width="15" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_StockSi_di" bpmnElement="Flow_StockSi">
+        <di:waypoint x="565" y="330" />
+        <di:waypoint x="620" y="330" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="586" y="312" width="12" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_4_di" bpmnElement="Flow_4">
+        <di:waypoint x="750" y="330" />
+        <di:waypoint x="795" y="330" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_VenceSi_di" bpmnElement="Flow_VenceSi">
+        <di:waypoint x="820" y="355" />
+        <di:waypoint x="820" y="360" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="829" y="350" width="12" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_VenceNo_di" bpmnElement="Flow_VenceNo">
+        <di:waypoint x="845" y="330" />
+        <di:waypoint x="920" y="330" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="876" y="312" width="15" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_5_di" bpmnElement="Flow_5">
+        <di:waypoint x="885" y="395" />
+        <di:waypoint x="985" y="395" />
+        <di:waypoint x="985" y="370" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_6_di" bpmnElement="Flow_6">
+        <di:waypoint x="985" y="290" />
+        <di:waypoint x="985" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_7_di" bpmnElement="Flow_7">
+        <di:waypoint x="1050" y="160" />
+        <di:waypoint x="1100" y="160" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_8_di" bpmnElement="Flow_8">
+        <di:waypoint x="1165" y="200" />
+        <di:waypoint x="1165" y="490" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_9_di" bpmnElement="Flow_9">
+        <di:waypoint x="1230" y="530" />
+        <di:waypoint x="1280" y="530" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_10_di" bpmnElement="Flow_10">
+        <di:waypoint x="1410" y="530" />
+        <di:waypoint x="1462" y="530" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

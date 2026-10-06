@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1540 620" width="100%" height="100%" style="background:#ffffff; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;">
+  <defs>
+    <marker id="arrow-rep" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#334155"/>
+    </marker>
+    <filter id="shadow-rep" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="2" dy="3" stdDeviation="3" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <!-- Pool Header -->
+  <rect x="30" y="30" width="1480" height="550" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="30" y="30" width="45" height="550" rx="8" fill="#0f172a"/>
+  <text x="-315" y="60" transform="rotate(-90)" fill="#ffffff" font-size="15" font-weight="bold" letter-spacing="1">PROCESO DE AUDITORÍA DE KARDEX Y REPORTES ABC (PARETO)</text>
+
+  <!-- Lanes -->
+  <!-- Lane 1: Usuario -->
+  <rect x="75" y="30" width="1435" height="170" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="30" width="35" height="170" fill="#3b82f6"/>
+  <text x="-135" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">AUDITOR / GERENCIA</text>
+
+  <!-- Lane 2: Motor Node.js -->
+  <rect x="75" y="200" width="1435" height="200" fill="#fcfdfe" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="200" width="35" height="200" fill="#0284c7"/>
+  <text x="-315" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">MOTOR DE NEGOCIO</text>
+
+  <!-- Lane 3: SQLite -->
+  <rect x="75" y="400" width="1435" height="180" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="400" width="35" height="180" fill="#0f766e"/>
+  <text x="-505" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">SQLITE 3</text>
+
+  <!-- Flow Lines -->
+  <!-- Start to Configurar Filtros -->
+  <path d="M 166 115 L 210 115" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-rep)"/>
+  <!-- Configurar to Gateway Tipo -->
+  <path d="M 340 115 L 400 115" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-rep)"/>
+  <!-- Gateway -> Kardex -->
+  <path d="M 425 90 L 425 65 L 500 65 L 500 115 L 530 115" stroke="#0284c7" stroke-width="2" fill="none" marker-end="url(#arrow-rep)"/>
+  <text x="430" y="55" font-size="10" font-weight="bold" fill="#0284c7">Kardex Ítem</text>
+  <!-- Gateway -> Pareto (SQLite) -->
+  <path d="M 425 140 L 425 490 L 490 490" stroke="#8b5cf6" stroke-width="2" fill="none" marker-end="url(#arrow-rep)"/>
+  <text x="430" y="170" font-size="10" font-weight="bold" fill="#8b5cf6">Rotación ABC</text>
+  <!-- SQLite to Algoritmo ABC -->
+  <path d="M 620 490 L 670 490 L 670 335" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-rep)"/>
+  <!-- Algoritmo to Canvas 2D -->
+  <path d="M 735 295 L 795 295" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-rep)"/>
+  <!-- Canvas to Visualizar Pantalla -->
+  <path d="M 860 255 L 860 155" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-rep)"/>
+  <!-- Kardex & Visualizar to ExcelJS -->
+  <path d="M 660 115 L 1050 115 L 1050 255" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-rep)"/>
+  <path d="M 925 115 L 1050 115 L 1050 255" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-rep)"/>
+  <!-- ExcelJS to Descargar -->
+  <path d="M 1115 295 L 1175 295 L 1175 155" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-rep)"/>
+  <!-- Descargar to Fin -->
+  <path d="M 1240 115 L 1300 115" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-rep)"/>
+
+  <!-- NODES -->
+  <!-- Start Event -->
+  <circle cx="145" cy="115" r="18" fill="#dbeafe" stroke="#2563eb" stroke-width="2.5" filter="url(#shadow-rep)"/>
+  <circle cx="145" cy="115" r="8" fill="#2563eb"/>
+  <text x="145" y="152" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">Auditoría / Reporte</text>
+
+  <!-- User Task Filtros -->
+  <rect x="210" y="75" width="130" height="80" rx="8" fill="#ffffff" stroke="#3b82f6" stroke-width="2" filter="url(#shadow-rep)"/>
+  <text x="275" y="105" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Configurar Filtros</text>
+  <text x="275" y="122" font-size="10" fill="#64748b" text-anchor="middle">Fechas, Bodega,</text>
+  <text x="275" y="137" font-size="10" fill="#64748b" text-anchor="middle">Sede o Categoría</text>
+
+  <!-- Gateway Tipo -->
+  <polygon points="425,90 450,115 425,140 400,115" fill="#fef3c7" stroke="#d97706" stroke-width="2" filter="url(#shadow-rep)"/>
+  <text x="425" y="119" font-size="14" font-weight="bold" fill="#b45309" text-anchor="middle">✕</text>
+
+  <!-- Task Kardex Individual -->
+  <rect x="530" y="75" width="130" height="80" rx="8" fill="#ffffff" stroke="#0284c7" stroke-width="2" filter="url(#shadow-rep)"/>
+  <text x="595" y="105" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Kardex por Ítem</text>
+  <text x="595" y="122" font-size="10" fill="#64748b" text-anchor="middle">Historial cronológico</text>
+  <text x="595" y="137" font-size="10" fill="#64748b" text-anchor="middle">y saldos acumulados</text>
+
+  <!-- Task SQLite Query -->
+  <rect x="490" y="450" width="130" height="80" rx="8" fill="#f0fdfa" stroke="#0f766e" stroke-width="2" filter="url(#shadow-rep)"/>
+  <text x="555" y="480" font-size="11" font-weight="bold" fill="#115e59" text-anchor="middle">Consultar Salidas</text>
+  <text x="555" y="497" font-size="10" fill="#047857" text-anchor="middle">Agrupación por Ítem</text>
+  <text x="555" y="512" font-size="10" fill="#64748b" text-anchor="middle">en SQLite 3</text>
+
+  <!-- Task Algoritmo ABC -->
+  <rect x="605" y="255" width="130" height="80" rx="8" fill="#ffffff" stroke="#0284c7" stroke-width="2" filter="url(#shadow-rep)"/>
+  <text x="670" y="285" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Algoritmo Pareto</text>
+  <text x="670" y="302" font-size="10" fill="#64748b" text-anchor="middle">Clasificación A-B-C-D-E</text>
+  <text x="670" y="317" font-size="10" fill="#64748b" text-anchor="middle">y % acumulados</text>
+
+  <!-- Task Canvas 2D -->
+  <rect x="795" y="255" width="130" height="80" rx="8" fill="#f0f9ff" stroke="#0284c7" stroke-width="2" filter="url(#shadow-rep)"/>
+  <text x="860" y="285" font-size="11" font-weight="bold" fill="#0369a1" text-anchor="middle">Canvas Donut 2D</text>
+  <text x="860" y="302" font-size="10" fill="#64748b" text-anchor="middle">Renderizado 800x460</text>
+  <text x="860" y="317" font-size="10" fill="#64748b" text-anchor="middle">en Buffer Base64</text>
+
+  <!-- Task Visualizar Pantalla -->
+  <rect x="795" y="75" width="130" height="80" rx="8" fill="#ffffff" stroke="#3b82f6" stroke-width="2" filter="url(#shadow-rep)"/>
+  <text x="860" y="105" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Explorar Dashboard</text>
+  <text x="860" y="122" font-size="10" fill="#64748b" text-anchor="middle">Gráfico Donut y tabla</text>
+  <text x="860" y="137" font-size="10" fill="#64748b" text-anchor="middle">con semáforos</text>
+
+  <!-- Task ExcelJS Builder -->
+  <rect x="985" y="255" width="130" height="80" rx="8" fill="#ffffff" stroke="#0284c7" stroke-width="2" filter="url(#shadow-rep)"/>
+  <text x="1050" y="285" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Builder ExcelJS</text>
+  <text x="1050" y="302" font-size="10" fill="#64748b" text-anchor="middle">Incrustación en B14</text>
+  <text x="1050" y="317" font-size="10" fill="#64748b" text-anchor="middle">y estilos contables</text>
+
+  <!-- Task Descargar -->
+  <rect x="1175" y="75" width="130" height="80" rx="8" fill="#ffffff" stroke="#3b82f6" stroke-width="2" filter="url(#shadow-rep)"/>
+  <text x="1240" y="105" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Descargar Informe</text>
+  <text x="1240" y="122" font-size="10" fill="#64748b" text-anchor="middle">Libro .xlsx o PDF</text>
+  <text x="1240" y="137" font-size="10" fill="#64748b" text-anchor="middle">con alta definición</text>
+
+  <!-- End Event Exitoso -->
+  <circle cx="1380" cy="115" r="18" fill="#dcfce7" stroke="#16a34a" stroke-width="4" filter="url(#shadow-rep)"/>
+  <text x="1380" y="152" font-size="10" font-weight="bold" fill="#15803d" text-anchor="middle">Informe Entregado</text>
+</svg>

@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Definitions_Entrada"
+                  targetNamespace="http://bpmn.io/schema/bpmn"
+                  exporter="Antigravity BPMN Modeler"
+                  exporterVersion="1.0.0">
+  <bpmn:collaboration id="Collaboration_Entrada">
+    <bpmn:participant id="Participant_ProcesoEntrada" name="Proceso de Entrada y Recepción de Compras (Inventario CDS)" processRef="Process_Entrada" />
+  </bpmn:collaboration>
+
+  <bpmn:process id="Process_Entrada" name="Entrada de Mercancía y Compras" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_Entrada">
+      <bpmn:lane id="Lane_Proveedor_Ent" name="Proveedor / Transportador">
+        <bpmn:flowNodeRef>StartEvent_LlegadaMercancia</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_EntregaFacturaRemision</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Almacen_Ent" name="Auxiliar / Almacenista CDS">
+        <bpmn:flowNodeRef>Activity_InspeccionFisicaEntrada</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_ConformidadEntrada</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_RechazoDevolucionProveedor</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_RechazoEntrada</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_VerificarLoteCaducidad</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_UbicarEstanteriaCDS</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Sistema_Ent" name="Sistema de Inventario CDS">
+        <bpmn:flowNodeRef>Activity_RegistrarMovimientoEntrada</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_ActualizarKardexEntrada</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_EntradaExitosa</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <!-- Flujo Proveedor -->
+    <bpmn:startEvent id="StartEvent_LlegadaMercancia" name="Llegada de Mercancía">
+      <bpmn:outgoing>Flow_E1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:userTask id="Activity_EntregaFacturaRemision" name="Presentar Factura / Remisión y Descargar Mercancía">
+      <bpmn:incoming>Flow_E1</bpmn:incoming>
+      <bpmn:outgoing>Flow_E2</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Flujo Almacén -->
+    <bpmn:userTask id="Activity_InspeccionFisicaEntrada" name="Inspección Cuantitativa, Empaque y Especificaciones">
+      <bpmn:incoming>Flow_E2</bpmn:incoming>
+      <bpmn:outgoing>Flow_E3</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:exclusiveGateway id="Gateway_ConformidadEntrada" name="¿Carga Conforme con Factura/OC?">
+      <bpmn:incoming>Flow_E3</bpmn:incoming>
+      <bpmn:outgoing>Flow_EntNo</bpmn:outgoing>
+      <bpmn:outgoing>Flow_EntSi</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:userTask id="Activity_RechazoDevolucionProveedor" name="Registrar Novedad y Devolución a Proveedor">
+      <bpmn:incoming>Flow_EntNo</bpmn:incoming>
+      <bpmn:outgoing>Flow_E_Rechazo</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="EndEvent_RechazoEntrada" name="Recepción Rechazada">
+      <bpmn:incoming>Flow_E_Rechazo</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:userTask id="Activity_VerificarLoteCaducidad" name="Validar Lote y Fecha de Vencimiento del Fabricante">
+      <bpmn:incoming>Flow_EntSi</bpmn:incoming>
+      <bpmn:outgoing>Flow_E4</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:userTask id="Activity_UbicarEstanteriaCDS" name="Almacenamiento Físico en Ubicación CDS Asignada">
+      <bpmn:incoming>Flow_E4</bpmn:incoming>
+      <bpmn:outgoing>Flow_E5</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Flujo Sistema CDS -->
+    <bpmn:serviceTask id="Activity_RegistrarMovimientoEntrada" name="Registrar Movimiento 'ENTRADA' (+) con Factura y Lote">
+      <bpmn:incoming>Flow_E5</bpmn:incoming>
+      <bpmn:outgoing>Flow_E6</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Activity_ActualizarKardexEntrada" name="Incrementar Saldo Físico y Actualizar Kardex">
+      <bpmn:incoming>Flow_E6</bpmn:incoming>
+      <bpmn:outgoing>Flow_E7</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_EntradaExitosa" name="Recepción Registrada y Disponible">
+      <bpmn:incoming>Flow_E7</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Conexiones -->
+    <bpmn:sequenceFlow id="Flow_E1" sourceRef="StartEvent_LlegadaMercancia" targetRef="Activity_EntregaFacturaRemision" />
+    <bpmn:sequenceFlow id="Flow_E2" sourceRef="Activity_EntregaFacturaRemision" targetRef="Activity_InspeccionFisicaEntrada" />
+    <bpmn:sequenceFlow id="Flow_E3" sourceRef="Activity_InspeccionFisicaEntrada" targetRef="Gateway_ConformidadEntrada" />
+    <bpmn:sequenceFlow id="Flow_EntNo" name="No" sourceRef="Gateway_ConformidadEntrada" targetRef="Activity_RechazoDevolucionProveedor" />
+    <bpmn:sequenceFlow id="Flow_EntSi" name="Sí" sourceRef="Gateway_ConformidadEntrada" targetRef="Activity_VerificarLoteCaducidad" />
+    <bpmn:sequenceFlow id="Flow_E_Rechazo" sourceRef="Activity_RechazoDevolucionProveedor" targetRef="EndEvent_RechazoEntrada" />
+    <bpmn:sequenceFlow id="Flow_E4" sourceRef="Activity_VerificarLoteCaducidad" targetRef="Activity_UbicarEstanteriaCDS" />
+    <bpmn:sequenceFlow id="Flow_E5" sourceRef="Activity_UbicarEstanteriaCDS" targetRef="Activity_RegistrarMovimientoEntrada" />
+    <bpmn:sequenceFlow id="Flow_E6" sourceRef="Activity_RegistrarMovimientoEntrada" targetRef="Activity_ActualizarKardexEntrada" />
+    <bpmn:sequenceFlow id="Flow_E7" sourceRef="Activity_ActualizarKardexEntrada" targetRef="EndEvent_EntradaExitosa" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Entrada">
+    <bpmndi:BPMNPlane id="BPMNPlane_Entrada" bpmnElement="Collaboration_Entrada">
+      <bpmndi:BPMNShape id="Participant_ProcesoEntrada_di" bpmnElement="Participant_ProcesoEntrada" isHorizontal="true">
+        <dc:Bounds x="160" y="80" width="1380" height="520" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Proveedor_Ent_di" bpmnElement="Lane_Proveedor_Ent" isHorizontal="true">
+        <dc:Bounds x="190" y="80" width="1350" height="150" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Almacen_Ent_di" bpmnElement="Lane_Almacen_Ent" isHorizontal="true">
+        <dc:Bounds x="190" y="230" width="1350" height="200" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Sistema_Ent_di" bpmnElement="Lane_Sistema_Ent" isHorizontal="true">
+        <dc:Bounds x="190" y="430" width="1350" height="170" />
+      </bpmndi:BPMNShape>
+
+      <!-- Elements -->
+      <bpmndi:BPMNShape id="StartEvent_LlegadaMercancia_di" bpmnElement="StartEvent_LlegadaMercancia">
+        <dc:Bounds x="242" y="137" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="225" y="180" width="70" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_EntregaFacturaRemision_di" bpmnElement="Activity_EntregaFacturaRemision">
+        <dc:Bounds x="330" y="115" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_InspeccionFisicaEntrada_di" bpmnElement="Activity_InspeccionFisicaEntrada">
+        <dc:Bounds x="330" y="280" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_ConformidadEntrada_di" bpmnElement="Gateway_ConformidadEntrada" isMarkerVisible="true">
+        <dc:Bounds x="515" y="295" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="498" y="258" width="84" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_RechazoDevolucionProveedor_di" bpmnElement="Activity_RechazoDevolucionProveedor">
+        <dc:Bounds x="620" y="350" width="130" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_RechazoEntrada_di" bpmnElement="EndEvent_RechazoEntrada">
+        <dc:Bounds x="792" y="367" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="780" y="410" width="60" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_VerificarLoteCaducidad_di" bpmnElement="Activity_VerificarLoteCaducidad">
+        <dc:Bounds x="620" y="250" width="130" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_UbicarEstanteriaCDS_di" bpmnElement="Activity_UbicarEstanteriaCDS">
+        <dc:Bounds x="800" y="250" width="130" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_RegistrarMovimientoEntrada_di" bpmnElement="Activity_RegistrarMovimientoEntrada">
+        <dc:Bounds x="980" y="475" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ActualizarKardexEntrada_di" bpmnElement="Activity_ActualizarKardexEntrada">
+        <dc:Bounds x="1160" y="475" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_EntradaExitosa_di" bpmnElement="EndEvent_EntradaExitosa">
+        <dc:Bounds x="1342" y="497" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1320" y="540" width="80" height="40" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Edges -->
+      <bpmndi:BPMNEdge id="Flow_E1_di" bpmnElement="Flow_E1"><di:waypoint x="278" y="155" /><di:waypoint x="330" y="155" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_E2_di" bpmnElement="Flow_E2"><di:waypoint x="395" y="195" /><di:waypoint x="395" y="280" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_E3_di" bpmnElement="Flow_E3"><di:waypoint x="460" y="320" /><di:waypoint x="515" y="320" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_EntNo_di" bpmnElement="Flow_EntNo"><di:waypoint x="540" y="345" /><di:waypoint x="540" y="385" /><di:waypoint x="620" y="385" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_EntSi_di" bpmnElement="Flow_EntSi"><di:waypoint x="540" y="295" /><di:waypoint x="540" y="285" /><di:waypoint x="620" y="285" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_E_Rechazo_di" bpmnElement="Flow_E_Rechazo"><di:waypoint x="750" y="385" /><di:waypoint x="792" y="385" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_E4_di" bpmnElement="Flow_E4"><di:waypoint x="750" y="285" /><di:waypoint x="800" y="285" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_E5_di" bpmnElement="Flow_E5"><di:waypoint x="865" y="320" /><di:waypoint x="865" y="515" /><di:waypoint x="980" y="515" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_E6_di" bpmnElement="Flow_E6"><di:waypoint x="1110" y="515" /><di:waypoint x="1160" y="515" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_E7_di" bpmnElement="Flow_E7"><di:waypoint x="1290" y="515" /><di:waypoint x="1342" y="515" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Definitions_Bajas"
+                  targetNamespace="http://bpmn.io/schema/bpmn"
+                  exporter="Antigravity BPMN Modeler"
+                  exporterVersion="1.0.0">
+  <bpmn:collaboration id="Collaboration_Bajas">
+    <bpmn:participant id="Participant_ProcesoBajas" name="Proceso de Disposición Final y Bajas por Caducidad o Daño" processRef="Process_Bajas" />
+  </bpmn:collaboration>
+
+  <bpmn:process id="Process_Bajas" name="Disposición Final y Bajas" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_Bajas">
+      <bpmn:lane id="Lane_Supervisor_Baja" name="Supervisor / Administrador">
+        <bpmn:flowNodeRef>StartEvent_DeteccionCaducidadDano</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_MonitoreoVencimientos</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_OrigenBaja</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_EjecutarAsistenteBajas</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_AprobacionBajaManual</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_AutorizarActaDestruccion</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Almacen_Baja" name="Auxiliar / Almacenista CDS">
+        <bpmn:flowNodeRef>Activity_RetiroFisicoCuarentena</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_DestruccionScrapReciclaje</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Sistema_Baja" name="Sistema de Inventario CDS">
+        <bpmn:flowNodeRef>Activity_RegistrarMovimientoBaja</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_ActualizarKardexBaja</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_BajaFinalizada</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <!-- Flujo Supervisor -->
+    <bpmn:startEvent id="StartEvent_DeteccionCaducidadDano" name="Detección de Vencimiento / Deterioro">
+      <bpmn:outgoing>Flow_B1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:userTask id="Activity_MonitoreoVencimientos" name="Consultar Semáforo de Vencimientos en Módulo CDS">
+      <bpmn:incoming>Flow_B1</bpmn:incoming>
+      <bpmn:outgoing>Flow_B2</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:exclusiveGateway id="Gateway_OrigenBaja" name="¿Causal de Baja?">
+      <bpmn:incoming>Flow_B2</bpmn:incoming>
+      <bpmn:outgoing>Flow_Caducidad</bpmn:outgoing>
+      <bpmn:outgoing>Flow_DanoManual</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:serviceTask id="Activity_EjecutarAsistenteBajas" name="Ejecutar 'Dar de Baja Ítems Vencidos' Automático">
+      <bpmn:incoming>Flow_Caducidad</bpmn:incoming>
+      <bpmn:outgoing>Flow_B3</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="Activity_AprobacionBajaManual" name="Registrar Dictamen de Baja por Daño / Scrap / Merma">
+      <bpmn:incoming>Flow_DanoManual</bpmn:incoming>
+      <bpmn:outgoing>Flow_B4</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Almacén -->
+    <bpmn:userTask id="Activity_RetiroFisicoCuarentena" name="Extracción Física de Estanterías hacia Zona de Cuarentena">
+      <bpmn:incoming>Flow_B3</bpmn:incoming>
+      <bpmn:incoming>Flow_B4</bpmn:incoming>
+      <bpmn:outgoing>Flow_B5</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:userTask id="Activity_DestruccionScrapReciclaje" name="Disposición Física (Destrucción, Scrap o Entrega a Gestor)">
+      <bpmn:incoming>Flow_B5</bpmn:incoming>
+      <bpmn:outgoing>Flow_B6</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:userTask id="Activity_AutorizarActaDestruccion" name="Firma y Cierre de Acta de Disposición Final">
+      <bpmn:incoming>Flow_B6</bpmn:incoming>
+      <bpmn:outgoing>Flow_B7</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Sistema CDS -->
+    <bpmn:serviceTask id="Activity_RegistrarMovimientoBaja" name="Registrar Movimiento 'DISPOSICIÓN FINAL (BAJA)' (-)">
+      <bpmn:incoming>Flow_B7</bpmn:incoming>
+      <bpmn:outgoing>Flow_B8</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Activity_ActualizarKardexBaja" name="Descontar Saldo Físico y Asentar Pérdida en Kardex">
+      <bpmn:incoming>Flow_B8</bpmn:incoming>
+      <bpmn:outgoing>Flow_B9</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_BajaFinalizada" name="Ítem Retirado del Inventario">
+      <bpmn:incoming>Flow_B9</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Conexiones -->
+    <bpmn:sequenceFlow id="Flow_B1" sourceRef="StartEvent_DeteccionCaducidadDano" targetRef="Activity_MonitoreoVencimientos" />
+    <bpmn:sequenceFlow id="Flow_B2" sourceRef="Activity_MonitoreoVencimientos" targetRef="Gateway_OrigenBaja" />
+    <bpmn:sequenceFlow id="Flow_Caducidad" name="Vencimiento (Rojo)" sourceRef="Gateway_OrigenBaja" targetRef="Activity_EjecutarAsistenteBajas" />
+    <bpmn:sequenceFlow id="Flow_DanoManual" name="Daño / Merma" sourceRef="Gateway_OrigenBaja" targetRef="Activity_AprobacionBajaManual" />
+    <bpmn:sequenceFlow id="Flow_B3" sourceRef="Activity_EjecutarAsistenteBajas" targetRef="Activity_RetiroFisicoCuarentena" />
+    <bpmn:sequenceFlow id="Flow_B4" sourceRef="Activity_AprobacionBajaManual" targetRef="Activity_RetiroFisicoCuarentena" />
+    <bpmn:sequenceFlow id="Flow_B5" sourceRef="Activity_RetiroFisicoCuarentena" targetRef="Activity_DestruccionScrapReciclaje" />
+    <bpmn:sequenceFlow id="Flow_B6" sourceRef="Activity_DestruccionScrapReciclaje" targetRef="Activity_AutorizarActaDestruccion" />
+    <bpmn:sequenceFlow id="Flow_B7" sourceRef="Activity_AutorizarActaDestruccion" targetRef="Activity_RegistrarMovimientoBaja" />
+    <bpmn:sequenceFlow id="Flow_B8" sourceRef="Activity_RegistrarMovimientoBaja" targetRef="Activity_ActualizarKardexBaja" />
+    <bpmn:sequenceFlow id="Flow_B9" sourceRef="Activity_ActualizarKardexBaja" targetRef="EndEvent_BajaFinalizada" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Bajas">
+    <bpmndi:BPMNPlane id="BPMNPlane_Bajas" bpmnElement="Collaboration_Bajas">
+      <bpmndi:BPMNShape id="Participant_ProcesoBajas_di" bpmnElement="Participant_ProcesoBajas" isHorizontal="true">
+        <dc:Bounds x="160" y="80" width="1420" height="520" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Supervisor_Baja_di" bpmnElement="Lane_Supervisor_Baja" isHorizontal="true">
+        <dc:Bounds x="190" y="80" width="1390" height="170" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Almacen_Baja_di" bpmnElement="Lane_Almacen_Baja" isHorizontal="true">
+        <dc:Bounds x="190" y="250" width="1390" height="180" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Sistema_Baja_di" bpmnElement="Lane_Sistema_Baja" isHorizontal="true">
+        <dc:Bounds x="190" y="430" width="1390" height="170" />
+      </bpmndi:BPMNShape>
+
+      <!-- Elements -->
+      <bpmndi:BPMNShape id="StartEvent_DeteccionCaducidadDano_di" bpmnElement="StartEvent_DeteccionCaducidadDano">
+        <dc:Bounds x="242" y="137" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="220" y="180" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_MonitoreoVencimientos_di" bpmnElement="Activity_MonitoreoVencimientos">
+        <dc:Bounds x="330" y="115" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_OrigenBaja_di" bpmnElement="Gateway_OrigenBaja" isMarkerVisible="true">
+        <dc:Bounds x="515" y="130" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="498" y="100" width="84" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_EjecutarAsistenteBajas_di" bpmnElement="Activity_EjecutarAsistenteBajas">
+        <dc:Bounds x="620" y="95" width="130" height="65" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_AprobacionBajaManual_di" bpmnElement="Activity_AprobacionBajaManual">
+        <dc:Bounds x="620" y="170" width="130" height="65" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_RetiroFisicoCuarentena_di" bpmnElement="Activity_RetiroFisicoCuarentena">
+        <dc:Bounds x="800" y="295" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_DestruccionScrapReciclaje_di" bpmnElement="Activity_DestruccionScrapReciclaje">
+        <dc:Bounds x="970" y="295" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_AutorizarActaDestruccion_di" bpmnElement="Activity_AutorizarActaDestruccion">
+        <dc:Bounds x="970" y="115" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_RegistrarMovimientoBaja_di" bpmnElement="Activity_RegistrarMovimientoBaja">
+        <dc:Bounds x="1140" y="475" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ActualizarKardexBaja_di" bpmnElement="Activity_ActualizarKardexBaja">
+        <dc:Bounds x="1310" y="475" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_BajaFinalizada_di" bpmnElement="EndEvent_BajaFinalizada">
+        <dc:Bounds x="1492" y="497" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1470" y="540" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Edges -->
+      <bpmndi:BPMNEdge id="Flow_B1_di" bpmnElement="Flow_B1"><di:waypoint x="278" y="155" /><di:waypoint x="330" y="155" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_B2_di" bpmnElement="Flow_B2"><di:waypoint x="460" y="155" /><di:waypoint x="515" y="155" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Caducidad_di" bpmnElement="Flow_Caducidad"><di:waypoint x="540" y="130" /><di:waypoint x="540" y="127" /><di:waypoint x="620" y="127" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_DanoManual_di" bpmnElement="Flow_DanoManual"><di:waypoint x="540" y="180" /><di:waypoint x="540" y="202" /><di:waypoint x="620" y="202" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_B3_di" bpmnElement="Flow_B3"><di:waypoint x="750" y="127" /><di:waypoint x="775" y="127" /><di:waypoint x="775" y="335" /><di:waypoint x="800" y="335" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_B4_di" bpmnElement="Flow_B4"><di:waypoint x="750" y="202" /><di:waypoint x="775" y="202" /><di:waypoint x="775" y="335" /><di:waypoint x="800" y="335" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_B5_di" bpmnElement="Flow_B5"><di:waypoint x="930" y="335" /><di:waypoint x="970" y="335" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_B6_di" bpmnElement="Flow_B6"><di:waypoint x="1035" y="295" /><di:waypoint x="1035" y="195" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_B7_di" bpmnElement="Flow_B7"><di:waypoint x="1100" y="155" /><di:waypoint x="1120" y="155" /><di:waypoint x="1120" y="515" /><di:waypoint x="1140" y="515" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_B8_di" bpmnElement="Flow_B8"><di:waypoint x="1270" y="515" /><di:waypoint x="1310" y="515" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_B9_di" bpmnElement="Flow_B9"><di:waypoint x="1440" y="515" /><di:waypoint x="1492" y="515" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

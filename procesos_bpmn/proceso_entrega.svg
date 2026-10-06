@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1560 620" width="100%" height="100%" style="background:#ffffff; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;">
+  <defs>
+    <!-- Arrow Marker -->
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#334155"/>
+    </marker>
+    <filter id="shadow" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="2" dy="3" stdDeviation="3" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <!-- Pool Header -->
+  <rect x="30" y="30" width="1500" height="550" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="30" y="30" width="45" height="550" rx="8" fill="#1e293b"/>
+  <text x="-305" y="60" transform="rotate(-90)" fill="#ffffff" font-size="15" font-weight="bold" letter-spacing="1">PROCESO DE ENTREGA / DESPACHO DE MATERIALES (CDS)</text>
+
+  <!-- Lanes -->
+  <!-- Lane 1: Solicitante -->
+  <rect x="75" y="30" width="1455" height="170" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="30" width="35" height="170" fill="#3b82f6"/>
+  <text x="-135" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">SOLICITANTE</text>
+
+  <!-- Lane 2: Almacén -->
+  <rect x="75" y="200" width="1455" height="200" fill="#fcfdfe" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="200" width="35" height="200" fill="#0284c7"/>
+  <text x="-315" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">ALMACÉN CDS</text>
+
+  <!-- Lane 3: Sistema CDS -->
+  <rect x="75" y="400" width="1455" height="180" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="400" width="35" height="180" fill="#0f766e"/>
+  <text x="-505" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">SISTEMA CDS</text>
+
+  <!-- Flow Lines (Sequence Flows) -->
+  <!-- Start to Presentar -->
+  <path d="M 166 115 L 210 115" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <!-- Presentar to Consultar Stock -->
+  <path d="M 275 155 L 275 270" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <!-- Consultar to Gateway Stock -->
+  <path d="M 340 300 L 400 300" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <!-- Gateway Stock -> No (Rechazo) -->
+  <path d="M 425 325 L 425 360" stroke="#ef4444" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <text x="432" y="348" font-size="11" font-weight="bold" fill="#ef4444">No</text>
+  <!-- Gateway Stock -> Si (Alistar) -->
+  <path d="M 450 300 L 510 300" stroke="#10b981" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <text x="465" y="290" font-size="11" font-weight="bold" fill="#10b981">Sí</text>
+  <!-- Alistar to Gateway Vencimiento -->
+  <path d="M 640 300 L 690 300" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <!-- Gateway Vence -> Si (Validar Lote) -->
+  <path d="M 715 325 L 715 350 L 760 350" stroke="#f59e0b" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <text x="722" y="342" font-size="11" font-weight="bold" fill="#d97706">Sí</text>
+  <!-- Gateway Vence -> No (Entregar) -->
+  <path d="M 740 300 L 930 300" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <text x="770" y="290" font-size="11" font-weight="bold" fill="#334155">No</text>
+  <!-- Validar Lote to Entregar -->
+  <path d="M 890 350 L 995 350 L 995 340" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <!-- Entregar to Recibir -->
+  <path d="M 995 260 L 995 155" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <!-- Recibir to Firmar -->
+  <path d="M 1060 115 L 1110 115" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <!-- Firmar to Registrar Movimiento -->
+  <path d="M 1175 155 L 1175 450" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <!-- Registrar to Actualizar Kardex -->
+  <path d="M 1240 490 L 1290 490" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <!-- Actualizar to Fin -->
+  <path d="M 1420 490 L 1465 490" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- NODES / ELEMENTS -->
+
+  <!-- Start Event -->
+  <circle cx="145" cy="115" r="18" fill="#dcfce7" stroke="#16a34a" stroke-width="2.5" filter="url(#shadow)"/>
+  <circle cx="145" cy="115" r="8" fill="#16a34a"/>
+  <text x="145" y="152" font-size="11" font-weight="600" fill="#1e293b" text-anchor="middle">Solicitud / OT</text>
+
+  <!-- User Task 1 -->
+  <rect x="210" y="75" width="130" height="80" rx="8" fill="#ffffff" stroke="#3b82f6" stroke-width="2" filter="url(#shadow)"/>
+  <path d="M 218 87 a 4 4 0 0 1 4 -4 h 10 a 4 4 0 0 1 4 4 v 4 a 4 4 0 0 1 -4 4 h -10 a 4 4 0 0 1 -4 -4 z" fill="#3b82f6" opacity="0.2"/>
+  <text x="275" y="105" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Presentar Solicitud</text>
+  <text x="275" y="122" font-size="10" fill="#64748b" text-anchor="middle">Código de Ítem</text>
+  <text x="275" y="137" font-size="10" fill="#64748b" text-anchor="middle">y Cantidad Requerida</text>
+
+  <!-- Service Task 1 -->
+  <rect x="210" y="270" width="130" height="65" rx="8" fill="#f0f9ff" stroke="#0284c7" stroke-width="2" filter="url(#shadow)"/>
+  <text x="275" y="295" font-size="11" font-weight="bold" fill="#0369a1" text-anchor="middle">Consultar Stock</text>
+  <text x="275" y="312" font-size="10" fill="#64748b" text-anchor="middle">Existencias CDS</text>
+  <text x="275" y="325" font-size="10" fill="#64748b" text-anchor="middle">y Ubicación Física</text>
+
+  <!-- Gateway Stock -->
+  <polygon points="425,275 450,300 425,325 400,300" fill="#fef3c7" stroke="#d97706" stroke-width="2" filter="url(#shadow)"/>
+  <text x="425" y="304" font-size="14" font-weight="bold" fill="#b45309" text-anchor="middle">✕</text>
+  <text x="425" y="265" font-size="10" font-weight="bold" fill="#1e293b" text-anchor="middle">¿Stock Suficiente?</text>
+
+  <!-- End Event Rechazo -->
+  <circle cx="425" cy="375" r="15" fill="#fee2e2" stroke="#dc2626" stroke-width="3" filter="url(#shadow)"/>
+  <text x="425" y="405" font-size="10" font-weight="600" fill="#b91c1c" text-anchor="middle">Sin Stock</text>
+
+  <!-- User Task Alistar -->
+  <rect x="510" y="260" width="130" height="80" rx="8" fill="#ffffff" stroke="#0284c7" stroke-width="2" filter="url(#shadow)"/>
+  <text x="575" y="290" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Picking y Alistamiento</text>
+  <text x="575" y="307" font-size="10" fill="#64748b" text-anchor="middle">Extracción física en</text>
+  <text x="575" y="322" font-size="10" fill="#64748b" text-anchor="middle">Estantería CDS</text>
+
+  <!-- Gateway Vencimiento -->
+  <polygon points="715,275 740,300 715,325 690,300" fill="#fef3c7" stroke="#d97706" stroke-width="2" filter="url(#shadow)"/>
+  <text x="715" y="304" font-size="14" font-weight="bold" fill="#b45309" text-anchor="middle">✕</text>
+  <text x="715" y="265" font-size="10" font-weight="bold" fill="#1e293b" text-anchor="middle">¿Aplica Lote?</text>
+
+  <!-- Task Validar Lote -->
+  <rect x="760" y="325" width="130" height="50" rx="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="825" y="345" font-size="10" font-weight="bold" fill="#92400e" text-anchor="middle">Validar Lote y Fecha</text>
+  <text x="825" y="360" font-size="9" fill="#b45309" text-anchor="middle">Semáforo Vigente (>30d)</text>
+
+  <!-- Task Entregar -->
+  <rect x="930" y="260" width="130" height="80" rx="8" fill="#ffffff" stroke="#0284c7" stroke-width="2" filter="url(#shadow)"/>
+  <text x="995" y="290" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Entregar Material</text>
+  <text x="995" y="307" font-size="10" fill="#64748b" text-anchor="middle">Despacho en ventanilla</text>
+  <text x="995" y="322" font-size="10" fill="#64748b" text-anchor="middle">al solicitante</text>
+
+  <!-- Task Recibir -->
+  <rect x="930" y="75" width="130" height="80" rx="8" fill="#ffffff" stroke="#3b82f6" stroke-width="2" filter="url(#shadow)"/>
+  <text x="995" y="105" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Revisar Conformidad</text>
+  <text x="995" y="122" font-size="10" fill="#64748b" text-anchor="middle">Verificar cantidad</text>
+  <text x="995" y="137" font-size="10" fill="#64748b" text-anchor="middle">y estado físico</text>
+
+  <!-- Task Firmar -->
+  <rect x="1110" y="75" width="130" height="80" rx="8" fill="#ffffff" stroke="#3b82f6" stroke-width="2" filter="url(#shadow)"/>
+  <text x="1175" y="105" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Firmar Entrega</text>
+  <text x="1175" y="122" font-size="10" fill="#64748b" text-anchor="middle">Documento / Cédula</text>
+  <text x="1175" y="137" font-size="10" fill="#64748b" text-anchor="middle">y Responsable</text>
+
+  <!-- Task Registrar CDS -->
+  <rect x="1110" y="450" width="130" height="80" rx="8" fill="#f0fdfa" stroke="#0f766e" stroke-width="2" filter="url(#shadow)"/>
+  <text x="1175" y="480" font-size="11" font-weight="bold" fill="#115e59" text-anchor="middle">Registrar 'ENTREGA'</text>
+  <text x="1175" y="497" font-size="10" fill="#047857" text-anchor="middle">Movimiento Salida (-)</text>
+  <text x="1175" y="512" font-size="10" fill="#64748b" text-anchor="middle">con datos de receptor</text>
+
+  <!-- Task Kardex -->
+  <rect x="1290" y="450" width="130" height="80" rx="8" fill="#f0fdfa" stroke="#0f766e" stroke-width="2" filter="url(#shadow)"/>
+  <text x="1355" y="480" font-size="11" font-weight="bold" fill="#115e59" text-anchor="middle">Actualizar Kardex</text>
+  <text x="1355" y="497" font-size="10" fill="#64748b" text-anchor="middle">Saldo físico automático</text>
+  <text x="1355" y="512" font-size="10" fill="#64748b" text-anchor="middle">y trazabilidad SQLite</text>
+
+  <!-- End Event Exitoso -->
+  <circle cx="1480" cy="490" r="18" fill="#dcfce7" stroke="#16a34a" stroke-width="4" filter="url(#shadow)"/>
+  <text x="1480" y="525" font-size="10" font-weight="bold" fill="#15803d" text-anchor="middle">Entrega Exitosa</text>
+</svg>

@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1520 620" width="100%" height="100%" style="background:#ffffff; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;">
+  <defs>
+    <marker id="arrow-res" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#334155"/>
+    </marker>
+    <filter id="shadow-res" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="2" dy="3" stdDeviation="3" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <!-- Pool Header -->
+  <rect x="30" y="30" width="1460" height="550" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="30" y="30" width="45" height="550" rx="8" fill="#0f172a"/>
+  <text x="-315" y="60" transform="rotate(-90)" fill="#ffffff" font-size="15" font-weight="bold" letter-spacing="1">PROCESO DE RESPALDOS Y RECUPERACIÓN DE BASE DE DATOS</text>
+
+  <!-- Lanes -->
+  <!-- Lane 1: Admin / TI -->
+  <rect x="75" y="30" width="1415" height="210" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="30" width="35" height="210" fill="#2563eb"/>
+  <text x="-140" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">SUPER ADMIN / TI</text>
+
+  <!-- Lane 2: Motor Persistencia -->
+  <rect x="75" y="240" width="1415" height="340" fill="#fcfdfe" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="240" width="35" height="340" fill="#0f766e"/>
+  <text x="-430" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">MOTOR SQLITE 3 / NODE</text>
+
+  <!-- Flow Lines -->
+  <!-- Start to Gateway Acción -->
+  <path d="M 166 125 L 220 125" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-res)"/>
+  <!-- Gateway -> Backup -->
+  <path d="M 245 100 L 245 85 L 300 85" stroke="#10b981" stroke-width="2" fill="none" marker-end="url(#arrow-res)"/>
+  <text x="250" y="75" font-size="10" font-weight="bold" fill="#10b981">Hacer Backup</text>
+  <!-- Gateway -> Restaurar -->
+  <path d="M 245 150 L 245 175 L 300 175" stroke="#f59e0b" stroke-width="2" fill="none" marker-end="url(#arrow-res)"/>
+  <text x="250" y="190" font-size="10" font-weight="bold" fill="#d97706">Restaurar BD</text>
+  <!-- Backup to VACUUM INTO -->
+  <path d="M 430 85 L 485 85 L 485 330" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-res)"/>
+  <!-- VACUUM INTO to Descargar -->
+  <path d="M 550 370 L 610 370 L 610 85 L 670 85" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-res)"/>
+  <!-- Descargar to Fin Backup -->
+  <path d="M 800 85 L 860 85" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-res)"/>
+  <!-- Cargar .db to PRAGMA integrity -->
+  <path d="M 430 175 L 485 175 L 485 470" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-res)"/>
+  <!-- PRAGMA to Gateway Integridad -->
+  <path d="M 550 510 L 610 510" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-res)"/>
+  <!-- Gateway -> No (Abortado) -->
+  <path d="M 635 535 L 635 555 L 700 555" stroke="#ef4444" stroke-width="2" fill="none" marker-end="url(#arrow-res)"/>
+  <text x="640" y="545" font-size="10" font-weight="bold" fill="#ef4444">Corrupto</text>
+  <!-- Gateway -> Sí (Reemplazar) -->
+  <path d="M 660 510 L 730 510" stroke="#10b981" stroke-width="2" fill="none" marker-end="url(#arrow-res)"/>
+  <text x="670" y="500" font-size="10" font-weight="bold" fill="#10b981">Válido</text>
+  <!-- Reemplazar to Reiniciar -->
+  <path d="M 860 510 L 920 510" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-res)"/>
+  <!-- Reiniciar to Fin Restauración -->
+  <path d="M 985 470 L 985 125 L 1050 125" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-res)"/>
+
+  <!-- NODES -->
+  <!-- Start Event -->
+  <circle cx="145" cy="125" r="18" fill="#e0e7ff" stroke="#4f46e5" stroke-width="2.5" filter="url(#shadow-res)"/>
+  <circle cx="145" cy="125" r="8" fill="#4f46e5"/>
+  <text x="145" y="162" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">Gestión BD</text>
+
+  <!-- Gateway Acción -->
+  <polygon points="245,100 270,125 245,150 220,125" fill="#fef3c7" stroke="#d97706" stroke-width="2" filter="url(#shadow-res)"/>
+  <text x="245" y="129" font-size="14" font-weight="bold" fill="#b45309" text-anchor="middle">✕</text>
+
+  <!-- Task Solicitar Backup -->
+  <rect x="300" y="55" width="130" height="60" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="2" filter="url(#shadow-res)"/>
+  <text x="365" y="78" font-size="10" font-weight="bold" fill="#15803d" text-anchor="middle">Solicitar Backup</text>
+  <text x="365" y="93" font-size="9" fill="#64748b" text-anchor="middle">Descarga .db / Excel</text>
+
+  <!-- Task VACUUM INTO -->
+  <rect x="420" y="330" width="130" height="80" rx="8" fill="#f0fdfa" stroke="#0f766e" stroke-width="2" filter="url(#shadow-res)"/>
+  <text x="485" y="360" font-size="11" font-weight="bold" fill="#115e59" text-anchor="middle">VACUUM INTO</text>
+  <text x="485" y="377" font-size="10" fill="#047857" text-anchor="middle">Clon binario atómico</text>
+  <text x="485" y="392" font-size="10" fill="#64748b" text-anchor="middle">en caliente (SQLite)</text>
+
+  <!-- Task Guardar Backup -->
+  <rect x="670" y="55" width="130" height="60" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="2" filter="url(#shadow-res)"/>
+  <text x="735" y="78" font-size="10" font-weight="bold" fill="#15803d" text-anchor="middle">Guardar Copia</text>
+  <text x="735" y="93" font-size="9" fill="#64748b" text-anchor="middle">Almacenar en seguro</text>
+
+  <!-- End Event Backup -->
+  <circle cx="880" cy="85" r="18" fill="#dcfce7" stroke="#16a34a" stroke-width="4" filter="url(#shadow-res)"/>
+  <text x="880" y="122" font-size="10" font-weight="bold" fill="#15803d" text-anchor="middle">Backup Guardado</text>
+
+  <!-- Task Cargar Archivo .db -->
+  <rect x="300" y="145" width="130" height="60" rx="8" fill="#ffffff" stroke="#f59e0b" stroke-width="2" filter="url(#shadow-res)"/>
+  <text x="365" y="168" font-size="10" font-weight="bold" fill="#92400e" text-anchor="middle">Cargar Respaldo</text>
+  <text x="365" y="183" font-size="9" fill="#64748b" text-anchor="middle">Archivo .db previo</text>
+
+  <!-- Task PRAGMA integrity -->
+  <rect x="420" y="470" width="130" height="80" rx="8" fill="#f0fdfa" stroke="#0f766e" stroke-width="2" filter="url(#shadow-res)"/>
+  <text x="485" y="500" font-size="10" font-weight="bold" fill="#115e59" text-anchor="middle">Integrity Check</text>
+  <text x="485" y="517" font-size="9" fill="#047857" text-anchor="middle">Validar B-Trees</text>
+  <text x="485" y="532" font-size="9" fill="#64748b" text-anchor="middle">y esquema SQLite</text>
+
+  <!-- Gateway Integridad -->
+  <polygon points="635,485 660,510 635,535 610,510" fill="#fef3c7" stroke="#d97706" stroke-width="2" filter="url(#shadow-res)"/>
+  <text x="635" y="514" font-size="14" font-weight="bold" fill="#b45309" text-anchor="middle">✕</text>
+
+  <!-- End Event Abortado -->
+  <circle cx="720" cy="555" r="15" fill="#fee2e2" stroke="#dc2626" stroke-width="3" filter="url(#shadow-res)"/>
+  <text x="720" y="585" font-size="9" font-weight="600" fill="#b91c1c" text-anchor="middle">Archivo Dañado</text>
+
+  <!-- Task Reemplazar BD -->
+  <rect x="730" y="470" width="130" height="80" rx="8" fill="#f0fdfa" stroke="#0f766e" stroke-width="2" filter="url(#shadow-res)"/>
+  <text x="795" y="500" font-size="11" font-weight="bold" fill="#115e59" text-anchor="middle">Reemplazar BD</text>
+  <text x="795" y="517" font-size="10" fill="#047857" text-anchor="middle">Sobrescribe en AppData</text>
+  <text x="795" y="532" font-size="10" fill="#64748b" text-anchor="middle">con datos íntegros</text>
+
+  <!-- Task Reiniciar Servicios -->
+  <rect x="920" y="470" width="130" height="80" rx="8" fill="#f0fdfa" stroke="#0f766e" stroke-width="2" filter="url(#shadow-res)"/>
+  <text x="985" y="500" font-size="11" font-weight="bold" fill="#115e59" text-anchor="middle">Recargar Conexión</text>
+  <text x="985" y="517" font-size="10" fill="#047857" text-anchor="middle">Reabrir base de datos</text>
+  <text x="985" y="532" font-size="10" fill="#64748b" text-anchor="middle">y cache de sesión</text>
+
+  <!-- End Event Restaurado -->
+  <circle cx="1070" cy="125" r="18" fill="#dcfce7" stroke="#16a34a" stroke-width="4" filter="url(#shadow-res)"/>
+  <text x="1070" y="162" font-size="10" font-weight="bold" fill="#15803d" text-anchor="middle">Sistema Restaurado</text>
+</svg>

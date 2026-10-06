@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1560 620" width="100%" height="100%" style="background:#ffffff; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;">
+  <defs>
+    <marker id="arrow-lic" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#334155"/>
+    </marker>
+    <filter id="shadow-lic" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="2" dy="3" stdDeviation="3" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <!-- Pool Header -->
+  <rect x="30" y="30" width="1500" height="550" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="30" y="30" width="45" height="550" rx="8" fill="#0f172a"/>
+  <text x="-315" y="60" transform="rotate(-90)" fill="#ffffff" font-size="15" font-weight="bold" letter-spacing="1">PROCESO DE LICENCIAMIENTO OFFLINE Y PROTECCIÓN CRIPTOGRÁFICA</text>
+
+  <!-- Lanes -->
+  <!-- Lane 1: Cliente -->
+  <rect x="75" y="30" width="1455" height="170" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="30" width="35" height="170" fill="#38bdf8"/>
+  <text x="-135" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">CLIENTE / USUARIO</text>
+
+  <!-- Lane 2: Admin -->
+  <rect x="75" y="200" width="1455" height="200" fill="#fcfdfe" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="200" width="35" height="200" fill="#10b981"/>
+  <text x="-315" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">ADMIN / GENERADOR</text>
+
+  <!-- Lane 3: Motor App / SQLite -->
+  <rect x="75" y="400" width="1455" height="180" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="400" width="35" height="180" fill="#0f766e"/>
+  <text x="-505" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">MOTOR LICENCIAS</text>
+
+  <!-- Flow Lines -->
+  <!-- Start to Código Desafío -->
+  <path d="M 166 115 L 210 115" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-lic)"/>
+  <!-- Desafío to Enviar WhatsApp -->
+  <path d="M 340 115 L 400 115" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-lic)"/>
+  <!-- WhatsApp to Admin Recepción -->
+  <path d="M 465 155 L 465 270" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-lic)"/>
+  <!-- Recepción to Seleccionar Días -->
+  <path d="M 530 300 L 590 300" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-lic)"/>
+  <!-- Días to Firmar HMAC -->
+  <path d="M 720 300 L 780 300" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-lic)"/>
+  <!-- Firmar to Enviar Clave WhatsApp -->
+  <path d="M 910 300 L 970 300" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-lic)"/>
+  <!-- Enviar Clave to Pegar en App -->
+  <path d="M 1035 260 L 1035 155" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-lic)"/>
+  <!-- Pegar to Gateway Anti-Tampering -->
+  <path d="M 1100 115 L 1150 115 L 1150 460" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-lic)"/>
+  <!-- Gateway Tampering -> No (Bloqueo Reloj) -->
+  <path d="M 1150 510 L 1150 535" stroke="#ef4444" stroke-width="2" fill="none" marker-end="url(#arrow-lic)"/>
+  <text x="1155" y="525" font-size="10" font-weight="bold" fill="#ef4444">Atrasado</text>
+  <!-- Gateway Tampering -> Sí (Gateway Firma) -->
+  <path d="M 1175 485 L 1230 485" stroke="#10b981" stroke-width="2" fill="none" marker-end="url(#arrow-lic)"/>
+  <text x="1185" y="475" font-size="10" font-weight="bold" fill="#10b981">Fecha OK</text>
+  <!-- Gateway Firma -> No (Rechazo) -->
+  <path d="M 1255 510 L 1255 535" stroke="#ef4444" stroke-width="2" fill="none" marker-end="url(#arrow-lic)"/>
+  <text x="1260" y="525" font-size="10" font-weight="bold" fill="#ef4444">Firma Mala</text>
+  <!-- Gateway Firma -> Sí (Actualizar Vencimiento) -->
+  <path d="M 1280 485 L 1330 485" stroke="#10b981" stroke-width="2" fill="none" marker-end="url(#arrow-lic)"/>
+  <text x="1285" y="475" font-size="10" font-weight="bold" fill="#10b981">Válida</text>
+  <!-- Actualizar to Rotar Desafío -->
+  <path d="M 1420 485 L 1450 485" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-lic)"/>
+
+  <!-- NODES -->
+  <!-- Start Event -->
+  <circle cx="145" cy="115" r="18" fill="#e0f2fe" stroke="#0284c7" stroke-width="2.5" filter="url(#shadow-lic)"/>
+  <circle cx="145" cy="115" r="8" fill="#0284c7"/>
+  <text x="145" y="152" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">Instalación App</text>
+
+  <!-- User Task Código Desafío -->
+  <rect x="210" y="75" width="130" height="80" rx="8" fill="#ffffff" stroke="#38bdf8" stroke-width="2" filter="url(#shadow-lic)"/>
+  <text x="275" y="105" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Código de Desafío</text>
+  <text x="275" y="122" font-size="10" fill="#0284c7" text-anchor="middle">6 dígitos aleatorios</text>
+  <text x="275" y="137" font-size="10" fill="#64748b" text-anchor="middle">en pantalla modal</text>
+
+  <!-- User Task Enviar WhatsApp -->
+  <rect x="400" y="75" width="130" height="80" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#shadow-lic)"/>
+  <text x="465" y="105" font-size="11" font-weight="bold" fill="#15803d" text-anchor="middle">Solicitar por WhatsApp</text>
+  <text x="465" y="122" font-size="10" fill="#16a34a" text-anchor="middle">Envía código y días</text>
+  <text x="465" y="137" font-size="10" fill="#64748b" text-anchor="middle">al administrador</text>
+
+  <!-- Task Admin Recepción -->
+  <rect x="400" y="260" width="130" height="80" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="2" filter="url(#shadow-lic)"/>
+  <text x="465" y="290" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Ingresar Código</text>
+  <text x="465" y="307" font-size="10" fill="#64748b" text-anchor="middle">En generador offline</text>
+  <text x="465" y="322" font-size="10" fill="#64748b" text-anchor="middle">licencias_admin.html</text>
+
+  <!-- Task Seleccionar Días -->
+  <rect x="590" y="260" width="130" height="80" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="2" filter="url(#shadow-lic)"/>
+  <text x="655" y="290" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Seleccionar Días</text>
+  <text x="655" y="307" font-size="10" fill="#64748b" text-anchor="middle">7, 15, 30, 90, 365</text>
+  <text x="655" y="322" font-size="10" fill="#64748b" text-anchor="middle">o 9999 (Vitalicia)</text>
+
+  <!-- Task HMAC-SHA256 -->
+  <rect x="780" y="260" width="130" height="80" rx="8" fill="#f0fdfa" stroke="#0f766e" stroke-width="2" filter="url(#shadow-lic)"/>
+  <text x="845" y="290" font-size="11" font-weight="bold" fill="#115e59" text-anchor="middle">Firma HMAC-SHA256</text>
+  <text x="845" y="307" font-size="10" fill="#047857" text-anchor="middle">Clave Maestra Secreta</text>
+  <text x="845" y="322" font-size="10" fill="#64748b" text-anchor="middle">4 bytes hex format</text>
+
+  <!-- Task Enviar Clave WhatsApp -->
+  <rect x="970" y="260" width="130" height="80" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" filter="url(#shadow-lic)"/>
+  <text x="1035" y="290" font-size="11" font-weight="bold" fill="#15803d" text-anchor="middle">Enviar Clave</text>
+  <text x="1035" y="307" font-size="10" fill="#16a34a" text-anchor="middle">WhatsApp 1-Click</text>
+  <text x="1035" y="322" font-size="10" fill="#64748b" text-anchor="middle">[DIAS]-[FIRMA]</text>
+
+  <!-- Task Pegar en App -->
+  <rect x="970" y="75" width="130" height="80" rx="8" fill="#ffffff" stroke="#38bdf8" stroke-width="2" filter="url(#shadow-lic)"/>
+  <text x="1035" y="105" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Pegar Clave en App</text>
+  <text x="1035" y="122" font-size="10" fill="#0284c7" text-anchor="middle">Presionar 'Activar'</text>
+  <text x="1035" y="137" font-size="10" fill="#64748b" text-anchor="middle">en pantalla modal</text>
+
+  <!-- Gateway Anti-Tampering -->
+  <polygon points="1150,460 1175,485 1150,510 1125,485" fill="#fef3c7" stroke="#d97706" stroke-width="2" filter="url(#shadow-lic)"/>
+  <text x="1150" y="489" font-size="14" font-weight="bold" fill="#b45309" text-anchor="middle">✕</text>
+
+  <!-- End Event Bloqueo Reloj -->
+  <circle cx="1150" cy="550" r="15" fill="#fee2e2" stroke="#dc2626" stroke-width="3" filter="url(#shadow-lic)"/>
+  <text x="1150" y="580" font-size="9" font-weight="bold" fill="#b91c1c" text-anchor="middle">Bloqueo Reloj</text>
+
+  <!-- Gateway Firma -->
+  <polygon points="1255,460 1280,485 1255,510 1230,485" fill="#fef3c7" stroke="#d97706" stroke-width="2" filter="url(#shadow-lic)"/>
+  <text x="1255" y="489" font-size="14" font-weight="bold" fill="#b45309" text-anchor="middle">✕</text>
+
+  <!-- End Event Clave Mala -->
+  <circle cx="1255" cy="550" r="15" fill="#fee2e2" stroke="#dc2626" stroke-width="3" filter="url(#shadow-lic)"/>
+  <text x="1255" y="580" font-size="9" font-weight="bold" fill="#b91c1c" text-anchor="middle">Clave Inválida</text>
+
+  <!-- Task Actualizar Vencimiento -->
+  <rect x="1330" y="450" width="110" height="70" rx="8" fill="#f0fdfa" stroke="#0f766e" stroke-width="2" filter="url(#shadow-lic)"/>
+  <text x="1385" y="475" font-size="10" font-weight="bold" fill="#115e59" text-anchor="middle">Actualizar Fecha</text>
+  <text x="1385" y="492" font-size="9" fill="#047857" text-anchor="middle">Guardar en SQLite</text>
+  <text x="1385" y="505" font-size="9" fill="#64748b" text-anchor="middle">+ N días autorizados</text>
+
+  <!-- End Event Desbloqueado -->
+  <circle cx="1490" cy="485" r="18" fill="#dcfce7" stroke="#16a34a" stroke-width="4" filter="url(#shadow-lic)"/>
+  <text x="1490" y="522" font-size="10" font-weight="bold" fill="#15803d" text-anchor="middle">App Desbloqueada</text>
+</svg>

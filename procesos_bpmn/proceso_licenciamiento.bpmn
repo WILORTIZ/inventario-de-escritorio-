@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Definitions_Licenciamiento"
+                  targetNamespace="http://bpmn.io/schema/bpmn"
+                  exporter="Antigravity BPMN Modeler"
+                  exporterVersion="1.0.0">
+  <bpmn:collaboration id="Collaboration_Licenciamiento">
+    <bpmn:participant id="Participant_ProcesoLicenciamiento" name="Proceso de Gestión y Activación de Licencias Offline (Challenge-Response HMAC-SHA256)" processRef="Process_Licenciamiento" />
+  </bpmn:collaboration>
+
+  <bpmn:process id="Process_Licenciamiento" name="Licenciamiento Offline y Protección Anti-Tampering" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_Licenciamiento">
+      <bpmn:lane id="Lane_Cliente_Lic" name="Cliente / Usuario de la Aplicación">
+        <bpmn:flowNodeRef>StartEvent_InstalacionApp</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_ConsultarCodigoDesafio</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_EnviarDesafioWhatsApp</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_IngresarClaveActivacion</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Admin_Lic" name="Administrador / Desarrollador (Generador Offline)">
+        <bpmn:flowNodeRef>Activity_RecepcionSolicitud</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_SeleccionarDiasVigencia</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_FirmarHMACSHA256</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_EnviarClaveWhatsApp</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Motor_Lic" name="Motor de Licencias (App / SQLite / Anti-Tampering)">
+        <bpmn:flowNodeRef>Gateway_VerificarManipulacionReloj</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_BloqueoReloj</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_ValidarFirmaCripto</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_ClaveInvalida</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_ActualizarFechaVencimiento</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_RotarCodigoDesafio</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_SistemaDesbloqueado</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <!-- Flujo Cliente -->
+    <bpmn:startEvent id="StartEvent_InstalacionApp" name="Instalación / Vencimiento de Licencia">
+      <bpmn:outgoing>Flow_L1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:serviceTask id="Activity_ConsultarCodigoDesafio" name="Generar / Mostrar Código de Desafío de 6 Dígitos">
+      <bpmn:incoming>Flow_L1</bpmn:incoming>
+      <bpmn:outgoing>Flow_L2</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="Activity_EnviarDesafioWhatsApp" name="Enviar Código de 6 Dígitos y Días Solicitados por WhatsApp">
+      <bpmn:incoming>Flow_L2</bpmn:incoming>
+      <bpmn:outgoing>Flow_L3</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Flujo Admin -->
+    <bpmn:userTask id="Activity_RecepcionSolicitud" name="Ingresar Código en Herramienta 'licencias_admin.html'">
+      <bpmn:incoming>Flow_L3</bpmn:incoming>
+      <bpmn:outgoing>Flow_L4</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:userTask id="Activity_SeleccionarDiasVigencia" name="Seleccionar Días (7, 15, 30, 60, 90, 180, 365, 9999)">
+      <bpmn:incoming>Flow_L4</bpmn:incoming>
+      <bpmn:outgoing>Flow_L5</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:serviceTask id="Activity_FirmarHMACSHA256" name="Calcular Firma HMAC-SHA256 Formato '[DIAS]-[FIRMA]'">
+      <bpmn:incoming>Flow_L5</bpmn:incoming>
+      <bpmn:outgoing>Flow_L6</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="Activity_EnviarClaveWhatsApp" name="Enviar Clave de Activación al Cliente por WhatsApp / Correo">
+      <bpmn:incoming>Flow_L6</bpmn:incoming>
+      <bpmn:outgoing>Flow_L7</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Activación en App -->
+    <bpmn:userTask id="Activity_IngresarClaveActivacion" name="Pegar Clave en la Aplicación y Presionar 'Activar'">
+      <bpmn:incoming>Flow_L7</bpmn:incoming>
+      <bpmn:outgoing>Flow_L8</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Motor de Licencias -->
+    <bpmn:exclusiveGateway id="Gateway_VerificarManipulacionReloj" name="¿Fecha de Sistema Correcta? (Anti-Rollback)">
+      <bpmn:incoming>Flow_L8</bpmn:incoming>
+      <bpmn:outgoing>Flow_RelojManipulado</bpmn:outgoing>
+      <bpmn:outgoing>Flow_RelojOK</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:endEvent id="EndEvent_BloqueoReloj" name="Bloqueo de Seguridad: Reloj Manipulado">
+      <bpmn:incoming>Flow_RelojManipulado</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:exclusiveGateway id="Gateway_ValidarFirmaCripto" name="¿Firma Criptográfica Válida?">
+      <bpmn:incoming>Flow_RelojOK</bpmn:incoming>
+      <bpmn:outgoing>Flow_FirmaInvalida</bpmn:outgoing>
+      <bpmn:outgoing>Flow_FirmaValida</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:endEvent id="EndEvent_ClaveInvalida" name="Clave Rechazada por Firma Incorrecta">
+      <bpmn:incoming>Flow_FirmaInvalida</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:serviceTask id="Activity_ActualizarFechaVencimiento" name="Calcular Nueva Fecha de Vencimiento y Guardar en SQLite">
+      <bpmn:incoming>Flow_FirmaValida</bpmn:incoming>
+      <bpmn:outgoing>Flow_L9</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Activity_RotarCodigoDesafio" name="Rotar Código de Desafío para Próxima Renovación">
+      <bpmn:incoming>Flow_L9</bpmn:incoming>
+      <bpmn:outgoing>Flow_L10</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_SistemaDesbloqueado" name="Sistema 100% Desbloqueado y Operativo">
+      <bpmn:incoming>Flow_L10</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Secuencias -->
+    <bpmn:sequenceFlow id="Flow_L1" sourceRef="StartEvent_InstalacionApp" targetRef="Activity_ConsultarCodigoDesafio" />
+    <bpmn:sequenceFlow id="Flow_L2" sourceRef="Activity_ConsultarCodigoDesafio" targetRef="Activity_EnviarDesafioWhatsApp" />
+    <bpmn:sequenceFlow id="Flow_L3" sourceRef="Activity_EnviarDesafioWhatsApp" targetRef="Activity_RecepcionSolicitud" />
+    <bpmn:sequenceFlow id="Flow_L4" sourceRef="Activity_RecepcionSolicitud" targetRef="Activity_SeleccionarDiasVigencia" />
+    <bpmn:sequenceFlow id="Flow_L5" sourceRef="Activity_SeleccionarDiasVigencia" targetRef="Activity_FirmarHMACSHA256" />
+    <bpmn:sequenceFlow id="Flow_L6" sourceRef="Activity_FirmarHMACSHA256" targetRef="Activity_EnviarClaveWhatsApp" />
+    <bpmn:sequenceFlow id="Flow_L7" sourceRef="Activity_EnviarClaveWhatsApp" targetRef="Activity_IngresarClaveActivacion" />
+    <bpmn:sequenceFlow id="Flow_L8" sourceRef="Activity_IngresarClaveActivacion" targetRef="Gateway_VerificarManipulacionReloj" />
+    <bpmn:sequenceFlow id="Flow_RelojManipulado" name="No (Atrasado)" sourceRef="Gateway_VerificarManipulacionReloj" targetRef="EndEvent_BloqueoReloj" />
+    <bpmn:sequenceFlow id="Flow_RelojOK" name="Sí (Válido)" sourceRef="Gateway_VerificarManipulacionReloj" targetRef="Gateway_ValidarFirmaCripto" />
+    <bpmn:sequenceFlow id="Flow_FirmaInvalida" name="No (Inválida)" sourceRef="Gateway_ValidarFirmaCripto" targetRef="EndEvent_ClaveInvalida" />
+    <bpmn:sequenceFlow id="Flow_FirmaValida" name="Sí (Válida)" sourceRef="Gateway_ValidarFirmaCripto" targetRef="Activity_ActualizarFechaVencimiento" />
+    <bpmn:sequenceFlow id="Flow_L9" sourceRef="Activity_ActualizarFechaVencimiento" targetRef="Activity_RotarCodigoDesafio" />
+    <bpmn:sequenceFlow id="Flow_L10" sourceRef="Activity_RotarCodigoDesafio" targetRef="EndEvent_SistemaDesbloqueado" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Licenciamiento">
+    <bpmndi:BPMNPlane id="BPMNPlane_Licenciamiento" bpmnElement="Collaboration_Licenciamiento">
+      <bpmndi:BPMNShape id="Participant_ProcesoLicenciamiento_di" bpmnElement="Participant_ProcesoLicenciamiento" isHorizontal="true">
+        <dc:Bounds x="160" y="80" width="1540" height="520" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Cliente_Lic_di" bpmnElement="Lane_Cliente_Lic" isHorizontal="true">
+        <dc:Bounds x="190" y="80" width="1510" height="160" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Admin_Lic_di" bpmnElement="Lane_Admin_Lic" isHorizontal="true">
+        <dc:Bounds x="190" y="240" width="1510" height="170" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Motor_Lic_di" bpmnElement="Lane_Motor_Lic" isHorizontal="true">
+        <dc:Bounds x="190" y="410" width="1510" height="190" />
+      </bpmndi:BPMNShape>
+
+      <!-- Elements -->
+      <bpmndi:BPMNShape id="StartEvent_InstalacionApp_di" bpmnElement="StartEvent_InstalacionApp">
+        <dc:Bounds x="242" y="137" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="220" y="180" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ConsultarCodigoDesafio_di" bpmnElement="Activity_ConsultarCodigoDesafio">
+        <dc:Bounds x="330" y="115" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_EnviarDesafioWhatsApp_di" bpmnElement="Activity_EnviarDesafioWhatsApp">
+        <dc:Bounds x="500" y="115" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_RecepcionSolicitud_di" bpmnElement="Activity_RecepcionSolicitud">
+        <dc:Bounds x="500" y="280" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_SeleccionarDiasVigencia_di" bpmnElement="Activity_SeleccionarDiasVigencia">
+        <dc:Bounds x="670" y="280" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_FirmarHMACSHA256_di" bpmnElement="Activity_FirmarHMACSHA256">
+        <dc:Bounds x="840" y="280" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_EnviarClaveWhatsApp_di" bpmnElement="Activity_EnviarClaveWhatsApp">
+        <dc:Bounds x="1010" y="280" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_IngresarClaveActivacion_di" bpmnElement="Activity_IngresarClaveActivacion">
+        <dc:Bounds x="1010" y="115" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_VerificarManipulacionReloj_di" bpmnElement="Gateway_VerificarManipulacionReloj" isMarkerVisible="true">
+        <dc:Bounds x="1050" y="445" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1035" y="410" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_BloqueoReloj_di" bpmnElement="EndEvent_BloqueoReloj">
+        <dc:Bounds x="1057" y="537" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1100" y="540" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_ValidarFirmaCripto_di" bpmnElement="Gateway_ValidarFirmaCripto" isMarkerVisible="true">
+        <dc:Bounds x="1185" y="445" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1170" y="410" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_ClaveInvalida_di" bpmnElement="EndEvent_ClaveInvalida">
+        <dc:Bounds x="1192" y="537" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1235" y="540" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ActualizarFechaVencimiento_di" bpmnElement="Activity_ActualizarFechaVencimiento">
+        <dc:Bounds x="1300" y="430" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_RotarCodigoDesafio_di" bpmnElement="Activity_RotarCodigoDesafio">
+        <dc:Bounds x="1470" y="430" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_SistemaDesbloqueado_di" bpmnElement="EndEvent_SistemaDesbloqueado">
+        <dc:Bounds x="1642" y="452" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1620" y="495" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Edges -->
+      <bpmndi:BPMNEdge id="Flow_L1_di" bpmnElement="Flow_L1"><di:waypoint x="278" y="155" /><di:waypoint x="330" y="155" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_L2_di" bpmnElement="Flow_L2"><di:waypoint x="460" y="155" /><di:waypoint x="500" y="155" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_L3_di" bpmnElement="Flow_L3"><di:waypoint x="565" y="195" /><di:waypoint x="565" y="280" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_L4_di" bpmnElement="Flow_L4"><di:waypoint x="630" y="320" /><di:waypoint x="670" y="320" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_L5_di" bpmnElement="Flow_L5"><di:waypoint x="800" y="320" /><di:waypoint x="840" y="320" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_L6_di" bpmnElement="Flow_L6"><di:waypoint x="970" y="320" /><di:waypoint x="1010" y="320" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_L7_di" bpmnElement="Flow_L7"><di:waypoint x="1075" y="280" /><di:waypoint x="1075" y="195" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_L8_di" bpmnElement="Flow_L8"><di:waypoint x="1075" y="195" /><di:waypoint x="1075" y="445" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_RelojManipulado_di" bpmnElement="Flow_RelojManipulado"><di:waypoint x="1075" y="495" /><di:waypoint x="1075" y="537" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_RelojOK_di" bpmnElement="Flow_RelojOK"><di:waypoint x="1100" y="470" /><di:waypoint x="1185" y="470" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_FirmaInvalida_di" bpmnElement="Flow_FirmaInvalida"><di:waypoint x="1210" y="495" /><di:waypoint x="1210" y="537" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_FirmaValida_di" bpmnElement="Flow_FirmaValida"><di:waypoint x="1235" y="470" /><di:waypoint x="1300" y="470" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_L9_di" bpmnElement="Flow_L9"><di:waypoint x="1430" y="470" /><di:waypoint x="1470" y="470" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_L10_di" bpmnElement="Flow_L10"><di:waypoint x="1600" y="470" /><di:waypoint x="1642" y="470" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

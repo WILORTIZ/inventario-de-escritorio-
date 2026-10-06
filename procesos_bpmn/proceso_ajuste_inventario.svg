@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1520 620" width="100%" height="100%" style="background:#ffffff; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;">
+  <defs>
+    <marker id="arrow-ajuste" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#334155"/>
+    </marker>
+    <filter id="shadow-ajuste" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="2" dy="3" stdDeviation="3" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <!-- Pool Header -->
+  <rect x="30" y="30" width="1460" height="550" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="30" y="30" width="45" height="550" rx="8" fill="#0f172a"/>
+  <text x="-315" y="60" transform="rotate(-90)" fill="#ffffff" font-size="15" font-weight="bold" letter-spacing="1">PROCESO DE AJUSTE Y CUADRE FÍSICO DE INVENTARIO</text>
+
+  <!-- Lanes -->
+  <!-- Lane 1: Auditor -->
+  <rect x="75" y="30" width="1415" height="170" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="30" width="35" height="170" fill="#0284c7"/>
+  <text x="-135" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">AUDITOR / CONTEO</text>
+
+  <!-- Lane 2: Supervisor -->
+  <rect x="75" y="200" width="1415" height="200" fill="#fcfdfe" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="200" width="35" height="200" fill="#8b5cf6"/>
+  <text x="-315" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">SUPERVISOR / ADMIN</text>
+
+  <!-- Lane 3: Sistema CDS -->
+  <rect x="75" y="400" width="1415" height="180" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="400" width="35" height="180" fill="#0f766e"/>
+  <text x="-505" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">SISTEMA CDS</text>
+
+  <!-- Flow Lines -->
+  <!-- Start to Conteo -->
+  <path d="M 166 115 L 210 115" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-ajuste)"/>
+  <!-- Conteo to Comparar -->
+  <path d="M 340 115 L 400 115" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-ajuste)"/>
+  <!-- Comparar to Gateway Diferencia -->
+  <path d="M 530 115 L 590 115" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-ajuste)"/>
+  <!-- Gateway -> No Diferencia (Cuadrado) -->
+  <path d="M 640 115 L 700 115" stroke="#10b981" stroke-width="2" fill="none" marker-end="url(#arrow-ajuste)"/>
+  <text x="645" y="105" font-size="10" font-weight="bold" fill="#10b981">Sin Diferencia</text>
+  <!-- Gateway -> Sí Diferencia (Investigar) -->
+  <path d="M 615 140 L 615 260" stroke="#f59e0b" stroke-width="2" fill="none" marker-end="url(#arrow-ajuste)"/>
+  <text x="620" y="170" font-size="10" font-weight="bold" fill="#d97706">Diferencia (+/-)</text>
+  <!-- Investigar to Gateway Tipo -->
+  <path d="M 680 300 L 740 300" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-ajuste)"/>
+  <!-- Gateway -> Sobrante (+) -->
+  <path d="M 765 275 L 765 250 L 830 250" stroke="#10b981" stroke-width="2" fill="none" marker-end="url(#arrow-ajuste)"/>
+  <text x="770" y="240" font-size="10" font-weight="bold" fill="#10b981">Sobrante (+)</text>
+  <!-- Gateway -> Faltante (-) -->
+  <path d="M 765 325 L 765 350 L 830 350" stroke="#ef4444" stroke-width="2" fill="none" marker-end="url(#arrow-ajuste)"/>
+  <text x="770" y="365" font-size="10" font-weight="bold" fill="#ef4444">Faltante (-)</text>
+  <!-- Aprobar to Registrar Ajuste CDS -->
+  <path d="M 960 250 L 1020 250 L 1020 450" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-ajuste)"/>
+  <path d="M 960 350 L 1020 350 L 1020 450" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-ajuste)"/>
+  <!-- Registrar to Regularizar Saldo -->
+  <path d="M 1085 490 L 1145 490" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-ajuste)"/>
+  <!-- Regularizar to Fin -->
+  <path d="M 1275 490 L 1335 490" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-ajuste)"/>
+
+  <!-- NODES -->
+  <!-- Start Event -->
+  <circle cx="145" cy="115" r="18" fill="#e0e7ff" stroke="#4f46e5" stroke-width="2.5" filter="url(#shadow-ajuste)"/>
+  <circle cx="145" cy="115" r="8" fill="#4f46e5"/>
+  <text x="145" y="152" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">Conteo Cíclico</text>
+
+  <!-- User Task Conteo -->
+  <rect x="210" y="75" width="130" height="80" rx="8" fill="#ffffff" stroke="#0284c7" stroke-width="2" filter="url(#shadow-ajuste)"/>
+  <text x="275" y="105" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Conteo Físico</text>
+  <text x="275" y="122" font-size="10" fill="#64748b" text-anchor="middle">Toma física por</text>
+  <text x="275" y="137" font-size="10" fill="#64748b" text-anchor="middle">ubicación CDS</text>
+
+  <!-- Task Comparar -->
+  <rect x="400" y="75" width="130" height="80" rx="8" fill="#f0f9ff" stroke="#0284c7" stroke-width="2" filter="url(#shadow-ajuste)"/>
+  <text x="465" y="105" font-size="11" font-weight="bold" fill="#0369a1" text-anchor="middle">Cotejo vs Teórico</text>
+  <text x="465" y="122" font-size="10" fill="#64748b" text-anchor="middle">Comparar físico vs</text>
+  <text x="465" y="137" font-size="10" fill="#64748b" text-anchor="middle">saldo del sistema</text>
+
+  <!-- Gateway Diferencia -->
+  <polygon points="615,90 640,115 615,140 590,115" fill="#fef3c7" stroke="#d97706" stroke-width="2" filter="url(#shadow-ajuste)"/>
+  <text x="615" y="119" font-size="14" font-weight="bold" fill="#b45309" text-anchor="middle">✕</text>
+
+  <!-- End Event Cuadrado -->
+  <circle cx="720" cy="115" r="18" fill="#dcfce7" stroke="#16a34a" stroke-width="4" filter="url(#shadow-ajuste)"/>
+  <text x="720" y="152" font-size="10" font-weight="bold" fill="#15803d" text-anchor="middle">100% Cuadrado</text>
+
+  <!-- Task Investigar -->
+  <rect x="550" y="260" width="130" height="80" rx="8" fill="#ffffff" stroke="#8b5cf6" stroke-width="2" filter="url(#shadow-ajuste)"/>
+  <text x="615" y="290" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Investigar Causa</text>
+  <text x="615" y="307" font-size="10" fill="#64748b" text-anchor="middle">Error conteo, merma</text>
+  <text x="615" y="322" font-size="10" fill="#64748b" text-anchor="middle">o cruce de código</text>
+
+  <!-- Gateway Tipo -->
+  <polygon points="765,275 790,300 765,325 740,300" fill="#fef3c7" stroke="#d97706" stroke-width="2" filter="url(#shadow-ajuste)"/>
+  <text x="765" y="304" font-size="14" font-weight="bold" fill="#b45309" text-anchor="middle">✕</text>
+
+  <!-- Task Aprobar Sobrante -->
+  <rect x="830" y="220" width="130" height="60" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5" filter="url(#shadow-ajuste)"/>
+  <text x="895" y="243" font-size="10" font-weight="bold" fill="#15803d" text-anchor="middle">Ajuste Positivo (+)</text>
+  <text x="895" y="258" font-size="9" fill="#16a34a" text-anchor="middle">Sobrante justificado</text>
+
+  <!-- Task Aprobar Faltante -->
+  <rect x="830" y="320" width="130" height="60" rx="8" fill="#fef2f2" stroke="#dc2626" stroke-width="1.5" filter="url(#shadow-ajuste)"/>
+  <text x="895" y="343" font-size="10" font-weight="bold" fill="#991b1b" text-anchor="middle">Ajuste Negativo (-)</text>
+  <text x="895" y="358" font-size="9" fill="#dc2626" text-anchor="middle">Faltante auditado</text>
+
+  <!-- Task Registrar Ajuste CDS -->
+  <rect x="955" y="450" width="130" height="80" rx="8" fill="#f0fdfa" stroke="#0f766e" stroke-width="2" filter="url(#shadow-ajuste)"/>
+  <text x="1020" y="480" font-size="11" font-weight="bold" fill="#115e59" text-anchor="middle">Registrar 'AJUSTE'</text>
+  <text x="1020" y="497" font-size="10" fill="#047857" text-anchor="middle">Movimiento (+/-)</text>
+  <text x="1020" y="512" font-size="10" fill="#64748b" text-anchor="middle">con justificación</text>
+
+  <!-- Task Regularizar Saldo -->
+  <rect x="1145" y="450" width="130" height="80" rx="8" fill="#f0fdfa" stroke="#0f766e" stroke-width="2" filter="url(#shadow-ajuste)"/>
+  <text x="1210" y="480" font-size="11" font-weight="bold" fill="#115e59" text-anchor="middle">Regularizar Saldo</text>
+  <text x="1210" y="497" font-size="10" fill="#64748b" text-anchor="middle">Asiento balance en</text>
+  <text x="1210" y="512" font-size="10" fill="#64748b" text-anchor="middle">Kardex en tiempo real</text>
+
+  <!-- End Event Exitoso -->
+  <circle cx="1355" cy="490" r="18" fill="#dcfce7" stroke="#16a34a" stroke-width="4" filter="url(#shadow-ajuste)"/>
+  <text x="1355" y="525" font-size="10" font-weight="bold" fill="#15803d" text-anchor="middle">Inventario Regularizado</text>
+</svg>

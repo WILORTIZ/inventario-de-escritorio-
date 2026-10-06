@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Definitions_Respaldos"
+                  targetNamespace="http://bpmn.io/schema/bpmn"
+                  exporter="Antigravity BPMN Modeler"
+                  exporterVersion="1.0.0">
+  <bpmn:collaboration id="Collaboration_Respaldos">
+    <bpmn:participant id="Participant_ProcesoRespaldos" name="Proceso de Gestión de Respaldos y Recuperación de Base de Datos" processRef="Process_Respaldos" />
+  </bpmn:collaboration>
+
+  <bpmn:process id="Process_Respaldos" name="Respaldos y Recuperación de BD" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_Respaldos">
+      <bpmn:lane id="Lane_Admin_Res" name="Super Administrador / TI">
+        <bpmn:flowNodeRef>StartEvent_AccionRespaldo</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_AccionBD</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_SolicitarBackupManual</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_SeleccionarArchivoRestaurar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_DescargarCopiaDB</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_CopiaGuardada</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_RestauracionExitosa</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Motor_Res" name="Motor de Persistencia y Servidor Node.js">
+        <bpmn:flowNodeRef>Activity_EjecutarVacuumInto</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_ValidarIntegridadSQLite</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_IntegridadOK</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_ReemplazarDBActiva</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_ReiniciarServiciosLocales</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>EndEvent_FalloRestauracion</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <!-- Flujo Admin -->
+    <bpmn:startEvent id="StartEvent_AccionRespaldo" name="Operación de Respaldo o Contingencia">
+      <bpmn:outgoing>Flow_S1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:exclusiveGateway id="Gateway_AccionBD" name="¿Acción de Base de Datos?">
+      <bpmn:incoming>Flow_S1</bpmn:incoming>
+      <bpmn:outgoing>Flow_HacerBackup</bpmn:outgoing>
+      <bpmn:outgoing>Flow_HacerRestaurar</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- Rama Backup -->
+    <bpmn:userTask id="Activity_SolicitarBackupManual" name="Solicitar Descarga de Copia de Seguridad (.db / Excel / JSON)">
+      <bpmn:incoming>Flow_HacerBackup</bpmn:incoming>
+      <bpmn:outgoing>Flow_S2</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:serviceTask id="Activity_EjecutarVacuumInto" name="Ejecutar 'VACUUM INTO' Generando Clon Binario Atómico">
+      <bpmn:incoming>Flow_S2</bpmn:incoming>
+      <bpmn:outgoing>Flow_S3</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="Activity_DescargarCopiaDB" name="Guardar Respaldo en Almacenamiento Seguro / Nube">
+      <bpmn:incoming>Flow_S3</bpmn:incoming>
+      <bpmn:outgoing>Flow_S4</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="EndEvent_CopiaGuardada" name="Copia de Seguridad Resguardada">
+      <bpmn:incoming>Flow_S4</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Rama Restauración -->
+    <bpmn:userTask id="Activity_SeleccionarArchivoRestaurar" name="Cargar Archivo de Respaldo (.db) previo">
+      <bpmn:incoming>Flow_HacerRestaurar</bpmn:incoming>
+      <bpmn:outgoing>Flow_S5</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:serviceTask id="Activity_ValidarIntegridadSQLite" name="Ejecutar 'PRAGMA integrity_check' y Estructura">
+      <bpmn:incoming>Flow_S5</bpmn:incoming>
+      <bpmn:outgoing>Flow_S6</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="Gateway_IntegridadOK" name="¿Archivo Íntegro y Válido?">
+      <bpmn:incoming>Flow_S6</bpmn:incoming>
+      <bpmn:outgoing>Flow_IntegNo</bpmn:outgoing>
+      <bpmn:outgoing>Flow_IntegSi</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:endEvent id="EndEvent_FalloRestauracion" name="Restauración Abortada por Archivo Corrupto">
+      <bpmn:incoming>Flow_IntegNo</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:serviceTask id="Activity_ReemplazarDBActiva" name="Reemplazar Base de Datos en %APPDATA%\INVENTARIO CDS\">
+      <bpmn:incoming>Flow_IntegSi</bpmn:incoming>
+      <bpmn:outgoing>Flow_S7</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Activity_ReiniciarServiciosLocales" name="Recargar Catálogos y Conexiones SQLite">
+      <bpmn:incoming>Flow_S7</bpmn:incoming>
+      <bpmn:outgoing>Flow_S8</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_RestauracionExitosa" name="Sistema Restaurado al 100%">
+      <bpmn:incoming>Flow_S8</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Conexiones -->
+    <bpmn:sequenceFlow id="Flow_S1" sourceRef="StartEvent_AccionRespaldo" targetRef="Gateway_AccionBD" />
+    <bpmn:sequenceFlow id="Flow_HacerBackup" name="Generar Backup" sourceRef="Gateway_AccionBD" targetRef="Activity_SolicitarBackupManual" />
+    <bpmn:sequenceFlow id="Flow_HacerRestaurar" name="Restaurar BD" sourceRef="Gateway_AccionBD" targetRef="Activity_SeleccionarArchivoRestaurar" />
+    <bpmn:sequenceFlow id="Flow_S2" sourceRef="Activity_SolicitarBackupManual" targetRef="Activity_EjecutarVacuumInto" />
+    <bpmn:sequenceFlow id="Flow_S3" sourceRef="Activity_EjecutarVacuumInto" targetRef="Activity_DescargarCopiaDB" />
+    <bpmn:sequenceFlow id="Flow_S4" sourceRef="Activity_DescargarCopiaDB" targetRef="EndEvent_CopiaGuardada" />
+    <bpmn:sequenceFlow id="Flow_S5" sourceRef="Activity_SeleccionarArchivoRestaurar" targetRef="Activity_ValidarIntegridadSQLite" />
+    <bpmn:sequenceFlow id="Flow_S6" sourceRef="Activity_ValidarIntegridadSQLite" targetRef="Gateway_IntegridadOK" />
+    <bpmn:sequenceFlow id="Flow_IntegNo" name="No" sourceRef="Gateway_IntegridadOK" targetRef="EndEvent_FalloRestauracion" />
+    <bpmn:sequenceFlow id="Flow_IntegSi" name="Sí" sourceRef="Gateway_IntegridadOK" targetRef="Activity_ReemplazarDBActiva" />
+    <bpmn:sequenceFlow id="Flow_S7" sourceRef="Activity_ReemplazarDBActiva" targetRef="Activity_ReiniciarServiciosLocales" />
+    <bpmn:sequenceFlow id="Flow_S8" sourceRef="Activity_ReiniciarServiciosLocales" targetRef="EndEvent_RestauracionExitosa" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Respaldos">
+    <bpmndi:BPMNPlane id="BPMNPlane_Respaldos" bpmnElement="Collaboration_Respaldos">
+      <bpmndi:BPMNShape id="Participant_ProcesoRespaldos_di" bpmnElement="Participant_ProcesoRespaldos" isHorizontal="true">
+        <dc:Bounds x="160" y="80" width="1440" height="480" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Admin_Res_di" bpmnElement="Lane_Admin_Res" isHorizontal="true">
+        <dc:Bounds x="190" y="80" width="1410" height="200" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Motor_Res_di" bpmnElement="Lane_Motor_Res" isHorizontal="true">
+        <dc:Bounds x="190" y="280" width="1410" height="280" />
+      </bpmndi:BPMNShape>
+
+      <!-- Elements -->
+      <bpmndi:BPMNShape id="StartEvent_AccionRespaldo_di" bpmnElement="StartEvent_AccionRespaldo">
+        <dc:Bounds x="242" y="147" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="220" y="190" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_AccionBD_di" bpmnElement="Gateway_AccionBD" isMarkerVisible="true">
+        <dc:Bounds x="335" y="140" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="320" y="105" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_SolicitarBackupManual_di" bpmnElement="Activity_SolicitarBackupManual">
+        <dc:Bounds x="440" y="100" width="130" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_EjecutarVacuumInto_di" bpmnElement="Activity_EjecutarVacuumInto">
+        <dc:Bounds x="440" y="320" width="130" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_DescargarCopiaDB_di" bpmnElement="Activity_DescargarCopiaDB">
+        <dc:Bounds x="620" y="100" width="130" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_CopiaGuardada_di" bpmnElement="EndEvent_CopiaGuardada">
+        <dc:Bounds x="802" y="117" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="780" y="160" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_SeleccionarArchivoRestaurar_di" bpmnElement="Activity_SeleccionarArchivoRestaurar">
+        <dc:Bounds x="440" y="190" width="130" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ValidarIntegridadSQLite_di" bpmnElement="Activity_ValidarIntegridadSQLite">
+        <dc:Bounds x="440" y="420" width="130" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_IntegridadOK_di" bpmnElement="Gateway_IntegridadOK" isMarkerVisible="true">
+        <dc:Bounds x="645" y="430" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="630" y="395" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_FalloRestauracion_di" bpmnElement="EndEvent_FalloRestauracion">
+        <dc:Bounds x="652" y="512" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="698" y="515" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ReemplazarDBActiva_di" bpmnElement="Activity_ReemplazarDBActiva">
+        <dc:Bounds x="780" y="420" width="130" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ReiniciarServiciosLocales_di" bpmnElement="Activity_ReiniciarServiciosLocales">
+        <dc:Bounds x="970" y="420" width="130" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_RestauracionExitosa_di" bpmnElement="EndEvent_RestauracionExitosa">
+        <dc:Bounds x="1162" y="137" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1140" y="180" width="80" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Edges -->
+      <bpmndi:BPMNEdge id="Flow_S1_di" bpmnElement="Flow_S1"><di:waypoint x="278" y="165" /><di:waypoint x="335" y="165" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_HacerBackup_di" bpmnElement="Flow_HacerBackup"><di:waypoint x="360" y="140" /><di:waypoint x="360" y="135" /><di:waypoint x="440" y="135" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_HacerRestaurar_di" bpmnElement="Flow_HacerRestaurar"><di:waypoint x="360" y="190" /><di:waypoint x="360" y="225" /><di:waypoint x="440" y="225" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_S2_di" bpmnElement="Flow_S2"><di:waypoint x="505" y="170" /><di:waypoint x="505" y="320" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_S3_di" bpmnElement="Flow_S3"><di:waypoint x="570" y="355" /><di:waypoint x="595" y="355" /><di:waypoint x="595" y="135" /><di:waypoint x="620" y="135" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_S4_di" bpmnElement="Flow_S4"><di:waypoint x="750" y="135" /><di:waypoint x="802" y="135" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_S5_di" bpmnElement="Flow_S5"><di:waypoint x="505" y="260" /><di:waypoint x="505" y="420" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_S6_di" bpmnElement="Flow_S6"><di:waypoint x="570" y="455" /><di:waypoint x="645" y="455" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_IntegNo_di" bpmnElement="Flow_IntegNo"><di:waypoint x="670" y="480" /><di:waypoint x="670" y="512" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_IntegSi_di" bpmnElement="Flow_IntegSi"><di:waypoint x="695" y="455" /><di:waypoint x="780" y="455" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_S7_di" bpmnElement="Flow_S7"><di:waypoint x="910" y="455" /><di:waypoint x="970" y="455" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_S8_di" bpmnElement="Flow_S8"><di:waypoint x="1035" y="420" /><di:waypoint x="1035" y="155" /><di:waypoint x="1162" y="155" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

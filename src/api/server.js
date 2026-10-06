@@ -6,6 +6,7 @@ const fs = require('fs');
 const XLSX = require('xlsx');
 const ExcelJS = require('exceljs');
 const crypto = require('crypto');
+const licenseManager = require('./licenseManager');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -509,11 +510,51 @@ async function runDatabaseMigrations() {
             `);
         }
 
+        // Inicializar motor de licencias offline con protección anti-clock-tampering
+        licenseManager.setDb(db);
+        await licenseManager.init();
+
         console.log('[MIGRACIONES] ✅ Base de datos y migraciones completadas exitosamente sin alterar datos existentes.');
     } catch (err) {
         console.error('[MIGRACIONES] ❌ Error ejecutando migraciones:', err);
     }
 }
+
+// ==========================================
+// -1. MÓDULO DE LICENCIAMIENTO OFFLINE (CHALLENGE-RESPONSE HMAC-SHA256)
+// ==========================================
+
+// Endpoint para consultar estado actual de la licencia
+app.get('/api/licencia/status', async (req, res) => {
+    try {
+        const status = await licenseManager.getStatus();
+        res.json(status);
+    } catch (err) {
+        res.status(500).json({ error: 'Error al consultar estado de licencia: ' + err.message });
+    }
+});
+
+// Endpoint para activar o renovar licencia mediante clave
+app.post('/api/licencia/activar', async (req, res) => {
+    try {
+        const { clave } = req.body;
+        if (!clave) return res.status(400).json({ error: 'Debe ingresar la clave de activación' });
+        const result = await licenseManager.activateLicense(clave);
+        res.json(result);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// Endpoint para rotar o regenerar código de desafío
+app.post('/api/licencia/regenerar-desafio', async (req, res) => {
+    try {
+        const newChallenge = await licenseManager.rotateChallenge();
+        res.json({ success: true, challenge: newChallenge });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // ==========================================
 // 0. AUTENTICACIÓN SEGURA, USUARIOS Y ROLES (PROTECCIÓN ANTI-INYECCIÓN Y BRUTE FORCE)

@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1520 620" width="100%" height="100%" style="background:#ffffff; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;">
+  <defs>
+    <marker id="arrow-baja" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#334155"/>
+    </marker>
+    <filter id="shadow-baja" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="2" dy="3" stdDeviation="3" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <!-- Pool Header -->
+  <rect x="30" y="30" width="1460" height="550" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="30" y="30" width="45" height="550" rx="8" fill="#0f172a"/>
+  <text x="-315" y="60" transform="rotate(-90)" fill="#ffffff" font-size="15" font-weight="bold" letter-spacing="1">PROCESO DE DISPOSICIÓN FINAL Y BAJAS POR CADUCIDAD / DAÑO</text>
+
+  <!-- Lanes -->
+  <!-- Lane 1: Supervisor -->
+  <rect x="75" y="30" width="1415" height="180" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="30" width="35" height="180" fill="#dc2626"/>
+  <text x="-140" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">SUPERVISOR / ADMIN</text>
+
+  <!-- Lane 2: Almacén -->
+  <rect x="75" y="210" width="1415" height="190" fill="#fcfdfe" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="210" width="35" height="190" fill="#0284c7"/>
+  <text x="-315" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">ALMACÉN CDS</text>
+
+  <!-- Lane 3: Sistema CDS -->
+  <rect x="75" y="400" width="1415" height="180" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="75" y="400" width="35" height="180" fill="#0f766e"/>
+  <text x="-505" y="98" transform="rotate(-90)" fill="#ffffff" font-size="12" font-weight="bold">SISTEMA CDS</text>
+
+  <!-- Flow Lines -->
+  <!-- Start to Monitoreo -->
+  <path d="M 166 115 L 210 115" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-baja)"/>
+  <!-- Monitoreo to Gateway Causal -->
+  <path d="M 340 115 L 410 115" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-baja)"/>
+  <!-- Gateway -> Vencimiento (Asistente) -->
+  <path d="M 435 90 L 435 75 L 500 75" stroke="#dc2626" stroke-width="2" fill="none" marker-end="url(#arrow-baja)"/>
+  <text x="440" y="65" font-size="10" font-weight="bold" fill="#dc2626">Vencido (Rojo)</text>
+  <!-- Gateway -> Daño Manual -->
+  <path d="M 435 140 L 435 155 L 500 155" stroke="#f59e0b" stroke-width="2" fill="none" marker-end="url(#arrow-baja)"/>
+  <text x="440" y="150" font-size="10" font-weight="bold" fill="#d97706">Daño / Merma</text>
+  <!-- Asistente & Daño to Retiro Cuarentena -->
+  <path d="M 630 75 L 680 75 L 680 295 L 730 295" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-baja)"/>
+  <path d="M 630 155 L 680 155 L 680 295 L 730 295" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-baja)"/>
+  <!-- Retiro to Destrucción -->
+  <path d="M 860 295 L 920 295" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-baja)"/>
+  <!-- Destrucción to Acta -->
+  <path d="M 985 255 L 985 155" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-baja)"/>
+  <!-- Acta to Registrar Movimiento -->
+  <path d="M 1050 115 L 1120 115 L 1120 450" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-baja)"/>
+  <!-- Registrar to Actualizar Kardex -->
+  <path d="M 1185 490 L 1235 490" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-baja)"/>
+  <!-- Actualizar to Fin -->
+  <path d="M 1365 490 L 1415 490" stroke="#334155" stroke-width="2" fill="none" marker-end="url(#arrow-baja)"/>
+
+  <!-- NODES -->
+  <!-- Start Event -->
+  <circle cx="145" cy="115" r="18" fill="#fee2e2" stroke="#dc2626" stroke-width="2.5" filter="url(#shadow-baja)"/>
+  <circle cx="145" cy="115" r="8" fill="#dc2626"/>
+  <text x="145" y="152" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">Caducidad / Daño</text>
+
+  <!-- User Task Monitoreo -->
+  <rect x="210" y="75" width="130" height="80" rx="8" fill="#ffffff" stroke="#dc2626" stroke-width="2" filter="url(#shadow-baja)"/>
+  <text x="275" y="105" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Monitoreo Semáforo</text>
+  <text x="275" y="122" font-size="10" fill="#64748b" text-anchor="middle">Módulo Vencimientos</text>
+  <text x="275" y="137" font-size="10" fill="#64748b" text-anchor="middle">y reporte de rotura</text>
+
+  <!-- Gateway Causal -->
+  <polygon points="435,90 460,115 435,140 410,115" fill="#fef3c7" stroke="#d97706" stroke-width="2" filter="url(#shadow-baja)"/>
+  <text x="435" y="119" font-size="14" font-weight="bold" fill="#b45309" text-anchor="middle">✕</text>
+
+  <!-- Task Asistente Bajas -->
+  <rect x="500" y="45" width="130" height="60" rx="8" fill="#fef2f2" stroke="#dc2626" stroke-width="1.5" filter="url(#shadow-baja)"/>
+  <text x="565" y="68" font-size="10" font-weight="bold" fill="#991b1b" text-anchor="middle">Asistente Bajas</text>
+  <text x="565" y="83" font-size="9" fill="#dc2626" text-anchor="middle">Ítems Vencidos (&lt;=0d)</text>
+
+  <!-- Task Dictamen Manual -->
+  <rect x="500" y="125" width="130" height="60" rx="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5" filter="url(#shadow-baja)"/>
+  <text x="565" y="148" font-size="10" font-weight="bold" fill="#92400e" text-anchor="middle">Dictamen de Merma</text>
+  <text x="565" y="163" font-size="9" fill="#b45309" text-anchor="middle">Deterioro / Rotura</text>
+
+  <!-- Task Retiro Cuarentena -->
+  <rect x="730" y="255" width="130" height="80" rx="8" fill="#ffffff" stroke="#0284c7" stroke-width="2" filter="url(#shadow-baja)"/>
+  <text x="795" y="285" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Retiro a Cuarentena</text>
+  <text x="795" y="302" font-size="10" fill="#64748b" text-anchor="middle">Extracción física de</text>
+  <text x="795" y="317" font-size="10" fill="#64748b" text-anchor="middle">estantes operativos</text>
+
+  <!-- Task Destrucción / Scrap -->
+  <rect x="920" y="255" width="130" height="80" rx="8" fill="#ffffff" stroke="#0284c7" stroke-width="2" filter="url(#shadow-baja)"/>
+  <text x="985" y="285" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Destrucción / Scrap</text>
+  <text x="985" y="302" font-size="10" fill="#64748b" text-anchor="middle">Disposición física o</text>
+  <text x="985" y="317" font-size="10" fill="#64748b" text-anchor="middle">entrega a gestor</text>
+
+  <!-- Task Acta -->
+  <rect x="920" y="75" width="130" height="80" rx="8" fill="#ffffff" stroke="#dc2626" stroke-width="2" filter="url(#shadow-baja)"/>
+  <text x="985" y="105" font-size="11" font-weight="bold" fill="#1e293b" text-anchor="middle">Autorizar Acta</text>
+  <text x="985" y="122" font-size="10" fill="#64748b" text-anchor="middle">Firma de justificación</text>
+  <text x="985" y="137" font-size="10" fill="#64748b" text-anchor="middle">y cierre administrativo</text>
+
+  <!-- Task Registrar Baja CDS -->
+  <rect x="1055" y="450" width="130" height="80" rx="8" fill="#f0fdfa" stroke="#0f766e" stroke-width="2" filter="url(#shadow-baja)"/>
+  <text x="1120" y="480" font-size="10" font-weight="bold" fill="#115e59" text-anchor="middle">Registrar 'BAJA'</text>
+  <text x="1120" y="497" font-size="9" fill="#047857" text-anchor="middle">DISPOSICIÓN FINAL (-)</text>
+  <text x="1120" y="512" font-size="9" fill="#64748b" text-anchor="middle">en Sistema CDS</text>
+
+  <!-- Task Actualizar Kardex -->
+  <rect x="1235" y="450" width="130" height="80" rx="8" fill="#f0fdfa" stroke="#0f766e" stroke-width="2" filter="url(#shadow-baja)"/>
+  <text x="1300" y="480" font-size="11" font-weight="bold" fill="#115e59" text-anchor="middle">Descontar Saldo</text>
+  <text x="1300" y="497" font-size="10" fill="#64748b" text-anchor="middle">Asiento de pérdida</text>
+  <text x="1300" y="512" font-size="10" fill="#64748b" text-anchor="middle">en Kardex auditable</text>
+
+  <!-- End Event Exitoso -->
+  <circle cx="1435" cy="490" r="18" fill="#fee2e2" stroke="#dc2626" stroke-width="4" filter="url(#shadow-baja)"/>
+  <text x="1435" y="525" font-size="10" font-weight="bold" fill="#991b1b" text-anchor="middle">Baja Finalizada</text>
+</svg>

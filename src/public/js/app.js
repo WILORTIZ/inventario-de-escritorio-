@@ -16,7 +16,16 @@ async function safeFetchJSON(url, options = {}) {
         }
         throw new Error(`Respuesta no válida del servidor (${res.status}): ${text.substring(0, 100)}`);
     }
-    return await res.json();
+    const data = await res.json();
+    if (!res.ok) {
+        if (res.status === 403 && data.error === 'LICENCIA_EXPIRADA') {
+            if (window.LicenseClient && window.LicenseClient.enforceLock) {
+                window.LicenseClient.enforceLock(data);
+            }
+        }
+        throw new Error(data.message || data.error || `Error ${res.status}`);
+    }
+    return data;
 }
 
 // ==============================================================
@@ -1420,6 +1429,9 @@ async function openModalMovimiento(preselectedCode = null) {
         }
     }
 
+    // Resetear modo de entrega masiva al abrir el modal
+    limpiarModoEntregaMasiva();
+
     handleTipoMovimientoChange(document.getElementById('mov-tipo').value);
     await actualizarContextoEnMovimiento();
 
@@ -1483,6 +1495,17 @@ function handleTipoMovimientoChange(tipo) {
     if (personaInput) personaInput.required = false;
     if (causalSelect) causalSelect.required = false;
 
+    // Mostrar barra de Entrega Masiva desde Excel únicamente cuando el tipo es ENTREGA
+    const barMasiva = document.getElementById('mov-entrega-masiva-bar');
+    if (tipo === 'ENTREGA') {
+        if (barMasiva) barMasiva.style.display = 'block';
+    } else {
+        if (barMasiva) barMasiva.style.display = 'none';
+        if (typeof entregaMasivaState !== 'undefined' && entregaMasivaState.active) {
+            limpiarModoEntregaMasiva();
+        }
+    }
+
     // Configuración dinámica estricta según Tipo de Movimiento
     if (tipo === 'ENTRADA') {
         // 1. ENTRADA MANUAL / PROVEEDOR
@@ -1536,14 +1559,16 @@ function handleTipoMovimientoChange(tipo) {
             }
         }
 
-        // Bodega Destino: HABILITADA Y SELECCIONABLE
+        // Bodega Destino: HABILITADA Y SELECCIONABLE (Diferente a Bodega Origen)
         if (colDestino) colDestino.style.display = 'block';
         if (lblDestino) lblDestino.innerHTML = '<i class="bi bi-box-arrow-in-down-right me-1 text-success"></i>Bodega de Destino / Recepción <span class="text-danger">*</span>';
         if (destinoSelect) {
             destinoSelect.required = true;
-            if (!destinoSelect.value || destinoSelect.value === 'ALL') {
-                const firstOpt = Array.from(destinoSelect.options).find(o => o.value && o.value !== 'ALL');
-                destinoSelect.value = firstOpt ? firstOpt.value : 'PROYECTOS';
+            const origenVal = (origenSelect && origenSelect.value && origenSelect.value !== 'ALL') ? origenSelect.value : 'CDS';
+            if (!destinoSelect.value || destinoSelect.value === 'ALL' || destinoSelect.value.trim().toUpperCase() === origenVal.trim().toUpperCase()) {
+                const proyOpt = Array.from(destinoSelect.options).find(o => o.value && o.value.trim().toUpperCase() === 'PROYECTOS' && o.value.trim().toUpperCase() !== origenVal.trim().toUpperCase());
+                const diffOpt = Array.from(destinoSelect.options).find(o => o.value && o.value !== 'ALL' && o.value.trim().toUpperCase() !== origenVal.trim().toUpperCase());
+                destinoSelect.value = proyOpt ? proyOpt.value : (diffOpt ? diffOpt.value : 'PROYECTOS');
             }
         }
 
@@ -1720,7 +1745,70 @@ function handleTipoMovimientoChange(tipo) {
         if (vencContainer) vencContainer.style.display = 'none';
     }
 
+    validarBodegasDiferentesEnMovimiento(false);
     actualizarStockPreviewEnMovimiento();
+}
+
+function onCambioBodegaOrigenEnMovimiento() {
+    validarBodegasDiferentesEnMovimiento(true);
+    actualizarStockPreviewEnMovimiento();
+}
+
+function validarBodegasDiferentesEnMovimiento(mostrarToast = false) {
+    const tipo = document.getElementById('mov-tipo')?.value;
+    const origenSelect = document.getElementById('mov-bodega-origen');
+    const destinoSelect = document.getElementById('mov-bodega-destino');
+    const alertaDiv = document.getElementById('alerta-bodegas-iguales');
+    const textoAlerta = document.getElementById('texto-alerta-bodegas-iguales');
+    const form = document.getElementById('form-movimiento');
+    const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
+
+    if (!origenSelect || !destinoSelect) return true;
+
+    // Rehabilitar todas las opciones de destino inicialmente
+    Array.from(destinoSelect.options).forEach(opt => {
+        opt.disabled = false;
+    });
+
+    if (tipo === 'ENTREGA') {
+        const origenVal = (origenSelect.value || '').trim().toUpperCase();
+
+        // Deshabilitar en Bodega Destino la misma bodega seleccionada en Origen (ej. no permitir CDS -> CDS)
+        Array.from(destinoSelect.options).forEach(opt => {
+            if (opt.value && opt.value.trim().toUpperCase() === origenVal) {
+                opt.disabled = true;
+            }
+        });
+
+        const destinoVal = (destinoSelect.value || '').trim().toUpperCase();
+        if (origenVal && destinoVal && origenVal === destinoVal) {
+            // Intentar auto-seleccionar otra bodega distinta si no fue cambio manual en destino, o mostrar alerta si ambas coinciden
+            const diffOpt = Array.from(destinoSelect.options).find(o => o.value && o.value !== 'ALL' && o.value.trim().toUpperCase() !== origenVal);
+            if (!mostrarToast && diffOpt) {
+                destinoSelect.value = diffOpt.value;
+                if (alertaDiv) alertaDiv.style.display = 'none';
+                return true;
+            }
+
+            if (alertaDiv) alertaDiv.style.display = 'block';
+            if (textoAlerta) {
+                textoAlerta.textContent = `No se puede entregar entre las mismas bodegas (Origen: ${origenSelect.value} → Destino: ${destinoSelect.value}). Seleccione una Bodega de Destino diferente.`;
+            }
+            if (mostrarToast) {
+                showToast(`⚠️ No se puede entregar de "${origenSelect.value}" a la misma bodega "${destinoSelect.value}".`, 'danger');
+            }
+            if (submitBtn) submitBtn.disabled = true;
+            return false;
+        }
+    }
+
+    if (alertaDiv) alertaDiv.style.display = 'none';
+    if (typeof entregaMasivaState !== 'undefined' && entregaMasivaState.active) {
+        actualizarBotonSubmitEntregaMasiva();
+    } else if (submitBtn) {
+        submitBtn.disabled = false;
+    }
+    return true;
 }
 
 function handleItemSelectInMovimiento(codigo) {
@@ -1801,6 +1889,11 @@ async function actualizarContextoEnMovimiento() {
 }
 
 async function actualizarStockPreviewEnMovimiento() {
+    if (typeof entregaMasivaState !== 'undefined' && entregaMasivaState.active) {
+        await validarStockLoteEntregaMasiva();
+        return;
+    }
+
     const selectedCode = document.getElementById('mov-item-select')?.value;
     if (!selectedCode) return;
 
@@ -1936,10 +2029,16 @@ async function submitMovimiento(e) {
             showToast(`⚠️ No se puede realizar una entrega a la misma bodega de origen (Origen: ${bOrigen}, Destino: ${bDestino}). Seleccione una bodega de destino diferente.`, 'danger');
             if (submitBtn) {
                 submitBtn.disabled = false;
-                submitBtn.innerHTML = 'Registrar Transacción';
+                actualizarBotonSubmitEntregaMasiva();
             }
             return;
         }
+    }
+
+    // Si estamos en modo Entrega Masiva desde Excel, procesar todos los ítems seleccionados generando su movimiento individual con consecutivo
+    if (tipoMov === 'ENTREGA' && typeof entregaMasivaState !== 'undefined' && entregaMasivaState.active) {
+        await ejecutarSubmitEntregaMasiva(submitBtn, sedeVal, bOrigen, bDestino, pDestino);
+        return;
     }
 
     const payload = {
@@ -1991,6 +2090,531 @@ async function submitMovimiento(e) {
         if (submitBtn) {
             submitBtn.disabled = false;
             submitBtn.innerHTML = 'Registrar Transacción';
+        }
+    }
+}
+
+// ==============================================================
+// 5.0.1 ENTREGA MASIVA DESDE EXCEL (FORMATO PICKINGS)
+// ==============================================================
+const entregaMasivaState = {
+    active: false,
+    fileName: '',
+    projectHeader: '',
+    rows: [], // { idx, codigo_item, nombre_excel, nombre_catalogo, cantidad, comentario, orden, observacion_fila, existe, stock_disponible, unidad, selected }
+    filtroActual: 'TODOS'
+};
+
+function limpiarModoEntregaMasiva() {
+    entregaMasivaState.active = false;
+    entregaMasivaState.fileName = '';
+    entregaMasivaState.projectHeader = '';
+    entregaMasivaState.rows = [];
+    entregaMasivaState.filtroActual = 'TODOS';
+
+    const fileInput = document.getElementById('mov-excel-masivo-input');
+    if (fileInput) fileInput.value = '';
+
+    const panel = document.getElementById('mov-entrega-masiva-panel');
+    if (panel) panel.style.display = 'none';
+
+    const btnCancel = document.getElementById('btn-cancelar-entrega-masiva');
+    if (btnCancel) btnCancel.classList.add('d-none');
+
+    const colItem = document.getElementById('col-mov-item-select');
+    const selectItem = document.getElementById('mov-item-select');
+    if (colItem) colItem.style.display = 'block';
+    if (selectItem) selectItem.required = true;
+
+    const colCant = document.getElementById('col-mov-cantidad');
+    const inputCant = document.getElementById('mov-cantidad');
+    if (colCant) colCant.style.display = 'block';
+    if (inputCant) inputCant.required = true;
+
+    const barTitle = document.getElementById('mov-masivo-bar-title');
+    const barSub = document.getElementById('mov-masivo-bar-subtitle');
+    if (barTitle) barTitle.textContent = 'Entrega Masiva desde Formato Excel (PICKINGS)';
+    if (barSub) barSub.innerHTML = 'Carga el archivo Excel para tomar automáticamente <strong>ID Artículo</strong> y <strong>Cantidad solicitada</strong> y generar el movimiento individual de cada ítem con su consecutivo.';
+
+    const modalDialog = document.querySelector('#modalMovimiento .modal-dialog');
+    if (modalDialog) {
+        modalDialog.classList.remove('modal-xl');
+        modalDialog.classList.add('modal-lg');
+    }
+
+    actualizarBotonSubmitEntregaMasiva();
+}
+
+function normalizarTextoColumna(txt) {
+    return String(txt || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toUpperCase();
+}
+
+async function cargarExcelEntregaMasiva(event) {
+    const file = event.target.files ? event.target.files[0] : null;
+    if (!file) return;
+
+    if (typeof XLSX === 'undefined') {
+        showToast('⚠️ La librería XLSX no está disponible para leer el archivo.', 'danger');
+        return;
+    }
+
+    try {
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+
+        // Preferir hoja PICKINGS si existe, de lo contrario la primera hoja
+        const targetSheetName = workbook.SheetNames.find(n => normalizarTextoColumna(n).includes('PICKING')) || workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[targetSheetName];
+        const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+
+        if (!rawRows || rawRows.length < 2) {
+            showToast('⚠️ El archivo Excel está vacío o no tiene filas válidas.', 'warning');
+            return;
+        }
+
+        // Detectar fila de encabezados buscando "ID ARTICULO" / "CODIGO" y "CANTIDAD SOLICITADA" / "CANTIDAD"
+        let headerRowIdx = -1;
+        let colIdIdx = -1;
+        let colNombreIdx = -1;
+        let colCantIdx = -1;
+        let colComentarioIdx = -1;
+        let colOrdenIdx = -1;
+        let colObsIdx = -1;
+
+        for (let r = 0; r < Math.min(rawRows.length, 15); r++) {
+            const row = rawRows[r].map(c => normalizarTextoColumna(c));
+            const idIdx = row.findIndex(c => c === 'ID ARTICULO' || c === 'ID ARTÍCULO' || c.includes('ID ART') || c === 'CODIGO' || c === 'ID_ARTICULO');
+            const cantIdx = row.findIndex(c => c.includes('CANTIDAD SOLICITADA') || c === 'CANTIDAD' || c === 'CANT SOLICITADA');
+
+            if (idIdx !== -1 && cantIdx !== -1) {
+                headerRowIdx = r;
+                colIdIdx = idIdx;
+                colCantIdx = cantIdx;
+                colNombreIdx = row.findIndex((c, idx) => idx !== idIdx && (c === 'ARTICULO' || c === 'NOMBRE' || c === 'DESCRIPCION' || c.includes('ARTICULO')));
+                colComentarioIdx = row.findIndex(c => c.includes('COMENTARIO') || c === 'ESTADO');
+                colOrdenIdx = row.findIndex(c => c === 'ORDEN' || c.includes('ORDEN'));
+                colObsIdx = row.findIndex(c => c.includes('OBSERVACION'));
+                break;
+            }
+        }
+
+        if (headerRowIdx === -1 || colIdIdx === -1 || colCantIdx === -1) {
+            showToast('⚠️ No se encontraron las columnas "ID Artículo" y "Cantidad solicitada" en el archivo Excel.', 'danger');
+            return;
+        }
+
+        // Extraer posible título de proyecto en las filas previas al encabezado (ej. fila 1 celda A1)
+        let projectHeader = '';
+        if (headerRowIdx > 0 && rawRows[0]) {
+            const firstNonEmpty = rawRows[0].find(c => String(c || '').trim().length > 0);
+            if (firstNonEmpty) projectHeader = String(firstNonEmpty).trim();
+        }
+
+        const parsedRows = [];
+        let firstOrden = '';
+
+        for (let r = headerRowIdx + 1; r < rawRows.length; r++) {
+            const row = rawRows[r];
+            if (!row || row.length === 0) continue;
+
+            const rawCode = String(row[colIdIdx] ?? '').trim();
+            const rawCant = row[colCantIdx];
+            if (!rawCode && (rawCant === '' || rawCant === null || rawCant === undefined)) continue;
+
+            const codigoNum = parseInt(rawCode.replace(/[^\d]/g, ''), 10);
+            const cantNum = parseFloat(String(rawCant).replace(',', '.'));
+
+            if (isNaN(codigoNum) || isNaN(cantNum) || cantNum <= 0) continue;
+
+            const nombreExcel = colNombreIdx !== -1 ? String(row[colNombreIdx] || '').trim() : '';
+            const comentario = colComentarioIdx !== -1 ? String(row[colComentarioIdx] || '').trim().toUpperCase() : '';
+            const orden = colOrdenIdx !== -1 ? String(row[colOrdenIdx] || '').trim() : '';
+            const obsFila = colObsIdx !== -1 ? String(row[colObsIdx] || '').trim() : '';
+
+            if (orden && !firstOrden) firstOrden = orden;
+
+            parsedRows.push({
+                idx: parsedRows.length,
+                excelRow: r + 1,
+                codigo_item: codigoNum,
+                nombre_excel: nombreExcel,
+                nombre_catalogo: null,
+                cantidad_solicitada: cantNum,
+                cantidad: cantNum,
+                comentario: comentario || '-',
+                orden: orden,
+                observacion_fila: obsFila,
+                existe: false,
+                stock_disponible: 0,
+                unidad: 'Unidad',
+                selected: true
+            });
+        }
+
+        if (parsedRows.length === 0) {
+            showToast('⚠️ No se encontraron filas con ID Artículo y Cantidad solicitada mayor a cero.', 'warning');
+            return;
+        }
+
+        entregaMasivaState.active = true;
+        entregaMasivaState.fileName = file.name;
+        entregaMasivaState.projectHeader = projectHeader;
+        entregaMasivaState.rows = parsedRows;
+        entregaMasivaState.filtroActual = 'TODOS';
+
+        // Autocompletar Orden de Trabajo / Documento Referencia si está vacío
+        const docRefInput = document.getElementById('mov-doc-ref');
+        if (docRefInput && !docRefInput.value.trim() && firstOrden) {
+            docRefInput.value = `OT-${firstOrden}`;
+        }
+
+        // Si el encabezado del Excel coincide con algún proyecto de la lista, seleccionarlo o sugerirlo en Observaciones
+        if (projectHeader) {
+            const proySelect = document.getElementById('mov-proyecto');
+            if (proySelect && proySelect.options) {
+                const matchOpt = Array.from(proySelect.options).find(o =>
+                    normalizarTextoColumna(projectHeader).includes(normalizarTextoColumna(o.value)) ||
+                    normalizarTextoColumna(o.value).includes(normalizarTextoColumna(projectHeader))
+                );
+                if (matchOpt) {
+                    proySelect.value = matchOpt.value;
+                }
+            }
+            const obsInput = document.getElementById('mov-observaciones');
+            if (obsInput && !obsInput.value.trim()) {
+                obsInput.value = `Formato Excel: ${projectHeader}`;
+            }
+        }
+
+        // Ocultar selector e input individual y mostrar panel masivo
+        const colItem = document.getElementById('col-mov-item-select');
+        const selectItem = document.getElementById('mov-item-select');
+        const infoDiv = document.getElementById('mov-item-info');
+        const colCant = document.getElementById('col-mov-cantidad');
+        const inputCant = document.getElementById('mov-cantidad');
+
+        if (colItem) colItem.style.display = 'none';
+        if (selectItem) selectItem.required = false;
+        if (infoDiv) infoDiv.style.display = 'none';
+        if (colCant) colCant.style.display = 'none';
+        if (inputCant) inputCant.required = false;
+
+        const panel = document.getElementById('mov-entrega-masiva-panel');
+        if (panel) panel.style.display = 'block';
+
+        const btnCancel = document.getElementById('btn-cancelar-entrega-masiva');
+        if (btnCancel) btnCancel.classList.remove('d-none');
+
+        const barTitle = document.getElementById('mov-masivo-bar-title');
+        const barSub = document.getElementById('mov-masivo-bar-subtitle');
+        if (barTitle) {
+            barTitle.innerHTML = `<i class="bi bi-check-circle-fill text-success me-1"></i>Archivo cargado: <span class="text-success">${file.name}</span>`;
+        }
+        if (barSub) {
+            barSub.innerHTML = `${projectHeader ? `<strong>Proyecto en formato:</strong> ${projectHeader} | ` : ''}Hoja: <strong>${targetSheetName}</strong> (${parsedRows.length} ítems detectados)`;
+        }
+
+        const modalDialog = document.querySelector('#modalMovimiento .modal-dialog');
+        if (modalDialog) {
+            modalDialog.classList.remove('modal-lg');
+            modalDialog.classList.add('modal-xl');
+        }
+
+        await validarStockLoteEntregaMasiva();
+        showToast(`✅ Formato Excel cargado: ${parsedRows.length} ítems leídos de "${targetSheetName}".`, 'success');
+    } catch (err) {
+        console.error('Error leyendo Excel de entrega masiva:', err);
+        showToast(`⚠️ Error al procesar el archivo Excel: ${err.message}`, 'danger');
+    }
+}
+
+async function validarStockLoteEntregaMasiva() {
+    if (!entregaMasivaState.active || entregaMasivaState.rows.length === 0) return;
+
+    const movSede = document.getElementById('mov-sede')?.value || appState.currentSede;
+    const movTipoInv = document.getElementById('mov-tipo-inventario')?.value || appState.currentInventario;
+    const bodegaOrigen = document.getElementById('mov-bodega-origen')?.value || 'CDS';
+
+    const codigos = entregaMasivaState.rows.map(r => r.codigo_item);
+
+    try {
+        const res = await fetch(`${API_BASE}/inventario/stock-lote-bodega`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                codigos,
+                sede: movSede,
+                tipo_inventario: movTipoInv,
+                bodega_origen: bodegaOrigen
+            })
+        });
+        const result = await res.json();
+        const itemsMap = (result.success && result.itemsMap) ? result.itemsMap : {};
+
+        entregaMasivaState.rows.forEach(row => {
+            const info = itemsMap[row.codigo_item];
+            const cantSolicitada = Number(row.cantidad_solicitada) || Number(row.cantidad) || 0;
+            row.cantidad_solicitada = cantSolicitada;
+
+            if (info && info.existe) {
+                row.existe = true;
+                row.nombre_catalogo = info.nombre;
+                row.unidad = info.unidad_medida || 'Unidad';
+                row.stock_disponible = Number(info.stock_disponible) || 0;
+
+                if (row.stock_disponible >= cantSolicitada && cantSolicitada > 0) {
+                    // Tiene stock completo
+                    row.cantidad = cantSolicitada;
+                    row.estado_validacion = 'LISTO';
+                    row.selected = true;
+                } else if (row.stock_disponible > 0 && row.stock_disponible < cantSolicitada) {
+                    // Tiene stock parcial (ej: hay 2 y pide 8 -> entrega los 2 disponibles y omite los otros 6)
+                    row.cantidad = row.stock_disponible;
+                    row.estado_validacion = 'PARCIAL';
+                    row.selected = true;
+                } else {
+                    // Stock en 0: se omite por completo
+                    row.cantidad = 0;
+                    row.estado_validacion = 'SIN_STOCK';
+                    row.selected = false;
+                }
+            } else {
+                row.existe = false;
+                row.nombre_catalogo = null;
+                row.unidad = 'Unidad';
+                row.stock_disponible = 0;
+                row.cantidad = 0;
+                row.estado_validacion = 'NO_CATALOGO';
+                row.selected = false;
+            }
+        });
+
+        renderizarTablaEntregaMasiva();
+    } catch (err) {
+        console.error('Error validando stock del lote masivo:', err);
+        showToast('⚠️ No se pudo validar el stock del lote contra el servidor.', 'danger');
+    }
+}
+
+function filtrarTablaEntregaMasiva(filtro) {
+    entregaMasivaState.filtroActual = filtro;
+    ['TODOS', 'LISTOS', 'ALISTAR'].forEach(f => {
+        const btn = document.getElementById(`btn-filtro-masivo-${f.toLowerCase()}`);
+        if (btn) btn.classList.toggle('active', f === filtro);
+    });
+    renderizarTablaEntregaMasiva();
+}
+
+function renderizarTablaEntregaMasiva() {
+    const tbody = document.getElementById('tbody-entrega-masiva-preview');
+    if (!tbody) return;
+
+    const total = entregaMasivaState.rows.length;
+    const completos = entregaMasivaState.rows.filter(r => r.existe && r.stock_disponible >= r.cantidad_solicitada).length;
+    const parciales = entregaMasivaState.rows.filter(r => r.existe && r.stock_disponible > 0 && r.stock_disponible < r.cantidad_solicitada).length;
+    const sinStock = entregaMasivaState.rows.filter(r => r.existe && r.stock_disponible <= 0).length;
+    const noCat = entregaMasivaState.rows.filter(r => !r.existe).length;
+
+    const bTotal = document.getElementById('masivo-badge-total');
+    const bListos = document.getElementById('masivo-badge-listos');
+    const bParciales = document.getElementById('masivo-badge-parciales');
+    const bSinStock = document.getElementById('masivo-badge-sin-stock');
+    const bNoCat = document.getElementById('masivo-badge-no-catalogo');
+
+    if (bTotal) bTotal.textContent = `${total} filas leídas`;
+    if (bListos) bListos.textContent = `${completos} completas`;
+    if (bParciales) bParciales.textContent = `${parciales} parciales (entrega saldo disp.)`;
+    if (bSinStock) bSinStock.textContent = `${sinStock} sin stock (0 disp.)`;
+    if (bNoCat) bNoCat.textContent = `${noCat} no existen en catálogo`;
+
+    const filtro = entregaMasivaState.filtroActual || 'TODOS';
+    const rowsToShow = entregaMasivaState.rows.filter(r => {
+        if (filtro === 'LISTOS') return r.existe && r.stock_disponible > 0;
+        if (filtro === 'ALISTAR') return r.comentario.includes('ALISTAR');
+        return true;
+    });
+
+    if (rowsToShow.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-3">No hay ítems que coincidan con el filtro seleccionado.</td></tr>`;
+        actualizarBotonSubmitEntregaMasiva();
+        return;
+    }
+
+    tbody.innerHTML = rowsToShow.map(r => {
+        const puedeEntregar = r.existe && r.stock_disponible > 0 && r.cantidad > 0 && r.cantidad <= r.stock_disponible;
+        const cantOmitida = Math.max(0, (r.cantidad_solicitada || 0) - (r.cantidad || 0));
+        let badgeEstado = '';
+        let rowClass = '';
+
+        if (!r.existe) {
+            badgeEstado = `<span class="badge bg-danger">No existe en catálogo</span>`;
+            rowClass = 'table-danger bg-opacity-10';
+        } else if (r.stock_disponible <= 0) {
+            badgeEstado = `<span class="badge bg-secondary">Sin stock (0 disp. - se omite)</span>`;
+            rowClass = 'table-secondary bg-opacity-10';
+        } else if (r.cantidad < r.cantidad_solicitada) {
+            badgeEstado = `<span class="badge bg-info text-dark" title="Se entregan ${r.cantidad} disponibles y se omiten ${cantOmitida}">Parcial: entrega ${r.cantidad} (omite ${cantOmitida})</span>`;
+            rowClass = 'table-info bg-opacity-10';
+        } else if (r.cantidad > r.stock_disponible) {
+            badgeEstado = `<span class="badge bg-warning text-dark">Supera stock (${r.stock_disponible})</span>`;
+            rowClass = 'table-warning bg-opacity-10';
+        } else {
+            badgeEstado = `<span class="badge bg-success"><i class="bi bi-check2 me-1"></i>Entrega completa (${r.cantidad})</span>`;
+        }
+
+        const comBadge = r.comentario === 'ALISTAR'
+            ? `<span class="badge bg-primary bg-opacity-10 text-primary border border-primary">${r.comentario}</span>`
+            : `<span class="badge bg-secondary bg-opacity-10 text-secondary border">${r.comentario}</span>`;
+
+        const nombreMostrar = r.nombre_catalogo || r.nombre_excel || 'Sin descripción';
+        const subObs = r.observacion_fila ? `<div class="text-danger small" style="font-size:0.7rem;"><i class="bi bi-exclamation-circle me-1"></i>${r.observacion_fila}</div>` : '';
+
+        return `
+            <tr class="${rowClass}">
+                <td class="text-center">
+                    <input type="checkbox" class="form-check-input" ${r.selected ? 'checked' : ''} ${!puedeEntregar ? 'disabled' : ''} onchange="onToggleFilaEntregaMasiva(${r.idx}, this.checked)">
+                </td>
+                <td class="fw-bold font-monospace">${r.codigo_item}</td>
+                <td>
+                    <div class="fw-semibold text-dark">${nombreMostrar}</div>
+                    ${subObs}
+                </td>
+                <td class="text-center">${comBadge}</td>
+                <td class="text-end fw-bold ${r.stock_disponible > 0 ? 'text-success' : 'text-danger'}">
+                    ${r.stock_disponible} <small class="text-muted fw-normal">${r.unidad}</small>
+                </td>
+                <td class="text-end text-muted fw-semibold">
+                    ${r.cantidad_solicitada}
+                </td>
+                <td class="text-end">
+                    <input type="number" step="any" min="0" max="${r.stock_disponible}" class="form-control form-control-sm text-end fw-bold py-0 px-1" style="height: 26px; font-size: 0.78rem;" value="${r.cantidad}" ${r.stock_disponible <= 0 || !r.existe ? 'disabled' : ''} onchange="onCambioCantidadEntregaMasiva(${r.idx}, this.value)">
+                </td>
+                <td class="text-center">${badgeEstado}</td>
+            </tr>
+        `;
+    }).join('');
+
+    actualizarBotonSubmitEntregaMasiva();
+}
+
+function toggleSelectAllEntregaMasiva(checked) {
+    const filtro = entregaMasivaState.filtroActual || 'TODOS';
+    entregaMasivaState.rows.forEach(r => {
+        const pasaFiltro = (filtro === 'TODOS') ||
+            (filtro === 'LISTOS' && r.existe && r.stock_disponible > 0) ||
+            (filtro === 'ALISTAR' && r.comentario.includes('ALISTAR'));
+
+        if (pasaFiltro) {
+            const puedeEntregar = r.existe && r.stock_disponible > 0 && r.cantidad > 0 && r.cantidad <= r.stock_disponible;
+            r.selected = checked && puedeEntregar;
+        }
+    });
+    renderizarTablaEntregaMasiva();
+}
+
+function onToggleFilaEntregaMasiva(idx, checked) {
+    const row = entregaMasivaState.rows.find(r => r.idx === idx);
+    if (!row) return;
+    const puedeEntregar = row.existe && row.stock_disponible > 0 && row.cantidad > 0 && row.cantidad <= row.stock_disponible;
+    row.selected = checked && puedeEntregar;
+    actualizarBotonSubmitEntregaMasiva();
+}
+
+function onCambioCantidadEntregaMasiva(idx, val) {
+    const row = entregaMasivaState.rows.find(r => r.idx === idx);
+    if (!row) return;
+    let num = parseFloat(val);
+    if (isNaN(num) || num < 0) num = 0;
+    if (row.existe && row.stock_disponible > 0 && num > row.stock_disponible) {
+        num = row.stock_disponible;
+    }
+    row.cantidad = num;
+    const puedeEntregar = row.existe && row.stock_disponible > 0 && row.cantidad > 0 && row.cantidad <= row.stock_disponible;
+    row.selected = puedeEntregar;
+    renderizarTablaEntregaMasiva();
+}
+
+function actualizarBotonSubmitEntregaMasiva() {
+    const form = document.getElementById('form-movimiento');
+    const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
+    if (!submitBtn) return;
+
+    if (entregaMasivaState.active) {
+        const seleccionados = entregaMasivaState.rows.filter(r => r.selected && r.existe && r.stock_disponible > 0 && r.cantidad > 0 && r.cantidad <= r.stock_disponible).length;
+        submitBtn.innerHTML = `<i class="bi bi-check2-all me-1"></i>Entregar Masivamente (${seleccionados} ítems con consecutivo individual)`;
+        submitBtn.disabled = (seleccionados === 0);
+    } else {
+        submitBtn.innerHTML = 'Registrar Transacción';
+        submitBtn.disabled = false;
+    }
+}
+
+async function ejecutarSubmitEntregaMasiva(submitBtn, sedeVal, bOrigen, bDestino, pDestino) {
+    const itemsSeleccionados = entregaMasivaState.rows.filter(r => r.selected && r.existe && r.stock_disponible > 0 && r.cantidad > 0 && r.cantidad <= r.stock_disponible);
+
+    if (itemsSeleccionados.length === 0) {
+        showToast('⚠️ No hay ítems válidos con stock disponible seleccionados para entregar.', 'warning');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            actualizarBotonSubmitEntregaMasiva();
+        }
+        return;
+    }
+
+    const payload = {
+        sede: sedeVal,
+        tipo_inventario: document.getElementById('mov-tipo-inventario')?.value || appState.currentInventario,
+        bodega_origen: bOrigen,
+        bodega_destino: bDestino,
+        proyecto_destino: pDestino,
+        causal_condicion: document.getElementById('mov-causal')?.value || 'USO EN OBRA / PROYECTO',
+        persona_recibe_devuelve: document.getElementById('mov-persona-recibe')?.value || null,
+        documento_referencia: document.getElementById('mov-doc-ref')?.value || null,
+        responsable: document.getElementById('mov-responsable')?.value?.trim() || getNombreUsuarioActual(),
+        observaciones: document.getElementById('mov-observaciones')?.value || null,
+        items: itemsSeleccionados.map(r => ({
+            codigo_item: r.codigo_item,
+            cantidad_solicitada: r.cantidad_solicitada,
+            cantidad: r.cantidad,
+            comentario: r.comentario,
+            orden: r.orden,
+            observacion_fila: r.observacion_fila
+        }))
+    };
+
+    try {
+        const res = await fetch(`${API_BASE}/movimientos/entrega-masiva`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await res.json();
+        if (!result.success) {
+            showToast(`⚠️ ${result.error}`, 'danger');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                actualizarBotonSubmitEntregaMasiva();
+            }
+            return;
+        }
+
+        closeModal('modalMovimiento');
+        limpiarModoEntregaMasiva();
+        document.getElementById('form-movimiento')?.reset();
+
+        showToast(`✅ ${result.message}`, 'success');
+        await recargarDatosContexto();
+    } catch (err) {
+        showToast(`Error en entrega masiva: ${err.message}`, 'danger');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            actualizarBotonSubmitEntregaMasiva();
         }
     }
 }

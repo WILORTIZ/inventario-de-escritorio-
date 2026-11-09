@@ -1700,7 +1700,29 @@
                                 </select>
                             </div>
 
-                            <div class="col-12 col-md-6">
+                            <!-- Barra de Carga de Excel para Entrega Masiva (solo visible cuando Tipo = ENTREGA) -->
+                            <div class="col-12" id="mov-entrega-masiva-bar" style="display: none;">
+                                <div class="p-2 px-3 rounded-3 border border-success bg-success bg-opacity-10 d-flex flex-wrap align-items-center justify-content-between gap-2">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="bi bi-file-earmark-spreadsheet-fill text-success fs-5"></i>
+                                        <div>
+                                            <div class="fw-bold small text-dark" id="mov-masivo-bar-title">Entrega Masiva desde Formato Excel (PICKINGS)</div>
+                                            <div class="text-muted" style="font-size: 0.75rem;" id="mov-masivo-bar-subtitle">Carga el archivo Excel para tomar automáticamente <strong>ID Artículo</strong> y <strong>Cantidad solicitada</strong> y generar el movimiento individual de cada ítem con su consecutivo.</div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input type="file" id="mov-excel-masivo-input" accept=".xlsx,.xls" class="d-none" onchange="cargarExcelEntregaMasiva(event)">
+                                        <button type="button" class="btn btn-success btn-sm fw-bold shadow-sm d-flex align-items-center gap-1" onclick="document.getElementById('mov-excel-masivo-input').click()">
+                                            <i class="bi bi-upload"></i> Cargar Excel de Entrega Masiva
+                                        </button>
+                                        <button type="button" class="btn btn-outline-danger btn-sm fw-semibold d-none" id="btn-cancelar-entrega-masiva" onclick="limpiarModoEntregaMasiva()">
+                                            <i class="bi bi-x-circle me-1"></i> Modo Individual
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6" id="col-mov-item-select">
                                 <label class="form-label fw-bold small">Seleccionar Ítem del Catálogo <span class="text-danger">*</span></label>
                                 <select class="form-select" id="mov-item-select" required onchange="handleItemSelectInMovimiento(this.value)">
                                     <option value="">-- Buscar ítem por código o nombre --</option>
@@ -1725,14 +1747,60 @@
                                 <input type="number" step="any" min="0.01" class="form-control" id="mov-cantidad" required placeholder="0.00">
                             </div>
 
+                            <!-- Panel de Vista Previa de Ítems Cargados desde Excel (Entrega Masiva) -->
+                            <div class="col-12" id="mov-entrega-masiva-panel" style="display: none;">
+                                <div class="card border-success shadow-sm">
+                                    <div class="card-header bg-light py-2 px-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+                                        <div class="d-flex flex-wrap align-items-center gap-2">
+                                            <span class="badge bg-dark" id="masivo-badge-total">0 filas leídas</span>
+                                            <span class="badge bg-success" id="masivo-badge-listos">0 completas</span>
+                                            <span class="badge bg-info text-dark" id="masivo-badge-parciales">0 parciales</span>
+                                            <span class="badge bg-warning text-dark" id="masivo-badge-sin-stock">0 en cero (0 stock)</span>
+                                            <span class="badge bg-danger" id="masivo-badge-no-catalogo">0 no existen en catálogo</span>
+                                        </div>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button type="button" class="btn btn-outline-secondary active" id="btn-filtro-masivo-todos" onclick="filtrarTablaEntregaMasiva('TODOS')">Todos</button>
+                                            <button type="button" class="btn btn-outline-success" id="btn-filtro-masivo-listos" onclick="filtrarTablaEntregaMasiva('LISTOS')">Con Stock (Completos + Parciales)</button>
+                                            <button type="button" class="btn btn-outline-primary" id="btn-filtro-masivo-alistar" onclick="filtrarTablaEntregaMasiva('ALISTAR')">Solo ALISTAR</button>
+                                        </div>
+                                    </div>
+                                    <div class="table-responsive" style="max-height: 290px;">
+                                        <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.78rem;">
+                                            <thead class="table-light sticky-top">
+                                                <tr>
+                                                    <th class="text-center" style="width: 36px;">
+                                                        <input type="checkbox" class="form-check-input" id="check-all-entrega-masiva" checked onchange="toggleSelectAllEntregaMasiva(this.checked)">
+                                                    </th>
+                                                    <th style="width: 85px;">ID Artículo</th>
+                                                    <th>Artículo / Descripción</th>
+                                                    <th style="width: 90px;" class="text-center">Comentario</th>
+                                                    <th style="width: 100px;" class="text-end">Stock Origen</th>
+                                                    <th style="width: 95px;" class="text-end">Solicitada</th>
+                                                    <th style="width: 110px;" class="text-end">A Entregar</th>
+                                                    <th style="width: 165px;" class="text-center">Estado Validación</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbody-entrega-masiva-preview"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="col-12 col-md-6" id="col-mov-bodega-origen">
                                 <label class="form-label fw-bold small" id="lbl-mov-bodega-origen"><i class="bi bi-box-arrow-up-right me-1 text-danger"></i>Bodega Origen <span class="text-danger">*</span></label>
-                                <select class="form-select" id="mov-bodega-origen" onchange="actualizarStockPreviewEnMovimiento()"></select>
+                                <select class="form-select" id="mov-bodega-origen" onchange="onCambioBodegaOrigenEnMovimiento()"></select>
                             </div>
 
                             <div class="col-12 col-md-6" id="col-mov-bodega-destino">
                                 <label class="form-label fw-bold small" id="lbl-mov-bodega-destino"><i class="bi bi-box-arrow-in-down-right me-1 text-success"></i>Bodega Destino <span class="text-danger">*</span></label>
-                                <select class="form-select" id="mov-bodega-destino"></select>
+                                <select class="form-select" id="mov-bodega-destino" onchange="validarBodegasDiferentesEnMovimiento(true)"></select>
+                            </div>
+
+                            <div class="col-12" id="alerta-bodegas-iguales" style="display: none;">
+                                <div class="alert alert-danger py-2 px-3 mb-0 small fw-semibold d-flex align-items-center">
+                                    <i class="bi bi-exclamation-octagon-fill me-2 fs-6"></i>
+                                    <span id="texto-alerta-bodegas-iguales">No se puede realizar una entrega hacia la misma bodega de origen (ej. de CDS a CDS). Seleccione una Bodega de Destino diferente.</span>
+                                </div>
                             </div>
 
                             <div class="col-12 col-md-6" id="col-mov-proyecto">

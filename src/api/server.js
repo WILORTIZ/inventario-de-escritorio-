@@ -557,6 +557,36 @@ app.post('/api/licencia/regenerar-desafio', async (req, res) => {
 });
 
 // ==========================================
+// -0.5. MIDDLEWARE DE BLOQUEO ESTRICTO POR LICENCIA
+// ==========================================
+// Protege todas las operaciones de la API. Si la licencia no es válida, bloquea con 403 Forbidden.
+app.use('/api', async (req, res, next) => {
+    // Permitir acceso exclusivo a los endpoints de consulta y activación de licencia
+    if (req.path.startsWith('/licencia') || (req.originalUrl && req.originalUrl.startsWith('/api/licencia'))) {
+        return next();
+    }
+
+    try {
+        const licenseStatus = await licenseManager.getStatus();
+        if (!licenseStatus.isValid) {
+            return res.status(403).json({
+                error: 'LICENCIA_EXPIRADA',
+                status: licenseStatus.status,
+                daysRemaining: licenseStatus.daysRemaining,
+                challenge: licenseStatus.challenge,
+                message: licenseStatus.status === 'CLOCK_TAMPERED'
+                    ? 'Manipulación de fecha detectada. Ajuste la fecha y hora de su equipo para continuar.'
+                    : 'La licencia del sistema se encuentra expirada o inactiva. Ingrese una clave de activación para desbloquear el sistema.'
+            });
+        }
+        next();
+    } catch (err) {
+        console.error('[LICENCIA - ERROR EN MIDDLEWARE]', err);
+        return res.status(500).json({ error: 'Error al verificar integridad de licencia: ' + err.message });
+    }
+});
+
+// ==========================================
 // 0. AUTENTICACIÓN SEGURA, USUARIOS Y ROLES (PROTECCIÓN ANTI-INYECCIÓN Y BRUTE FORCE)
 // ==========================================
 
@@ -1713,6 +1743,277 @@ app.post('/api/movimientos', async (req, res) => {
         });
     } catch (err) {
         console.error(err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Consultar stock disponible y existencia en catálogo para un lote de códigos en una bodega origen
+app.post('/api/inventario/stock-lote-bodega', async (req, res) => {
+    try {
+        const { codigos, sede, tipo_inventario, bodega_origen } = req.body;
+        if (!Array.isArray(codigos) || codigos.length === 0) {
+            return res.json({ success: true, itemsMap: {} });
+        }
+
+        const movSede = sede || 'Sede Suroriental';
+        const movTipoInv = tipo_inventario || 'CDS';
+        const origenActual = (bodega_origen && bodega_origen !== 'ALL') ? bodega_origen : 'CDS';
+
+        const cleanCodes = [...new Set(codigos.map(c => parseInt(c, 10)).filter(c => !isNaN(c)))];
+        if (cleanCodes.length === 0) {
+            return res.json({ success: true, itemsMap: {} });
+        }
+
+        const placeholders = cleanCodes.map(() => '?').join(',');
+        const catalogRows = await dbAll(`SELECT codigo, nombre, unidad_medida, ubicacion_cds, estado FROM items WHERE codigo IN (${placeholders})`, cleanCodes);
+        const catalogMap = {};
+        catalogRows.forEach(r => {
+            catalogMap[r.codigo] = r;
+        });
+
+        let stockRows = [];
+        if (origenActual === 'CDS') {
+            stockRows = await dbAll(`
+                SELECT 
+                    codigo_item,
+                    COALESCE(SUM(
+                        (CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO', 'ENTRADA POR TRASLADO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END) -
+                        (CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO', 'SALIDA POR TRASLADO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END)
+                    ), 0) as stock
+                FROM movimientos
+                WHERE codigo_item IN (${placeholders}) AND sede = ? AND tipo_inventario = ?
+                GROUP BY codigo_item
+            `, [...cleanCodes, movSede, movTipoInv]);
+        } else {
+            stockRows = await dbAll(`
+                SELECT 
+                    codigo_item,
+                    COALESCE(SUM(
+                        (CASE WHEN bodega_destino = ? THEN cantidad ELSE 0 END) -
+                        (CASE WHEN bodega_origen = ? THEN cantidad ELSE 0 END)
+                    ), 0) as stock
+                FROM movimientos
+                WHERE codigo_item IN (${placeholders}) AND (bodega_destino = ? OR bodega_origen = ?) AND sede = ? AND tipo_inventario = ?
+                GROUP BY codigo_item
+            `, [origenActual, origenActual, ...cleanCodes, origenActual, origenActual, movSede, movTipoInv]);
+        }
+
+        const stockMap = {};
+        stockRows.forEach(s => {
+            stockMap[s.codigo_item] = Number(s.stock) || 0;
+        });
+
+        const itemsMap = {};
+        cleanCodes.forEach(code => {
+            const cat = catalogMap[code];
+            itemsMap[code] = {
+                existe: !!cat,
+                nombre: cat ? cat.nombre : null,
+                unidad_medida: cat ? (cat.unidad_medida || 'Unidad') : 'Unidad',
+                ubicacion_cds: cat ? (cat.ubicacion_cds || 'A1') : 'A1',
+                estado: cat ? (cat.estado || 'Activo') : null,
+                stock_disponible: stockMap[code] !== undefined ? stockMap[code] : 0
+            };
+        });
+
+        res.json({ success: true, itemsMap });
+    } catch (err) {
+        console.error('Error en stock-lote-bodega:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Registro de Entrega Masiva (genera un movimiento individual con su propio consecutivo por cada ítem)
+app.post('/api/movimientos/entrega-masiva', async (req, res) => {
+    let inTransaction = false;
+    try {
+        const {
+            sede,
+            tipo_inventario,
+            bodega_origen,
+            bodega_destino,
+            causal_condicion,
+            proyecto_destino,
+            responsable,
+            persona_recibe_devuelve,
+            documento_referencia,
+            observaciones,
+            items
+        } = req.body;
+
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, error: 'No se recibieron ítems para procesar la entrega masiva.' });
+        }
+
+        const movSede = sede || 'Sede Suroriental';
+        const movTipoInv = tipo_inventario || 'CDS';
+        const origenActual = (bodega_origen && bodega_origen !== 'ALL') ? bodega_origen : 'CDS';
+        const destinoActual = (bodega_destino && bodega_destino !== 'ALL') ? bodega_destino : 'PROYECTOS';
+
+        if (origenActual.trim().toUpperCase() === destinoActual.trim().toUpperCase()) {
+            return res.status(400).json({
+                success: false,
+                error: `No se puede realizar una entrega a la misma bodega de origen (${origenActual}). Seleccione una bodega de destino diferente.`
+            });
+        }
+
+        await dbRun('BEGIN TRANSACTION');
+        inTransaction = true;
+
+        const lastMov = await dbGet(`SELECT id FROM movimientos ORDER BY id DESC LIMIT 1`);
+        let nextId = (lastMov ? lastMov.id : 0) + 1;
+
+        const now = new Date();
+        const movFecha = now.toISOString().split('T')[0];
+        const movHora = now.toTimeString().split(' ')[0].substring(0, 5);
+
+        const registrados = [];
+        const omitidos = [];
+
+        for (const rowItem of items) {
+            const codigoNum = parseInt(rowItem.codigo_item, 10);
+            const cantNum = parseFloat(rowItem.cantidad);
+
+            if (isNaN(codigoNum) || isNaN(cantNum) || cantNum <= 0) {
+                omitidos.push({
+                    codigo_item: rowItem.codigo_item,
+                    motivo: 'Código o cantidad inválida (<= 0)'
+                });
+                continue;
+            }
+
+            const item = await dbGet(`SELECT * FROM items WHERE codigo = ?`, [codigoNum]);
+            if (!item) {
+                omitidos.push({
+                    codigo_item: codigoNum,
+                    motivo: 'No existe en el catálogo'
+                });
+                continue;
+            }
+
+            let stockDisponible = 0;
+            if (origenActual === 'CDS') {
+                const stockData = await dbGet(`
+                    SELECT 
+                        COALESCE(SUM(
+                            (CASE WHEN tipo_movimiento IN ('ENTRADA', 'DEVOLUCION', 'AJUSTE POSITIVO', 'ENTRADA POR TRASLADO') AND (bodega_destino = 'CDS' OR bodega_destino IS NULL) THEN cantidad ELSE 0 END) -
+                            (CASE WHEN tipo_movimiento IN ('ENTREGA', 'DISPOSICION FINAL', 'AJUSTE NEGATIVO', 'SALIDA POR TRASLADO') AND (bodega_origen = 'CDS' OR bodega_origen IS NULL) THEN cantidad ELSE 0 END)
+                        ), 0) as stock
+                    FROM movimientos WHERE codigo_item = ? AND sede = ? AND tipo_inventario = ?
+                `, [codigoNum, movSede, movTipoInv]);
+                stockDisponible = stockData ? Number(stockData.stock) : 0;
+            } else {
+                const stockData = await dbGet(`
+                    SELECT 
+                        COALESCE(SUM(
+                            (CASE WHEN bodega_destino = ? THEN cantidad ELSE 0 END) -
+                            (CASE WHEN bodega_origen = ? THEN cantidad ELSE 0 END)
+                        ), 0) as stock
+                    FROM movimientos 
+                    WHERE codigo_item = ? AND (bodega_destino = ? OR bodega_origen = ?) AND sede = ? AND tipo_inventario = ?
+                `, [origenActual, origenActual, codigoNum, origenActual, origenActual, movSede, movTipoInv]);
+                stockDisponible = stockData ? Number(stockData.stock) : 0;
+            }
+
+            if (stockDisponible <= 0) {
+                omitidos.push({
+                    codigo_item: codigoNum,
+                    nombre: item.nombre,
+                    motivo: `Sin existencias en ${origenActual} (Disponible: 0, Solicitado: ${rowItem.cantidad_solicitada || cantNum})`
+                });
+                continue;
+            }
+
+            const cantSolicitadaOriginal = parseFloat(rowItem.cantidad_solicitada) || cantNum;
+            const cantEntregar = Math.min(cantNum, stockDisponible);
+            const cantOmitida = Math.max(0, cantSolicitadaOriginal - cantEntregar);
+
+            const n_movimiento = `MOV-${String(nextId).padStart(5, '0')}`;
+            nextId++;
+
+            const obsParts = [];
+            if (observaciones && observaciones.trim()) obsParts.push(observaciones.trim());
+            if (cantOmitida > 0) {
+                obsParts.push(`Entrega parcial: ${cantEntregar} de ${cantSolicitadaOriginal} solicitados (Omitido: ${cantOmitida})`);
+            }
+            if (rowItem.comentario && rowItem.comentario.trim() && rowItem.comentario !== '-') obsParts.push(`Picking: ${rowItem.comentario.trim()}`);
+            if (rowItem.observacion_fila && rowItem.observacion_fila.trim()) obsParts.push(`Obs: ${rowItem.observacion_fila.trim()}`);
+            const obsFinal = obsParts.length > 0 ? obsParts.join(' | ') : 'Entrega masiva por formato Excel';
+
+            const docRefFinal = (documento_referencia && documento_referencia.trim())
+                ? documento_referencia.trim()
+                : (rowItem.orden ? `OT-${rowItem.orden}` : 'ENTREGA-MASIVA');
+
+            await dbRun(`
+                INSERT INTO movimientos (
+                    n_movimiento, fecha, hora, tipo_movimiento, codigo_item, nombre_item, cantidad, unidad,
+                    bodega_origen, bodega_destino, causal_condicion, ubicacion_cds, proyecto_destino,
+                    responsable, persona_recibe_devuelve, documento_referencia, observaciones, fecha_vencimiento_lote,
+                    sede, tipo_inventario
+                ) VALUES (?, ?, ?, 'ENTREGA', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+            `, [
+                n_movimiento,
+                movFecha,
+                movHora,
+                item.codigo,
+                item.nombre,
+                cantEntregar,
+                item.unidad_medida || 'Unidad',
+                origenActual,
+                destinoActual,
+                causal_condicion || 'USO EN OBRA / PROYECTO',
+                item.ubicacion_cds || 'A1',
+                proyecto_destino || 'OPERACION',
+                responsable || 'Administrador CDS',
+                persona_recibe_devuelve || null,
+                docRefFinal,
+                obsFinal,
+                movSede,
+                movTipoInv
+            ]);
+
+            registrados.push({
+                n_movimiento,
+                codigo_item: item.codigo,
+                nombre_item: item.nombre,
+                cantidad: cantEntregar,
+                cantidad_solicitada: cantSolicitadaOriginal,
+                parcial: cantOmitida > 0,
+                unidad: item.unidad_medida || 'Unidad'
+            });
+        }
+
+        if (registrados.length === 0) {
+            await dbRun('ROLLBACK');
+            inTransaction = false;
+            return res.status(400).json({
+                success: false,
+                error: 'Ninguno de los ítems seleccionados pudo ser entregado (verifique existencias en bodega origen o existencia en catálogo).',
+                omitidos
+            });
+        }
+
+        await dbRun('COMMIT');
+        inTransaction = false;
+
+        const primerMov = registrados[0].n_movimiento;
+        const ultimoMov = registrados[registrados.length - 1].n_movimiento;
+        const rangoTexto = registrados.length === 1 ? primerMov : `${primerMov} al ${ultimoMov}`;
+
+        res.json({
+            success: true,
+            message: `Se registraron ${registrados.length} entregas individuales con éxito (${rangoTexto}).`,
+            total_registrados: registrados.length,
+            total_omitidos: omitidos.length,
+            rango_consecutivos: rangoTexto,
+            registrados,
+            omitidos
+        });
+    } catch (err) {
+        if (inTransaction) {
+            try { await dbRun('ROLLBACK'); } catch (_) {}
+        }
+        console.error('Error en entrega-masiva:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });

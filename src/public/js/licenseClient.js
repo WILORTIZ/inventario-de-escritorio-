@@ -1,13 +1,24 @@
 /**
  * INVENTARIO CDS - MÓDULO CLIENTE DE LICENCIAMIENTO OFFLINE
  * Esquema Challenge-Response (HMAC-SHA256) con Protección Anti-Manipulación de Reloj
+ * y Bloqueo Riguroso de Interfaz (Hard Lock Screen)
  */
 
 (function () {
     let currentLicense = null;
 
-    // Estilos CSS para el badge y modal de activación
+    // Estilos CSS para el badge, modal de activación y cortina de bloqueo impenetrable
     const licenseStyles = `
+        body.license-locked {
+            overflow: hidden !important;
+        }
+        body.license-locked > *:not(#licenseModalBackdrop):not(#toastContainer) {
+            filter: blur(10px) grayscale(75%) !important;
+            pointer-events: none !important;
+            user-select: none !important;
+            transition: filter 0.3s ease;
+        }
+
         .license-badge-pill {
             display: inline-flex;
             align-items: center;
@@ -52,31 +63,34 @@
             50% { transform: scale(1.03); }
         }
         
-        /* Modal de Licencia */
+        /* Modal y Pantalla de Bloqueo Total de Licencia */
         #licenseModalBackdrop {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(5, 10, 20, 0.85);
-            backdrop-filter: blur(8px);
-            z-index: 99999;
+            background: rgba(4, 8, 16, 0.94);
+            backdrop-filter: blur(16px);
+            z-index: 99999999 !important;
             display: none;
             align-items: center;
             justify-content: center;
-            padding: 1rem;
+            padding: 1.25rem;
+        }
+        #licenseModalBackdrop.locked-active {
+            display: flex !important;
         }
         .license-modal-card {
             background: #0f172a;
             border: 1px solid #334155;
             border-radius: 20px;
             width: 100%;
-            max-width: 520px;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+            max-width: 530px;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(56, 189, 248, 0.15);
             color: #f8fafc;
             overflow: hidden;
             animation: modalFadeIn 0.3s ease-out;
         }
         @keyframes modalFadeIn {
-            from { opacity: 0; transform: scale(0.95) translateY(10px); }
+            from { opacity: 0; transform: scale(0.95) translateY(12px); }
             to { opacity: 1; transform: scale(1) translateY(0); }
         }
         .license-modal-header {
@@ -91,7 +105,7 @@
             padding: 1.5rem;
             display: flex;
             flex-direction: column;
-            gap: 1.2rem;
+            gap: 1.15rem;
         }
         .challenge-code-box {
             background: #090e1a;
@@ -100,12 +114,26 @@
             padding: 0.85rem;
             text-align: center;
             font-family: 'JetBrains Mono', monospace, monospace;
-            font-size: 1.8rem;
+            font-size: 1.9rem;
             font-weight: 800;
-            letter-spacing: 5px;
+            letter-spacing: 6px;
             color: #38bdf8;
             user-select: all;
-            box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.25);
+        }
+        .lock-badge-banner {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            color: #fca5a5;
+            padding: 0.65rem 1rem;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            text-align: center;
         }
     `;
 
@@ -132,6 +160,12 @@
                         <button type="button" class="btn-close btn-close-white" onclick="window.LicenseClient.closeModal()" id="btnLicClose" aria-label="Cerrar"></button>
                     </div>
                     <div class="license-modal-body">
+                        <!-- Banner de Bloqueo Activo -->
+                        <div id="licLockBanner" class="lock-badge-banner" style="display: none;">
+                            <i class="bi bi-shield-lock-fill fs-5"></i>
+                            <span>SISTEMA BLOQUEADO POR VENCIMIENTO DE LICENCIA</span>
+                        </div>
+
                         <!-- Alerta de Manipulación de Reloj -->
                         <div id="licClockAlert" class="alert alert-danger py-2 small" style="display: none;">
                             <strong>⚠️ Manipulación de Fecha Detectada:</strong><br>
@@ -158,7 +192,7 @@
                             </label>
                             <div class="challenge-code-box" id="licChallengeBox">------</div>
                             <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">
-                                Dicta este código de 6 dígitos a tu administrador o proveedor para recibir tu clave de activación.
+                                Comparte este código de 6 dígitos con tu administrador para generar la clave de activación.
                             </small>
                         </div>
 
@@ -174,7 +208,7 @@
                             <label class="form-label text-secondary small fw-bold mb-1">
                                 2. Ingresa la Clave de Activación Recibida
                             </label>
-                            <input type="text" id="licActivationInput" class="form-control bg-dark text-white border-secondary text-center fw-bold py-2 fs-6" placeholder="Ej: 30-6DACC320" autocomplete="off" style="letter-spacing: 2px; text-transform: uppercase;">
+                            <input type="text" id="licActivationInput" class="form-control bg-dark text-white border-secondary text-center fw-bold py-2 fs-6" placeholder="Ej: 30-DABA43A7" autocomplete="off" style="letter-spacing: 2px; text-transform: uppercase;">
                         </div>
 
                         <!-- Botón Activar -->
@@ -191,6 +225,24 @@
         document.body.appendChild(div.firstElementChild);
     }
 
+    // Forzar pantalla de bloqueo duro (Hard Lock)
+    function enforceLock(licenseData = null) {
+        injectModal();
+        if (licenseData) {
+            currentLicense = { ...currentLicense, ...licenseData, isValid: false };
+        }
+        document.body.classList.add('license-locked');
+        const bd = document.getElementById('licenseModalBackdrop');
+        const closeBtn = document.getElementById('btnLicClose');
+        const lockBanner = document.getElementById('licLockBanner');
+
+        if (bd) bd.classList.add('locked-active');
+        if (closeBtn) closeBtn.style.display = 'none';
+        if (lockBanner) lockBanner.style.display = 'flex';
+
+        updateUIElements();
+    }
+
     // Consultar estado de la licencia al servidor
     async function checkLicenseStatus(autoOpenIfInvalid = false) {
         try {
@@ -203,17 +255,16 @@
         }
     }
 
-    // Actualizar elementos de la interfaz (Navbar Badge y Modal)
-    function updateUI(autoOpenIfInvalid = false) {
+    // Actualizar elementos visuales dentro del modal
+    function updateUIElements() {
         if (!currentLicense) return;
 
-        // Actualizar datos del modal
         const statusEl = document.getElementById('licStatusText');
         const expireEl = document.getElementById('licExpireText');
         const challengeEl = document.getElementById('licChallengeBox');
         const planEl = document.getElementById('licPlanSubtitle');
         const clockAlert = document.getElementById('licClockAlert');
-        const closeBtn = document.getElementById('btnLicClose');
+        const lockBanner = document.getElementById('licLockBanner');
 
         if (challengeEl) challengeEl.innerText = currentLicense.challenge || '------';
         if (planEl) planEl.innerText = currentLicense.planName || 'INVENTARIO CDS';
@@ -223,26 +274,47 @@
             if (currentLicense.status === 'CLOCK_TAMPERED') {
                 statusEl.innerHTML = '<span class="text-danger fw-bold">⚠️ Fecha Manipulada</span>';
                 if (clockAlert) clockAlert.style.display = 'block';
+                if (lockBanner) {
+                    lockBanner.style.display = 'flex';
+                    lockBanner.innerHTML = '<i class="bi bi-clock-history fs-5"></i><span>BLOQUEADO: FECHA DE SISTEMA MANIPULADA</span>';
+                }
             } else if (currentLicense.status === 'EXPIRED') {
                 statusEl.innerHTML = '<span class="text-danger fw-bold">🔴 Licencia Expirada</span>';
                 if (clockAlert) clockAlert.style.display = 'none';
+                if (lockBanner) {
+                    lockBanner.style.display = 'flex';
+                    lockBanner.innerHTML = '<i class="bi bi-shield-lock-fill fs-5"></i><span>SISTEMA BLOQUEADO POR VENCIMIENTO DE LICENCIA</span>';
+                }
             } else if (currentLicense.isTrial) {
                 statusEl.innerHTML = `<span class="text-warning fw-bold">🟡 Período de Prueba (${currentLicense.daysRemaining}d restantes)</span>`;
                 if (clockAlert) clockAlert.style.display = 'none';
+                if (lockBanner) lockBanner.style.display = 'none';
             } else {
                 statusEl.innerHTML = `<span class="text-success fw-bold">🟢 Licencia Activa (${currentLicense.daysRemaining}d restantes)</span>`;
                 if (clockAlert) clockAlert.style.display = 'none';
+                if (lockBanner) lockBanner.style.display = 'none';
             }
         }
+    }
 
-        // Si la licencia expiró o el reloj está manipulado, no permitir cerrar el modal
+    // Actualizar estado general y aplicar bloqueo si es inválido
+    function updateUI(autoOpenIfInvalid = false) {
+        if (!currentLicense) return;
+
+        updateUIElements();
+
+        const closeBtn = document.getElementById('btnLicClose');
+        const bd = document.getElementById('licenseModalBackdrop');
+
+        // Si la licencia expiró o está manipulada -> BLOQUEO TOTAL OBLIGATORIO
         if (!currentLicense.isValid) {
+            document.body.classList.add('license-locked');
             if (closeBtn) closeBtn.style.display = 'none';
-            if (autoOpenIfInvalid) {
-                openModal();
-            }
+            if (bd) bd.classList.add('locked-active');
         } else {
+            document.body.classList.remove('license-locked');
             if (closeBtn) closeBtn.style.display = 'block';
+            if (bd) bd.classList.remove('locked-active');
         }
 
         // Actualizar o inyectar Badge en la barra de navegación
@@ -259,7 +331,6 @@
             badge.href = '#';
             badge.onclick = (e) => { e.preventDefault(); openModal(); };
 
-            // Buscar contenedor en header o navbar
             const headerRight = document.querySelector('.navbar .ms-auto') || document.querySelector('header .header-actions') || document.querySelector('.navbar');
             if (headerRight) {
                 headerRight.prepend(badge);
@@ -291,16 +362,27 @@
         injectModal();
         checkLicenseStatus(false);
         const bd = document.getElementById('licenseModalBackdrop');
-        if (bd) bd.style.display = 'flex';
+        if (bd) {
+            if (!currentLicense || !currentLicense.isValid) {
+                bd.classList.add('locked-active');
+                document.body.classList.add('license-locked');
+            } else {
+                bd.style.display = 'flex';
+            }
+        }
     }
 
     function closeModal() {
         if (currentLicense && !currentLicense.isValid) {
-            alert('Debe ingresar una clave de activación válida para continuar usando el sistema.');
+            // Estrictamente imposible cerrar si la licencia no es válida
             return;
         }
         const bd = document.getElementById('licenseModalBackdrop');
-        if (bd) bd.style.display = 'none';
+        if (bd) {
+            bd.style.display = 'none';
+            bd.classList.remove('locked-active');
+        }
+        document.body.classList.remove('license-locked');
     }
 
     function copyChallenge() {
@@ -336,8 +418,20 @@
             if (res.ok && data.success) {
                 alert(`🎉 ¡Activación Exitosa!\n${data.message}\nNueva fecha de vencimiento: ${data.newExpiration}`);
                 input.value = '';
+                document.body.classList.remove('license-locked');
+                const bd = document.getElementById('licenseModalBackdrop');
+                if (bd) {
+                    bd.style.display = 'none';
+                    bd.classList.remove('locked-active');
+                }
                 await checkLicenseStatus(false);
-                closeModal();
+
+                // Recargar interfaz para sincronizar datos y desbloquear operaciones
+                if (typeof window.cargarDatosIniciales === 'function') {
+                    window.cargarDatosIniciales();
+                } else {
+                    window.location.reload();
+                }
             } else {
                 alert('❌ Error al activar: ' + (data.error || 'Clave inválida'));
             }
@@ -346,13 +440,46 @@
         }
     }
 
-    // Inicialización automática
-    window.addEventListener('DOMContentLoaded', () => {
+    // Interceptar globalmente window.fetch para que si el backend devuelve 403 por licencia, bloquee al instante
+    const nativeFetch = window.fetch;
+    window.fetch = async function (...args) {
+        const response = await nativeFetch.apply(this, args);
+        if (response && response.status === 403) {
+            const clone = response.clone();
+            try {
+                const data = await clone.json();
+                if (data && data.error === 'LICENCIA_EXPIRADA') {
+                    enforceLock(data);
+                }
+            } catch (e) {}
+        }
+        return response;
+    };
+
+    // Bloquear tecla Escape si la licencia no es válida
+    window.addEventListener('keydown', (e) => {
+        if (currentLicense && !currentLicense.isValid) {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }
+    }, true);
+
+    // Inicialización automática tolerante a estados de carga
+    function init() {
         injectModal();
         checkLicenseStatus(true);
-        // Comprobar cada 15 minutos en segundo plano
-        setInterval(() => checkLicenseStatus(false), 15 * 60 * 1000);
-    });
+    }
+
+    if (document.readyState === 'loading') {
+        window.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+
+    // Comprobación periódica cada 3 minutos
+    setInterval(() => checkLicenseStatus(false), 3 * 60 * 1000);
 
     // Exponer API global
     window.LicenseClient = {
@@ -361,6 +488,7 @@
         checkStatus: checkLicenseStatus,
         copyChallenge,
         requestViaWhatsApp,
-        activate
+        activate,
+        enforceLock
     };
 })();
